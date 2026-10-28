@@ -4,7 +4,7 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 
 ## Working agreement
 
-- **One iteration, one branch.** Branch from `main` as `feat/<n>-<slug>`, for example `feat/2-local-index`. Fixes use `fix/<slug>`, docs use `docs/<slug>`.
+- **One iteration, one branch.** Branch from `main` as `feat/<n>-<slug>`, for example `feat/2-local-index`. Fixes use `fix/<slug>`, docs use `docs/<slug>`, CI and tooling use `ci/<slug>`.
 - **No direct pushes to `main`** after the baseline commit. Everything goes through a pull request.
 - **Commit and PR titles** follow Conventional Commits. Version numbers and `CHANGELOG.md` change only in release pull requests. See [versioning.md](versioning.md).
 - **A pull request needs:** passing CI (format, clippy with warnings denied, tests), tests for new behavior, and an updated design doc if a decision changed.

@@ -1,0 +1,30 @@
+# Supply chain checks, run in CI by cargo-deny.
+
+[graph]
+all-features = true
+
+[advisories]
+yanked = "deny"
+ignore = [
+  { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml is unmaintained and comes in through serde_yaml_ng. Replacing the YAML crate is a follow-up change." },
+]
+
+[licenses]
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "BSL-1.0",
+  "Unicode-3.0",
+  "Unlicense",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
