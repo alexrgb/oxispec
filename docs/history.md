@@ -1,0 +1,82 @@
+# History
+
+Your specs live in git, so git already keeps every version, who changed it, and when. OxiSpec reads that history and explains it in terms of specs: which node changed, which link was added, which requirement was removed. Nothing is stored apart from git, so there is no second copy to fall out of step.
+
+These commands need a git repository.
+
+## Naming a revision
+
+Wherever a command takes a revision, you can give:
+
+| You type | Meaning |
+|---|---|
+| `HEAD`, `HEAD~3`, `main`, `a1b2c3d` | Anything git understands |
+| `v1.0` | A tag. If there is no such revision, the tag `specs-v1.0` is tried, which is how spec release tags are named (see [versioning.md](versioning.md)) |
+| `date:2026-01-31` | The last commit on or before that day. Git cannot read dates after 2099. |
+
+## Reading the past
+
+```bash
+oxispec show REQ-AUTH-0001 --at v1.0     # the node as it was
+oxispec check --at date:2026-01-31       # were the specs consistent then?
+```
+
+Both print the revision they used. `--at` cannot be combined with `check --changed`. The JSON output has an `at` object with the commit, its short form and its subject, or `null` for the working tree.
+
+## History of a node
+
+```bash
+oxispec history REQ-AUTH-0001
+```
+
+```text
+REQ-AUTH-0001  specs/requirements/auth/session-timeout.md
+  uncommitted
+      text changed
+  1953dc2  2026-10-28  Ann  rename file
+      moved: specs/requirements/auth/admin-session-timeout.md -> specs/requirements/auth/session-timeout.md
+  ef17c3e  2026-10-28  Ann  accept the timeout requirement
+      status: draft -> accepted; link added: decided-by ADR-0001
+  efd148b  2026-10-28  Ann  add auth requirement and adr
+      created
+```
+
+Each entry is a commit that changed the node's file, newest first, followed across renames and moves. Under it is what changed in terms of the node: type, status, owner, path, links added and removed, requirements and scenarios added and removed, and whether the text changed. An edit that is not committed yet is listed first.
+
+- `--limit N` shows N commits (default 20) and says when there is more.
+- `--at REVISION` reads the history up to that revision, and finds nodes that no longer exist in the working tree. Without it, a deleted node is reported as unknown, with a hint to use `--at`.
+- `--json` gives `entries`, each with the commit (or `null` for uncommitted), an `event` of `created`, `changed`, `deleted` or `uncommitted`, and the list of `changes`.
+
+An edit that only changes a comment in the frontmatter shows as "no change to the node itself".
+
+## Comparing two revisions
+
+```bash
+oxispec diff v1.0              # from v1.0 to the working tree
+oxispec diff v1.0 v2.0         # between two revisions
+```
+
+```text
+from efd148b (add auth requirement and adr) to the working tree
++ REQ-AUTH-0002  specs/requirements/auth/password-length.md
+~ REQ-AUTH-0001  specs/requirements/auth/session-timeout.md
+    status: draft -> accepted
+    link added: decided-by ADR-0001
+findings: 0 new, 0 fixed
+```
+
+`+` is a node added, `-` removed, `~` changed. Then the checks are run on both sides and the difference is reported: errors and warnings that are new, and ones that went away. A finding is matched by its node and message, not its file, so moving a file does not make its findings new. This is how you answer "did this release make the specs less consistent?".
+
+`--json` gives `added`, `removed`, `changed` (with the same `change` objects as `history`), `new_findings` and `fixed_findings`.
+
+## How fast
+
+Reading a revision means reading every spec file from git's object store, in one `git cat-file` process. On 20,000 requirement files (release build, macOS, Apple silicon, after the first run):
+
+| Command | Time |
+|---|---|
+| `show --at` or `check --at` | about 1 to 1.5 s |
+| `diff` between two revisions | about 2 to 3 s |
+| `history` of one node | about 0.3 s |
+
+Runs right after a very large commit can be much slower, because git may be packing its objects in the background. I saw a first run of 20 s. These are one machine's numbers, not a promise. If history queries over many commits become too slow, an index over commits can be added without changing the commands.
