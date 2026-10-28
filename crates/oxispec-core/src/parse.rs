@@ -54,6 +54,23 @@ fn has_normative(line: &str) -> bool {
         .any(|w| w == "SHALL" || w == "MUST")
 }
 
+/// The first `# ` heading outside code fences.
+fn first_heading(body: &str) -> Option<String> {
+    let mut in_fence = false;
+    for line in body.lines() {
+        let t = line.trim_start();
+        if t.starts_with("```") || t.starts_with("~~~") {
+            in_fence = !in_fence;
+        } else if !in_fence
+            && let Some(heading) = line.strip_prefix("# ")
+            && !heading.trim().is_empty()
+        {
+            return Some(heading.trim().to_string());
+        }
+    }
+    None
+}
+
 /// Splits a trailing `{#anchor}` off a scenario heading.
 fn split_anchor(heading: &str) -> (String, Option<String>) {
     let s = heading.trim();
@@ -141,11 +158,18 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
     } else {
         Vec::new()
     };
+    let title = first_heading(body).map(|h| {
+        h.strip_prefix(&format!("{id}: "))
+            .map_or(h.clone(), str::to_string)
+    });
     let node = Node {
         id,
         ty,
         status: fm.status,
         owner: fm.owner,
+        approved_by: fm.approved_by,
+        approved_on: fm.approved_on,
+        title,
         path: path.to_path_buf(),
         links: fm
             .links
@@ -237,5 +261,37 @@ mod tests {
         assert_eq!(span.lines_before_body, 3);
         assert!(frontmatter_span("no frontmatter\n").is_none());
         assert!(frontmatter_span("---\nnever closed\n").is_none());
+    }
+
+    #[test]
+    fn titles_come_from_the_first_heading_without_the_id_prefix() {
+        let text = "---\nid: ADR-0001\ntype: adr\n---\n```\n# not this\n```\n# ADR-0001: Use Postgres\n\n# Another\n";
+        let node = parse_file_text(Path::new("a.md"), text).0.unwrap();
+        assert_eq!(node.title.as_deref(), Some("Use Postgres"));
+        let plain = parse_file_text(
+            Path::new("a.md"),
+            "---\nid: ADR-0002\ntype: adr\n---\n# Plain title\n",
+        )
+        .0
+        .unwrap();
+        assert_eq!(plain.title.as_deref(), Some("Plain title"));
+        let none = parse_file_text(
+            Path::new("a.md"),
+            "---\nid: ADR-0003\ntype: adr\n---\nno heading\n",
+        )
+        .0
+        .unwrap();
+        assert_eq!(none.title, None);
+    }
+
+    #[test]
+    fn approval_fields_are_read_when_quoted_or_not() {
+        let quoted = "---\nid: CHG-1\ntype: change\nstatus: approved\napproved_by: Ann Lee\napproved_on: \"2026-10-28\"\n---\n";
+        let node = parse_file_text(Path::new("c.md"), quoted).0.unwrap();
+        assert_eq!(node.approved_by.as_deref(), Some("Ann Lee"));
+        assert_eq!(node.approved_on.as_deref(), Some("2026-10-28"));
+        let bare = quoted.replace("\"2026-10-28\"", "2026-10-28");
+        let node = parse_file_text(Path::new("c.md"), &bare).0.unwrap();
+        assert_eq!(node.approved_on.as_deref(), Some("2026-10-28"));
     }
 }

@@ -13,6 +13,7 @@ use oxispec_core::index;
 use oxispec_core::node::KNOWN_LINK_KINDS;
 use oxispec_core::{Finding, Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, modules};
 
+mod changes;
 mod git;
 mod history;
 mod rollback;
@@ -81,6 +82,11 @@ enum Command {
         id_scheme: Option<IdSchemeArg>,
         #[command(subcommand)]
         kind: NewKind,
+    },
+    /// Work with change sets
+    Change {
+        #[command(subcommand)]
+        action: ChangeAction,
     },
     /// Add a typed link from one node to another, for example: link REQ-AUTH-0001 decided-by ADR-0001
     Link {
@@ -198,6 +204,31 @@ enum NewKind {
     Requirement { domain: String, title: String },
     /// An architecture decision record
     Adr { title: String },
+    /// A change set: a proposed change to the specs, with a lifecycle
+    Change { title: String },
+}
+
+#[derive(Subcommand)]
+enum ChangeAction {
+    /// Move a change set along draft, in-review, approved, merged, reverted
+    Status {
+        id: String,
+        status: String,
+        /// Who approves, when moving to approved (default: git user.name)
+        #[arg(long)]
+        by: Option<String>,
+        /// Skip a step, or set a status that is not the next one
+        #[arg(long)]
+        force: bool,
+    },
+    /// List change sets
+    List {
+        /// Only change sets with this status
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -240,8 +271,27 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     require_module(&cfg, "adrs")?;
                     new_adr(&root, &title, scheme, cache)?
                 }
+                NewKind::Change { title } => {
+                    require_module(&cfg, "specs")?;
+                    new_change(&root, &title, scheme, cache)?
+                }
             };
             println!("created {} ({})", created.0, created.1.display());
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Change { action } => {
+            let root = project_root(cli.root.as_deref())?;
+            match action {
+                ChangeAction::Status {
+                    id,
+                    status,
+                    by,
+                    force,
+                } => changes::change_status(&root, &id, &status, by.as_deref(), force, cache)?,
+                ChangeAction::List { status, json } => {
+                    changes::change_list(&root, status.as_deref(), json, cache)?
+                }
+            }
             Ok(ExitCode::SUCCESS)
         }
         Command::Link { from, kind, to } => {
@@ -365,6 +415,7 @@ fn require_module(cfg: &Config, module: &str) -> Result<()> {
 fn ensure_module_dirs(root: &Path, cfg: &Config) -> Result<()> {
     if cfg.has("specs") {
         fs::create_dir_all(root.join("specs/requirements"))?;
+        fs::create_dir_all(root.join("specs/changes"))?;
     }
     if cfg.has("adrs") {
         fs::create_dir_all(root.join("specs/adr"))?;
@@ -844,6 +895,20 @@ status: proposed
 ## Consequences
 ";
 
+const CHANGE_TEMPLATE: &str = "---
+id: @ID@
+type: change
+status: draft
+---
+# @ID@: @TITLE@
+
+## Why
+
+## What changes
+
+## Impact
+";
+
 fn new_requirement(
     root: &Path,
     domain: &str,
@@ -871,6 +936,22 @@ fn new_adr(root: &Path, title: &str, scheme: IdScheme, cache: bool) -> Result<(S
     let suffix = id.strip_prefix("ADR-").unwrap_or(&id);
     let rel = PathBuf::from("specs/adr").join(format!("{suffix}-{}.md", slug(title)?));
     let body = ADR_TEMPLATE.replace("@ID@", &id).replace("@TITLE@", title);
+    write_new(root, &rel, &body)?;
+    Ok((id, rel))
+}
+
+fn new_change(
+    root: &Path,
+    title: &str,
+    scheme: IdScheme,
+    cache: bool,
+) -> Result<(String, PathBuf)> {
+    let id = allocate_id(&load_graph(root, cache), "CHG-", scheme)?;
+    let suffix = id.strip_prefix("CHG-").unwrap_or(&id);
+    let rel = PathBuf::from("specs/changes").join(format!("{suffix}-{}.md", slug(title)?));
+    let body = CHANGE_TEMPLATE
+        .replace("@ID@", &id)
+        .replace("@TITLE@", title);
     write_new(root, &rel, &body)?;
     Ok((id, rel))
 }

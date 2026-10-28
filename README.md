@@ -18,10 +18,11 @@ oxispec show ADR-0001
 oxispec history REQ-AUTH-0001   # how it changed, from git
 oxispec diff v1                 # what changed since a tag, branch or commit
 oxispec tag v2                  # name this revision of the specs
+oxispec new change "Tighten timeouts"   # a proposal, with a lifecycle and an approval
 oxispec rollback v1 REQ-AUTH-0001 --dry-run   # put a node back, after checking
 ```
 
-Use `oxispec init --id-scheme random` when several branches add specs at the same time. The file format, link kinds, check codes and the local index are in [docs/format.md](docs/format.md). History and diffs are in [docs/history.md](docs/history.md).
+Use `oxispec init --id-scheme random` when several branches add specs at the same time. The file format, link kinds, check codes and the local index are in [docs/format.md](docs/format.md). History, diffs, rollback and tags are in [docs/history.md](docs/history.md). Change sets are described in [docs/format.md](docs/format.md#change-sets).
 
 `oxispec check` reports dangling links (including links to scenarios that do not exist), duplicate IDs, supersede cycles, and requirements without a scenario or a SHALL/MUST. It exits with code 1 when there are errors.
 

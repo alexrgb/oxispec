@@ -414,3 +414,10 @@ pub fn list_tags(root: &Path) -> Result<Vec<SpecTag>> {
     }
     Ok(tags)
 }
+
+/// The name git has for the current user (`user.name`), if any.
+pub fn user_name(root: &Path) -> Result<Option<String>> {
+    let out = git(root, &["config", "user.name"])?;
+    let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    Ok((out.status.success() && !name.is_empty()).then_some(name))
+}

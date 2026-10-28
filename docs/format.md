@@ -32,6 +32,7 @@ The system MUST expire admin sessions after 15 minutes of inactivity.
 | `type` | Required. `requirement`, `adr`, `decision`, `test-case`, `standard`, `api`, `state-machine`, `diagram`, `term`, `change`, `system`, `container`, `component`, `person`, `deployment-environment` or `release`. Other types give a warning, because later modules add types. |
 | `status` | Optional, free text for now, for example `draft` or `accepted`. |
 | `owner` | Optional, free text for now. |
+| `approved_by`, `approved_on` | Set on [change sets](#change-sets) when they are approved. A name, and a date as `YYYY-MM-DD`. |
 | `links` | Optional. Link kind to one or more targets. |
 
 Unknown keys are ignored.
@@ -88,10 +89,35 @@ oxispec link REQ-AUTH-0001 decided-by ADR-0001
 | `overrides` | This node deliberately overrides that one |
 | `conflicts-with` | A declared conflict |
 | `depends-on` | This node needs that one |
+| `changes` | This change set modifies that node |
 
 Other kinds are accepted with a warning, which catches typos.
 
 Reverse links are computed, never stored. `oxispec show ADR-0001` lists the nodes that link to it.
+
+## Change sets
+
+A change set is a node of type `change`: a proposal to change the specs, with a lifecycle. Create one with `oxispec new change "Tighten timeouts"`, which writes `specs/changes/0001-tighten-timeouts.md` with sections for why, what changes and impact. Link it to what it changes with `oxispec link CHG-0001 changes REQ-AUTH-0001`.
+
+```text
+draft -> in-review -> approved -> merged -> reverted
+              ^            |
+              +------------+   changes after approval go back to review
+```
+
+```bash
+oxispec change status CHG-0001 in-review
+oxispec change status CHG-0001 approved --by "Ann Lee"   # default: git user.name
+oxispec change status CHG-0001 merged
+oxispec change list --status approved                    # also --json
+```
+
+- Steps cannot be skipped, and `--force` allows it.
+- Approving records `approved_by` and `approved_on` in the file, so the approval is in git history with the commit that made it. Merging keeps them. Moving back to draft or review withdraws them.
+- `oxispec check` reports a change set with a missing or unknown status (E012) and an approved or merged one with no approver (E013).
+- **The approval is recorded, not enforced.** Anyone who can edit the file can write a name into it. Until access control exists, what stops someone approving their own change is your repository's review rules. An agent should propose a change set and leave approval to a person.
+
+Releases (next) use the change sets: a release can require that none are still draft or in review.
 
 ## Project config
 
@@ -156,6 +182,8 @@ Codes are stable. A code is never reused.
 | E009 | error | A link points to a scenario that does not exist |
 | E010 | error | A scenario anchor is used twice in one file |
 | E011 | error | A scenario anchor is not letters and digits |
+| E012 | error | A change set has no status, or one that is not in the lifecycle |
+| E013 | error | A change set is approved or merged but has no `approved_by` |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |

@@ -191,7 +191,7 @@ Operations:
 
 **Rollback is checked.** Before it is applied, the engine builds the would-be graph and runs the validators. It reports broken links, new conflicts and code that references removed requirements. A rollback of one node can be partial (single node and its dependents) or full.
 
-**Change sets** carry state: draft, in review, approved, merged, reverted. They hold the delta, tasks, and the consistency report computed against the base revision.
+**Change sets** carry state: draft, in-review, approved, merged, reverted. They are nodes of type `change`, so they link, diff and have history like any other node, and an approval is recorded in the file (who and when), not enforced until access control exists. They hold the delta, tasks, and the consistency report computed against the base revision.
 
 ## 7. Releases
 
