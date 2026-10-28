@@ -69,6 +69,45 @@ findings: 0 new, 0 fixed
 
 `--json` gives `added`, `removed`, `changed` (with the same `change` objects as `history`), `new_findings` and `fixed_findings`.
 
+## Naming a revision with a tag
+
+```bash
+oxispec tag v2.3                       # tag the latest commit as specs-v2.3
+oxispec tag v1.0 --at HEAD~5 -m "first release"
+oxispec tag                            # list the spec tags
+```
+
+A spec tag is an annotated git tag named `specs-<name>`, so it never collides with the tags of your code (see [versioning.md](versioning.md)). You use it by its short name, for example `oxispec show REQ-AUTH-0001 --at v2.3`. Tags are never moved or overwritten: a name that exists is an error. A tag points at a commit, so changes that are not committed are not in it, and the command says how many spec files are left out. `--json` works for creating and for listing. Annotated tags need git to know your name and email.
+
+## Rolling back
+
+```bash
+oxispec rollback v2.3 REQ-AUTH-0001 ADR-0004   # put these nodes back as they were at v2.3
+oxispec rollback v2.3 --all                    # restore everything that differs
+oxispec rollback v2.3 REQ-AUTH-0001 --dry-run  # show what would happen, change nothing
+```
+
+```text
+rolling back to 73f1fea (c1 create)
+  restore REQ-AUTH-0001 (status: accepted -> draft; link removed: decided-by ADR-0001)
+wrote 1 file(s), deleted 0. Review it with `oxispec diff HEAD`, then commit. ...
+```
+
+For each node, the rollback does one of these:
+
+| The node | What happens |
+|---|---|
+| exists now and then, and differs | its file is put back as it was, at the path it had then |
+| was deleted since | its file comes back |
+| did not exist then | its file is deleted |
+| is already the same | nothing |
+
+**Nothing is committed.** The files change in your working tree, you review them with `oxispec diff HEAD`, and you commit. That commit is the new revision. History is never rewritten, and the rollback itself is visible in `oxispec history`.
+
+**It checks before it writes.** It builds the specs as they would be afterwards and runs the checks. If that would introduce new errors, for example a deleted node that other nodes link to, it prints them and stops without touching anything. It also stops if any file it would change or delete has changes that are not committed, since that work cannot be recovered from git, and if a restored file would overwrite a file that is not part of the rollback. `--force` goes ahead anyway, and `--dry-run` reports the same problems without writing.
+
+`--json` prints the actions and the problems found. The nodes to roll back must be named, or `--all` given, never both.
+
 ## How fast
 
 Reading a revision means reading every spec file from git's object store, in one `git cat-file` process. On 20,000 requirement files (release build, macOS, Apple silicon, after the first run):

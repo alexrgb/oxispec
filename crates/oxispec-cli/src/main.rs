@@ -15,6 +15,7 @@ use oxispec_core::{Finding, Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, m
 
 mod git;
 mod history;
+mod rollback;
 
 #[derive(Parser)]
 #[command(
@@ -120,6 +121,37 @@ enum Command {
         /// Number of commits to show
         #[arg(long, default_value_t = 20)]
         limit: usize,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Put nodes back to how they were at a git revision, after checking nothing breaks.
+    /// Nothing is committed: review the result and commit it.
+    Rollback {
+        /// A branch, tag, hash, or date:YYYY-MM-DD
+        revision: String,
+        /// The nodes to restore
+        ids: Vec<String>,
+        /// Restore every node that differs from that revision
+        #[arg(long)]
+        all: bool,
+        /// Go ahead although it would introduce errors or lose uncommitted work
+        #[arg(long)]
+        force: bool,
+        /// Show what would happen and change nothing
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Name a revision with a tag (specs-NAME), or list the tags when no name is given
+    Tag {
+        name: Option<String>,
+        /// The revision to tag (default: HEAD)
+        #[arg(long)]
+        at: Option<String>,
+        /// The tag's message
+        #[arg(short, long)]
+        message: Option<String>,
         #[arg(long)]
         json: bool,
     },
@@ -260,6 +292,43 @@ fn run(cli: Cli) -> Result<ExitCode> {
         } => {
             let root = project_root(cli.root.as_deref())?;
             history::history_command(&root, &id, at.as_deref(), limit, json, cache)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Rollback {
+            revision,
+            ids,
+            all,
+            force,
+            dry_run,
+            json,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            let options = rollback::Options {
+                revision: &revision,
+                ids,
+                all,
+                force,
+                dry_run,
+                json,
+                cache,
+            };
+            rollback::rollback_command(&root, &options)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Tag {
+            name,
+            at,
+            message,
+            json,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            history::tag_command(
+                &root,
+                name.as_deref(),
+                at.as_deref(),
+                message.as_deref(),
+                json,
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Diff { from, to, json } => {

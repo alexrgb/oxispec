@@ -184,8 +184,8 @@ Operations:
 | `oxispec show REQ-AUTH-0012 --at <rev\|date\|tag>` | Read any node as it was. `check --at` checks the specs as they were |
 | `oxispec diff <revA> <revB>` | Graph-aware diff: nodes, edges, claims, conflicts |
 | `oxispec history REQ-AUTH-0012` | All versions with the change set and reason |
-| `oxispec rollback <rev>` | Creates a **new** revision that restores the old state. History is never rewritten |
-| `oxispec tag v2.3` | Names a revision, for releases and audits |
+| `oxispec rollback <rev> <id>...` | Restores nodes to an old state in the working tree, after checking. Committing it is the **new** revision. History is never rewritten |
+| `oxispec tag v2.3` | Names a revision with the git tag `specs-v2.3`, for releases and audits |
 
 **How it is built.** A revision is a git commit. The first implementation reads old revisions straight from git, so there is one source of truth and no second store to keep in step. The revision store above becomes an index over those commits, added when queries across many commits are measured to be slow, and for server mode. `--at` accepts anything git does, `date:YYYY-MM-DD` for the last commit on or before that day, and a spec release tag without its `specs-` prefix.
 

@@ -240,3 +240,69 @@ pub fn diff_command(
     }
     Ok(())
 }
+
+/// `oxispec tag`: with a name, creates the tag `specs-<name>`. Without one,
+/// lists the spec tags.
+pub fn tag_command(
+    root: &Path,
+    name: Option<&str>,
+    at: Option<&str>,
+    message: Option<&str>,
+    json_output: bool,
+) -> Result<()> {
+    config::load(root)?;
+    git::require_repository(root, "tag")?;
+    let Some(name) = name else {
+        if at.is_some() || message.is_some() {
+            anyhow::bail!("--at and --message are for creating a tag, so give it a name");
+        }
+        let tags = git::list_tags(root)?;
+        if json_output {
+            let list: Vec<_> = tags
+                .iter()
+                .map(|t| json!({"name": t.name, "tag": t.tag, "commit": t.commit, "date": t.date, "message": t.message}))
+                .collect();
+            let out = json!({"schema_version": OUTPUT_SCHEMA_VERSION, "tags": list});
+            println!("{}", serde_json::to_string_pretty(&out)?);
+        } else if tags.is_empty() {
+            println!("no spec tags yet; create one with `oxispec tag <name>`");
+        } else {
+            for t in &tags {
+                println!("{:<16} {}  {}  {}", t.name, t.commit, t.date, t.message);
+            }
+        }
+        return Ok(());
+    };
+
+    let revision = git::resolve_rev(root, at.unwrap_or("HEAD"))?;
+    let default_message = format!("OxiSpec tag {name}");
+    let tag = git::create_tag(
+        root,
+        name,
+        &revision.oid,
+        message.unwrap_or(&default_message),
+    )?;
+    let loose = if at.is_none() {
+        git::uncommitted_spec_files(root)?
+    } else {
+        0
+    };
+    if json_output {
+        let out = json!({
+            "schema_version": OUTPUT_SCHEMA_VERSION,
+            "tag": tag,
+            "name": name,
+            "commit": revision.oid,
+            "uncommitted_spec_files": loose,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        println!("tagged {revision} as {tag}; use it with --at {name}");
+        if loose > 0 {
+            println!(
+                "note: {loose} spec file(s) have changes that are not committed, so the tag does not include them"
+            );
+        }
+    }
+    Ok(())
+}
