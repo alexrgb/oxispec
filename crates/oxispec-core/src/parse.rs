@@ -79,7 +79,7 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
     let Some((yaml, body, consumed)) = split_frontmatter(text) else {
         return (None, Vec::new());
     };
-    let fm: Frontmatter = match serde_yaml_ng::from_str(yaml) {
+    let fm: Frontmatter = match serde_saphyr::from_str(yaml) {
         Ok(fm) => fm,
         Err(e) => {
             let f = Finding::warning(

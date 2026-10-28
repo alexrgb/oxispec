@@ -11,7 +11,7 @@ pub enum Error {
     #[error("{0}: {1}")]
     Io(PathBuf, std::io::Error),
     #[error("invalid config {0}: {1}")]
-    Yaml(PathBuf, serde_yaml_ng::Error),
+    Yaml(PathBuf, String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,7 +42,7 @@ pub fn find_root(start: &Path) -> Option<PathBuf> {
 pub fn load(root: &Path) -> Result<Config, Error> {
     let path = root.join(CONFIG_PATH);
     let text = std::fs::read_to_string(&path).map_err(|e| Error::Io(path.clone(), e))?;
-    serde_yaml_ng::from_str(&text).map_err(|e| Error::Yaml(path, e))
+    serde_saphyr::from_str(&text).map_err(|e| Error::Yaml(path, e.to_string()))
 }
 
 pub fn save(root: &Path, config: &Config) -> Result<(), Error> {
@@ -50,6 +50,7 @@ pub fn save(root: &Path, config: &Config) -> Result<(), Error> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| Error::Io(dir.to_path_buf(), e))?;
     }
-    let text = serde_yaml_ng::to_string(config).map_err(|e| Error::Yaml(path.clone(), e))?;
+    let text =
+        serde_saphyr::to_string(config).map_err(|e| Error::Yaml(path.clone(), e.to_string()))?;
     std::fs::write(&path, text).map_err(|e| Error::Io(path, e))
 }
