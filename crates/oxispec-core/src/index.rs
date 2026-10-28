@@ -27,7 +27,7 @@ use crate::parse::parse_file_text;
 pub const CACHE_DIR: &str = ".oxispec/cache";
 const CACHE_FILE: &str = "index.json";
 /// Bump when the layout of the cache file changes.
-const CACHE_VERSION: u32 = 1;
+const CACHE_VERSION: u32 = 2;
 /// A different engine version may parse differently, so it never reuses a cache.
 const ENGINE: &str = env!("CARGO_PKG_VERSION");
 /// Files modified within this window before the cache was written are not trusted by size and time.
@@ -149,8 +149,11 @@ pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
             continue;
         }
         stats.files += 1;
-        let rel = path.strip_prefix(root).unwrap_or(path);
-        let key = key_of(rel);
+        // Paths are kept with `/` separators on every platform, so output and
+        // JSON look the same everywhere and match what git reports.
+        let key = key_of(path.strip_prefix(root).unwrap_or(path));
+        let rel_buf = PathBuf::from(&key);
+        let rel = rel_buf.as_path();
         seen.insert(key.clone());
         let cached = old.as_ref().and_then(|c| c.files.get(&key));
         let meta = fs::metadata(path).ok();
@@ -430,5 +433,19 @@ mod tests {
             graph.nodes[0].path,
             Path::new("specs").join("auth").join("a.md")
         );
+    }
+
+    #[test]
+    fn paths_use_forward_slashes_on_every_platform() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(root, "specs/auth/a.md", &node_text("REQ-A-0001"));
+        write(root, "specs/bad.md", "---\nid: [unclosed\n---\n");
+        for cached in [false, true, true] {
+            let (graph, _) = load(root, cached);
+            assert_eq!(graph.nodes[0].path.to_string_lossy(), "specs/auth/a.md");
+            let finding = graph.findings[0].path.as_ref().unwrap();
+            assert_eq!(finding.to_string_lossy(), "specs/bad.md");
+        }
     }
 }

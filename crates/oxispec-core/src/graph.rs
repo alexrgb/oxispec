@@ -1,11 +1,12 @@
 //! The graph: all nodes found under a project root, plus reverse links.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::finding::Finding;
 use crate::id;
 use crate::node::Node;
+use crate::parse::parse_file_text;
 
 #[derive(Debug, Default)]
 pub struct Graph {
@@ -35,6 +36,29 @@ impl Graph {
     /// touching the local index. See [`crate::index::load`] for the cached version.
     pub fn load(root: &Path) -> Graph {
         crate::index::load(root, false).0
+    }
+
+    /// Builds a graph from files that are not on disk, for example read from
+    /// an older git revision. Paths are relative to the project root.
+    pub fn from_sources<I>(sources: I) -> Graph
+    where
+        I: IntoIterator<Item = (PathBuf, Vec<u8>)>,
+    {
+        let mut nodes = Vec::new();
+        let mut findings = Vec::new();
+        for (path, bytes) in sources {
+            match String::from_utf8(bytes) {
+                Ok(text) => {
+                    let (node, parse_findings) = parse_file_text(&path, &text);
+                    nodes.extend(node);
+                    findings.extend(parse_findings);
+                }
+                Err(_) => findings.push(
+                    Finding::warning("W003", "cannot read file: not valid UTF-8").at(&path, None),
+                ),
+            }
+        }
+        Graph::new(nodes, findings)
     }
 
     pub fn from_nodes(nodes: Vec<Node>) -> Graph {

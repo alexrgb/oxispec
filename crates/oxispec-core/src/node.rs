@@ -62,6 +62,9 @@ pub struct Node {
     /// Link kind to target IDs, for example `decided-by` to `[ADR-0007]`.
     pub links: BTreeMap<String, Vec<String>>,
     pub requirements: Vec<RequirementBlock>,
+    /// BLAKE3 hash of everything after the frontmatter, to see that the text changed.
+    #[serde(default)]
+    pub body_hash: String,
 }
 
 impl Node {

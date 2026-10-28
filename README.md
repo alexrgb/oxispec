@@ -15,9 +15,11 @@ oxispec link REQ-AUTH-0001 decided-by ADR-0001
 oxispec check
 oxispec check --changed   # only what differs from git HEAD, and what links to it
 oxispec show ADR-0001
+oxispec history REQ-AUTH-0001   # how it changed, from git
+oxispec diff v1                 # what changed since a tag, branch or commit
 ```
 
-Use `oxispec init --id-scheme random` when several branches add specs at the same time. The file format, link kinds, check codes and the local index are in [docs/format.md](docs/format.md).
+Use `oxispec init --id-scheme random` when several branches add specs at the same time. The file format, link kinds, check codes and the local index are in [docs/format.md](docs/format.md). History and diffs are in [docs/history.md](docs/history.md).
 
 `oxispec check` reports dangling links (including links to scenarios that do not exist), duplicate IDs, supersede cycles, and requirements without a scenario or a SHALL/MUST. It exits with code 1 when there are errors.
 

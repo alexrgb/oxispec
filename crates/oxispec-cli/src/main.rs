@@ -11,9 +11,10 @@ use oxispec_core::edit::{LinkEdit, add_link};
 use oxispec_core::impact::{impact, in_scope};
 use oxispec_core::index;
 use oxispec_core::node::KNOWN_LINK_KINDS;
-use oxispec_core::{Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, modules};
+use oxispec_core::{Finding, Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, modules};
 
 mod git;
+mod history;
 
 #[derive(Parser)]
 #[command(
@@ -106,6 +107,29 @@ enum Command {
         /// The git ref to compare with, for --changed
         #[arg(long, default_value = "HEAD", requires = "changed")]
         base: String,
+        /// Check the specs as they were at a git revision (a branch, tag, hash or date:YYYY-MM-DD)
+        #[arg(long, conflicts_with = "changed")]
+        at: Option<String>,
+    },
+    /// Show how a node changed over time, from git history
+    History {
+        id: String,
+        /// Look at history up to this revision, and find nodes that no longer exist
+        #[arg(long)]
+        at: Option<String>,
+        /// Number of commits to show
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show how the specs differ between two revisions (default for the second: the working tree)
+    Diff {
+        /// A branch, tag, hash, or date:YYYY-MM-DD
+        from: String,
+        to: Option<String>,
+        #[arg(long)]
+        json: bool,
     },
     /// Build or refresh the local index in .oxispec/cache
     Index {
@@ -120,6 +144,9 @@ enum Command {
         id: String,
         #[arg(long)]
         json: bool,
+        /// Show the node as it was at a git revision (a branch, tag, hash or date:YYYY-MM-DD)
+        #[arg(long)]
+        at: Option<String>,
     },
 }
 
@@ -197,12 +224,14 @@ fn run(cli: Cli) -> Result<ExitCode> {
             verbose,
             changed,
             base,
+            at,
         } => {
             let options = CheckOptions {
                 json,
                 strict,
                 verbose,
                 changed_since: changed.then_some(base),
+                at,
             };
             check_command(&project_root(cli.root.as_deref())?, &options, cache)
         }
@@ -213,8 +242,29 @@ fn run(cli: Cli) -> Result<ExitCode> {
             index_command(&project_root(cli.root.as_deref())?, rebuild, json)?;
             Ok(ExitCode::SUCCESS)
         }
-        Command::Show { id, json } => {
-            show(&project_root(cli.root.as_deref())?, &id, json, cache)?;
+        Command::Show { id, json, at } => {
+            show(
+                &project_root(cli.root.as_deref())?,
+                &id,
+                json,
+                cache,
+                at.as_deref(),
+            )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::History {
+            id,
+            at,
+            limit,
+            json,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            history::history_command(&root, &id, at.as_deref(), limit, json, cache)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Diff { from, to, json } => {
+            let root = project_root(cli.root.as_deref())?;
+            history::diff_command(&root, &from, to.as_deref(), json, cache)?;
             Ok(ExitCode::SUCCESS)
         }
     }
@@ -438,6 +488,22 @@ struct CheckOptions {
     verbose: bool,
     /// `Some(base)` limits the report to files changed since that git ref.
     changed_since: Option<String>,
+    /// Check the specs as they were at this git revision.
+    at: Option<String>,
+}
+
+/// `error[E002]: message`, the first line of a finding.
+pub(crate) fn finding_line(f: &Finding) -> String {
+    let level = match f.severity {
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+        Severity::Info => "info",
+    };
+    format!("{level}[{}]: {}", f.code, f.message)
+}
+
+fn revision_json(revision: &git::Revision) -> serde_json::Value {
+    serde_json::json!({"commit": revision.oid, "short": revision.short, "subject": revision.subject})
 }
 
 fn load_graph(root: &Path, cache: bool) -> Graph {
@@ -482,7 +548,15 @@ fn index_command(root: &Path, rebuild: bool, json: bool) -> Result<()> {
 
 fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<ExitCode> {
     config::load(root)?;
-    let graph = load_graph(root, cache);
+    let revision = options
+        .at
+        .as_deref()
+        .map(|spec| git::resolve_rev(root, spec))
+        .transpose()?;
+    let graph = match &revision {
+        Some(rev) => git::graph_at(root, rev)?,
+        None => load_graph(root, cache),
+    };
     let mut findings = check(&graph);
     let total = graph.nodes.len();
     let mut checked = total;
@@ -499,6 +573,7 @@ fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<Exi
     if options.json {
         let out = serde_json::json!({
             "schema_version": OUTPUT_SCHEMA_VERSION,
+            "at": revision.as_ref().map(revision_json),
             "nodes": total,
             "checked_nodes": checked,
             "scope": scope.map(|(base, files)| serde_json::json!({"base": base, "changed_files": files})),
@@ -508,16 +583,14 @@ fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<Exi
         });
         println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
+        if let Some(rev) = &revision {
+            println!("checking {rev}");
+        }
         for f in &findings {
             if f.severity == Severity::Info && !options.verbose {
                 continue;
             }
-            let level = match f.severity {
-                Severity::Error => "error",
-                Severity::Warning => "warning",
-                Severity::Info => "info",
-            };
-            println!("{level}[{}]: {}", f.code, f.message);
+            println!("{}", finding_line(f));
             if let Some(path) = &f.path {
                 match f.line {
                     Some(line) => println!("  --> {}:{line}", path.display()),
@@ -540,9 +613,13 @@ fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<Exi
     })
 }
 
-fn show(root: &Path, id: &str, json: bool, cache: bool) -> Result<()> {
+fn show(root: &Path, id: &str, json: bool, cache: bool, at: Option<&str>) -> Result<()> {
     config::load(root)?;
-    let graph = load_graph(root, cache);
+    let revision = at.map(|spec| git::resolve_rev(root, spec)).transpose()?;
+    let graph = match &revision {
+        Some(rev) => git::graph_at(root, rev)?,
+        None => load_graph(root, cache),
+    };
     let node = graph
         .get(id)
         .with_context(|| format!("no node with id {id}"))?;
@@ -554,11 +631,15 @@ fn show(root: &Path, id: &str, json: bool, cache: bool) -> Result<()> {
             .collect();
         let out = serde_json::json!({
             "schema_version": OUTPUT_SCHEMA_VERSION,
+            "at": revision.as_ref().map(revision_json),
             "node": node,
             "incoming": incoming,
         });
         println!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
+    }
+    if let Some(rev) = &revision {
+        println!("at {rev}");
     }
     println!(
         "{}  {}  [{}]",

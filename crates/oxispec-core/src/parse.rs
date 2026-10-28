@@ -153,6 +153,7 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
             .map(|(k, v)| (k, v.into_vec()))
             .collect(),
         requirements,
+        body_hash: blake3::hash(body.as_bytes()).to_hex().to_string(),
     };
     (Some(node), Vec::new())
 }

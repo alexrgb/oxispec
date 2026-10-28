@@ -448,7 +448,12 @@ fn a_damaged_cache_is_replaced_without_an_error() {
 // ---- check --changed ----
 
 fn git(dir: &Path, args: &[&str]) {
+    git_env(dir, args, &[]);
+}
+
+fn git_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) {
     let out = Command::new("git")
+        .envs(env.iter().copied())
         .args([
             "-c",
             "user.name=test",
@@ -618,4 +623,337 @@ fn check_changed_outside_a_git_repository_explains_itself() {
     let out = run(p, &["check", "--changed"]);
     assert_eq!(out.code, 2);
     assert!(out.stderr.contains("git repository"), "{}", out.stderr);
+}
+
+// ---- history, diff and --at ----
+
+fn commit_all(dir: &Path, message: &str) {
+    git(dir, &["add", "-A"]);
+    git(dir, &["commit", "-q", "-m", message]);
+}
+
+/// A repository with four commits:
+/// 1. REQ-AUTH-0001 and ADR-0001 are created
+/// 2. REQ-AUTH-0001 is accepted and linked to the ADR
+/// 3. REQ-AUTH-0002 is added
+/// 4. the file of REQ-AUTH-0001 is renamed
+fn project_with_history(p: &Path) {
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    run(p, &["new", "requirement", "auth", "Admin session timeout"]);
+    run(p, &["new", "adr", "Use Postgres"]);
+    commit_all(p, "add the auth requirement and an adr");
+
+    run(p, &["link", "REQ-AUTH-0001", "decided-by", "ADR-0001"]);
+    let file = auth_path(p, "admin-session-timeout");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, text.replace("status: draft", "status: accepted")).unwrap();
+    commit_all(p, "accept the timeout requirement");
+
+    run(p, &["new", "requirement", "auth", "Password length"]);
+    commit_all(p, "add password length");
+
+    git(
+        p,
+        &[
+            "mv",
+            "specs/requirements/auth/admin-session-timeout.md",
+            "specs/requirements/auth/session-timeout.md",
+        ],
+    );
+    git(p, &["commit", "-q", "-m", "rename the file"]);
+}
+
+#[test]
+fn history_lists_each_change_and_follows_a_renamed_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+
+    let out = run(p, &["history", "REQ-AUTH-0001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let text = out.stdout;
+    assert!(
+        text.contains("REQ-AUTH-0001  specs/requirements/auth/session-timeout.md"),
+        "{text}"
+    );
+    assert!(text.contains("rename the file"), "{text}");
+    assert!(
+        text.contains("moved: specs/requirements/auth/admin-session-timeout.md"),
+        "{text}"
+    );
+    assert!(text.contains("accept the timeout requirement"), "{text}");
+    assert!(
+        text.contains("status: draft -> accepted; link added: decided-by ADR-0001"),
+        "{text}"
+    );
+    assert!(
+        text.contains("add the auth requirement and an adr"),
+        "{text}"
+    );
+    assert!(text.contains("created"), "{text}");
+    assert!(!text.contains("uncommitted"), "{text}");
+    // Newest first.
+    let newest = text.find("rename the file").unwrap();
+    let oldest = text.find("add the auth requirement").unwrap();
+    assert!(newest < oldest, "{text}");
+
+    // An edit that is not committed shows at the top.
+    let file = auth_path(p, "session-timeout");
+    let current = fs::read_to_string(&file).unwrap();
+    fs::write(&file, format!("{current}\nAn extra paragraph.\n")).unwrap();
+    let out = run(p, &["history", "REQ-AUTH-0001"]);
+    let first_entry = out.stdout.lines().nth(1).unwrap();
+    assert!(first_entry.contains("uncommitted"), "{}", out.stdout);
+    assert!(out.stdout.contains("text changed"), "{}", out.stdout);
+}
+
+#[test]
+fn history_json_and_limit() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+
+    let out = run(p, &["history", "REQ-AUTH-0001", "--json"]);
+    let report = json(&out);
+    assert_eq!(report["schema_version"], 1);
+    assert_eq!(report["truncated"], false);
+    let entries = report["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 3);
+    assert_eq!(entries[0]["event"], "changed");
+    assert_eq!(entries[0]["changes"][0]["change"], "moved");
+    assert_eq!(entries[2]["event"], "created");
+    assert_eq!(
+        entries[2]["commit"]["subject"],
+        "add the auth requirement and an adr"
+    );
+
+    let out = run(p, &["history", "REQ-AUTH-0001", "--limit", "1", "--json"]);
+    let report = json(&out);
+    assert_eq!(report["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(report["truncated"], true);
+    let human = run(p, &["history", "REQ-AUTH-0001", "--limit", "1"]);
+    assert!(
+        human.stdout.contains("more history exists"),
+        "{}",
+        human.stdout
+    );
+}
+
+#[test]
+fn history_of_a_deleted_node_is_found_with_at() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+    fs::remove_file(auth_path(p, "password-length")).unwrap();
+    commit_all(p, "remove password length");
+
+    let out = run(p, &["history", "REQ-AUTH-0002"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("--at"), "{}", out.stderr);
+
+    let out = run(p, &["history", "REQ-AUTH-0002", "--at", "HEAD~1"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("add password length"), "{}", out.stdout);
+
+    // The deletion itself shows when the history is read from the last commit.
+    let out = run(p, &["history", "REQ-AUTH-0002", "--at", "HEAD"]);
+    assert_eq!(out.code, 2, "the node does not exist at HEAD");
+}
+
+#[test]
+fn show_and_check_can_look_at_an_older_revision() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+    // Break something after the history above.
+    let file = auth_path(p, "password-length");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        text.replace(
+            "status: draft\n",
+            "status: draft\nlinks:\n  refines: REQ-NOPE-0001\n",
+        ),
+    )
+    .unwrap();
+    commit_all(p, "link to something missing");
+
+    let out = run(p, &["show", "REQ-AUTH-0001", "--at", "HEAD~4"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("[draft]"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("admin-session-timeout.md"),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["show", "REQ-AUTH-0001"]);
+    assert!(out.stdout.contains("[accepted]"), "{}", out.stdout);
+    assert!(out.stdout.contains("session-timeout.md"), "{}", out.stdout);
+
+    // The old revision was clean. The current one is not.
+    let out = run(p, &["check", "--at", "HEAD~1"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(out.stdout.starts_with("checking "), "{}", out.stdout);
+    assert_eq!(run(p, &["check"]).code, 1);
+
+    let out = run(p, &["check", "--at", "HEAD~1", "--json"]);
+    let report = json(&out);
+    assert_eq!(report["at"]["subject"], "rename the file");
+    assert!(report["at"]["commit"].as_str().unwrap().len() >= 40);
+}
+
+#[test]
+fn diff_reports_nodes_and_findings() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+
+    let out = run(p, &["diff", "HEAD~3"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let text = out.stdout;
+    assert!(text.contains("to the working tree"), "{text}");
+    assert!(text.contains("+ REQ-AUTH-0002"), "{text}");
+    assert!(text.contains("~ REQ-AUTH-0001"), "{text}");
+    assert!(text.contains("status: draft -> accepted"), "{text}");
+    assert!(text.contains("findings: 0 new, 0 fixed"), "{text}");
+
+    // Two commits that introduce, then fix, a dangling link.
+    let file = auth_path(p, "password-length");
+    let original = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        original.replace(
+            "status: draft\n",
+            "status: draft\nlinks:\n  refines: REQ-NOPE-0001\n",
+        ),
+    )
+    .unwrap();
+    commit_all(p, "break a link");
+    fs::write(&file, &original).unwrap();
+    commit_all(p, "fix the link");
+
+    let out = run(p, &["diff", "HEAD~2", "HEAD~1"]);
+    assert!(
+        out.stdout.contains("findings: 1 new, 0 fixed"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("new error[E002]"), "{}", out.stdout);
+    let out = run(p, &["diff", "HEAD~1", "HEAD"]);
+    assert!(
+        out.stdout.contains("findings: 0 new, 1 fixed"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("fixed error[E002]"), "{}", out.stdout);
+    let out = run(p, &["diff", "HEAD~2", "HEAD"]);
+    assert!(
+        out.stdout.contains("no changes to any node"),
+        "{}",
+        out.stdout
+    );
+
+    let out = run(p, &["diff", "HEAD~2", "HEAD~1", "--json"]);
+    let report = json(&out);
+    assert_eq!(report["schema_version"], 1);
+    assert_eq!(report["new_findings"].as_array().unwrap().len(), 1);
+    assert_eq!(report["changed"][0]["id"], "REQ-AUTH-0002");
+    assert_eq!(report["changed"][0]["changes"][0]["change"], "link_added");
+}
+
+#[test]
+fn revisions_can_be_branches_tags_hashes_or_dates() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init"]).code, 0);
+    run(p, &["new", "requirement", "auth", "Login"]);
+    git_env(p, &["add", "-A"], &[]);
+    git_env(
+        p,
+        &["commit", "-q", "-m", "first"],
+        &[
+            ("GIT_AUTHOR_DATE", "2026-01-10T12:00:00Z"),
+            ("GIT_COMMITTER_DATE", "2026-01-10T12:00:00Z"),
+        ],
+    );
+    git(p, &["tag", "specs-v1"]);
+    let file = p.join("specs/requirements/auth/login.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, text.replace("status: draft", "status: accepted")).unwrap();
+    git_env(p, &["add", "-A"], &[]);
+    git_env(
+        p,
+        &["commit", "-q", "-m", "second"],
+        &[
+            ("GIT_AUTHOR_DATE", "2026-02-20T12:00:00Z"),
+            ("GIT_COMMITTER_DATE", "2026-02-20T12:00:00Z"),
+        ],
+    );
+
+    let status_at = |rev: &str| -> String {
+        let out = run(p, &["show", "REQ-AUTH-0001", "--at", rev]);
+        assert_eq!(out.code, 0, "{rev}: {}{}", out.stdout, out.stderr);
+        out.stdout
+    };
+    assert!(status_at("HEAD").contains("[accepted]"));
+    assert!(status_at("HEAD~1").contains("[draft]"));
+    assert!(status_at("specs-v1").contains("[draft]"));
+    // A spec release tag works without its `specs-` prefix.
+    assert!(status_at("v1").contains("[draft]"));
+    assert!(status_at("date:2026-01-31").contains("[draft]"));
+    assert!(status_at("date:2026-02-20").contains("[accepted]"));
+    // Git cannot read dates after 2099, but any date up to then works.
+    assert!(status_at("date:2099-12-31").contains("[accepted]"));
+
+    for (rev, expected) in [
+        ("date:2025-12-31", "no commit on or before"),
+        ("date:yesterday", "date:2026-01-31"),
+        ("no-such-rev", "unknown revision"),
+    ] {
+        let out = run(p, &["show", "REQ-AUTH-0001", "--at", rev]);
+        assert_eq!(out.code, 2, "{rev}");
+        assert!(out.stderr.contains(expected), "{rev}: {}", out.stderr);
+    }
+}
+
+#[test]
+fn history_commands_need_a_git_repository_and_at_excludes_changed() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init"]).code, 0);
+    run(p, &["new", "requirement", "auth", "Login"]);
+    for args in [
+        &["history", "REQ-AUTH-0001"][..],
+        &["diff", "HEAD"][..],
+        &["show", "REQ-AUTH-0001", "--at", "HEAD"][..],
+    ] {
+        let out = run(p, args);
+        assert_eq!(out.code, 2, "{args:?}");
+        assert!(
+            out.stderr.contains("git repository"),
+            "{args:?}: {}",
+            out.stderr
+        );
+    }
+    let out = run(p, &["check", "--at", "HEAD", "--changed"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("cannot be used with"), "{}", out.stderr);
+}
+
+#[test]
+fn history_in_a_repository_without_commits_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init"]).code, 0);
+    run(p, &["new", "requirement", "auth", "Login"]);
+    let out = run(p, &["history", "REQ-AUTH-0001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("created (not committed)"),
+        "{}",
+        out.stdout
+    );
 }

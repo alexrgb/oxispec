@@ -2,6 +2,7 @@
 
 pub mod check;
 pub mod config;
+pub mod diff;
 pub mod edit;
 pub mod finding;
 pub mod graph;
