@@ -12,6 +12,7 @@ pub mod index;
 pub mod modules;
 pub mod node;
 pub mod parse;
+pub mod rollback;
 
 pub use check::check;
 pub use finding::{Finding, Severity};

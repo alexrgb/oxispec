@@ -323,3 +323,94 @@ pub fn changes(root: &Path, base: &str) -> Result<Changes> {
     changes.paths.extend(files.into_iter().map(PathBuf::from));
     Ok(changes)
 }
+
+/// Files among `paths` that have changes which are not committed: edited,
+/// staged, or not tracked yet. Rolling these back would lose that work.
+pub fn dirty_paths(root: &Path, paths: &[PathBuf]) -> Result<Vec<String>> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut args: Vec<String> = ["status", "--porcelain", "-z", "--untracked-files=all", "--"]
+        .map(String::from)
+        .to_vec();
+    args.extend(paths.iter().map(|p| p.to_string_lossy().replace('\\', "/")));
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let out = git_stdout(root, &args)?;
+    // Entries look like `XY path`. A rename adds a second entry with only a path.
+    Ok(names(&out)
+        .filter(|e| e.as_bytes().get(2) == Some(&b' '))
+        .map(|e| e[3..].to_string())
+        .collect())
+}
+
+/// How many markdown files have changes that are not committed.
+pub fn uncommitted_spec_files(root: &Path) -> Result<usize> {
+    Ok(dirty_paths(root, &[PathBuf::from("*.md")])?.len())
+}
+
+/// Spec release tags are git tags with this prefix, as in docs/versioning.md.
+pub const TAG_PREFIX: &str = "specs-";
+
+#[derive(Debug, Clone)]
+pub struct SpecTag {
+    /// The name without the prefix, as you type it.
+    pub name: String,
+    pub tag: String,
+    pub commit: String,
+    pub date: String,
+    pub message: String,
+}
+
+/// Creates the annotated tag `specs-<name>` at a commit.
+pub fn create_tag(root: &Path, name: &str, oid: &str, message: &str) -> Result<String> {
+    let tag = format!("{TAG_PREFIX}{name}");
+    let refname = format!("refs/tags/{tag}");
+    if !git(root, &["check-ref-format", &refname])?.status.success() {
+        bail!("`{name}` is not a valid tag name");
+    }
+    let exists = git(root, &["rev-parse", "--verify", "--quiet", &refname])?;
+    if exists.status.success() {
+        bail!("the tag {tag} already exists; tags are never moved, so pick a new name");
+    }
+    let out = git(root, &["tag", "-a", "-m", message, &tag, oid])?;
+    if !out.status.success() {
+        bail!(
+            "git could not create the tag: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(tag)
+}
+
+/// All spec tags, newest first.
+pub fn list_tags(root: &Path) -> Result<Vec<SpecTag>> {
+    let pattern = format!("refs/tags/{TAG_PREFIX}*");
+    let listing = git_text(
+        root,
+        &[
+            "for-each-ref",
+            "--sort=-creatordate",
+            "--format=%(refname:strip=2)%1f%(creatordate:short)%1f%(contents:subject)",
+            &pattern,
+        ],
+    )?;
+    let mut tags = Vec::new();
+    for line in listing.lines().filter(|l| !l.is_empty()) {
+        let mut fields = line.split('\x1f');
+        let tag = fields.next().unwrap_or("").to_string();
+        let date = fields.next().unwrap_or("").to_string();
+        let message = fields.next().unwrap_or("").to_string();
+        let commit = git_text(
+            root,
+            &["rev-parse", "--short", &format!("{tag}^{{commit}}")],
+        )?;
+        tags.push(SpecTag {
+            name: tag.strip_prefix(TAG_PREFIX).unwrap_or(&tag).to_string(),
+            tag,
+            commit,
+            date,
+            message,
+        });
+    }
+    Ok(tags)
+}

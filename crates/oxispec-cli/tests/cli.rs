@@ -12,6 +12,11 @@ fn run(dir: &Path, args: &[&str]) -> Out {
     let o = Command::new(env!("CARGO_BIN_EXE_oxispec"))
         .args(args)
         .current_dir(dir)
+        // So that `oxispec tag` can create annotated tags without a global git identity.
+        .env("GIT_COMMITTER_NAME", "test")
+        .env("GIT_COMMITTER_EMAIL", "test@example.com")
+        .env("GIT_AUTHOR_NAME", "test")
+        .env("GIT_AUTHOR_EMAIL", "test@example.com")
         .output()
         .expect("binary runs");
     Out {
@@ -956,4 +961,320 @@ fn history_in_a_repository_without_commits_says_so() {
         "{}",
         out.stdout
     );
+}
+
+// ---- rollback and tag ----
+
+fn head_subject(p: &Path) -> String {
+    let out = Command::new("git")
+        .args(["log", "-1", "--format=%s"])
+        .current_dir(p)
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+fn git_status(p: &Path) -> String {
+    let out = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(p)
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+#[test]
+fn rollback_restores_a_node_and_its_old_path_without_committing() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+
+    // Commit 1 is HEAD~3: the node was a draft, in its first file.
+    let out = run(p, &["rollback", "HEAD~3", "REQ-AUTH-0001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("restore REQ-AUTH-0001"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("status: accepted -> draft"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("moved: "), "{}", out.stdout);
+
+    assert!(auth_path(p, "admin-session-timeout").is_file());
+    assert!(!auth_path(p, "session-timeout").exists());
+    assert!(
+        run(p, &["show", "REQ-AUTH-0001"])
+            .stdout
+            .contains("[draft]")
+    );
+    assert_eq!(run(p, &["check"]).code, 0);
+
+    // Nothing was committed. The change waits for review.
+    assert_eq!(head_subject(p), "rename the file");
+    assert!(!git_status(p).is_empty());
+
+    // Committing it is the new revision, and it shows in the history.
+    commit_all(p, "roll the timeout back to a draft");
+    let out = run(p, &["history", "REQ-AUTH-0001"]);
+    let first = out.stdout.lines().nth(1).unwrap();
+    assert!(
+        first.contains("roll the timeout back to a draft"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("status: accepted -> draft"),
+        "{}",
+        out.stdout
+    );
+    // History is not rewritten: the older commits are all still there.
+    assert!(
+        out.stdout.contains("accept the timeout requirement"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn rollback_dry_run_and_json_change_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+
+    let out = run(p, &["rollback", "HEAD~3", "REQ-AUTH-0001", "--dry-run"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("dry run: nothing was changed"),
+        "{}",
+        out.stdout
+    );
+    assert!(git_status(p).is_empty());
+
+    let out = run(
+        p,
+        &["rollback", "HEAD~3", "REQ-AUTH-0001", "--dry-run", "--json"],
+    );
+    let report = json(&out);
+    assert_eq!(report["schema_version"], 1);
+    assert_eq!(report["dry_run"], true);
+    assert_eq!(report["actions"][0]["action"], "restore");
+    assert_eq!(report["actions"][0]["id"], "REQ-AUTH-0001");
+    assert!(git_status(p).is_empty());
+}
+
+#[test]
+fn rollback_refuses_to_break_links_unless_forced() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+    assert_eq!(
+        run(p, &["link", "REQ-AUTH-0001", "refines", "REQ-AUTH-0002"]).code,
+        0
+    );
+    commit_all(p, "link to the password requirement");
+
+    // REQ-AUTH-0002 did not exist in the first commit, so this deletes it.
+    let out = run(p, &["rollback", "HEAD~4", "REQ-AUTH-0002"]);
+    assert_eq!(out.code, 2, "{}", out.stdout);
+    assert!(
+        out.stdout.contains("remove REQ-AUTH-0002"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("would break"), "{}", out.stdout);
+    assert!(out.stderr.contains("new error"), "{}", out.stderr);
+    assert!(
+        auth_path(p, "password-length").is_file(),
+        "nothing was touched"
+    );
+    assert!(git_status(p).is_empty());
+
+    let out = run(p, &["rollback", "HEAD~4", "REQ-AUTH-0002", "--force"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(!auth_path(p, "password-length").exists());
+    assert_eq!(
+        run(p, &["check"]).code,
+        1,
+        "the link now dangles, as warned"
+    );
+}
+
+#[test]
+fn rollback_refuses_to_lose_uncommitted_work_unless_forced() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+    let file = auth_path(p, "session-timeout");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, format!("{text}\nWork in progress.\n")).unwrap();
+
+    let out = run(p, &["rollback", "HEAD~3", "REQ-AUTH-0001"]);
+    assert_eq!(out.code, 2, "{}", out.stdout);
+    assert!(out.stderr.contains("not committed"), "{}", out.stderr);
+    assert!(
+        fs::read_to_string(&file)
+            .unwrap()
+            .contains("Work in progress.")
+    );
+
+    let out = run(p, &["rollback", "HEAD~3", "REQ-AUTH-0001", "--force"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(!file.exists());
+}
+
+#[test]
+fn rollback_recreates_deleted_nodes_and_all_restores_everything() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+    fs::remove_file(auth_path(p, "password-length")).unwrap();
+    commit_all(p, "delete the password requirement");
+
+    let out = run(p, &["rollback", "HEAD~1", "REQ-AUTH-0002"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("recreate REQ-AUTH-0002"),
+        "{}",
+        out.stdout
+    );
+    assert!(auth_path(p, "password-length").is_file());
+    commit_all(p, "bring it back");
+
+    // Back to the very first commit: one node is restored, one is removed.
+    let out = run(p, &["rollback", "HEAD~4", "--all"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["diff", "HEAD~4"]);
+    assert!(
+        out.stdout.contains("no changes to any node"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn rollback_explains_bad_input() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+    let cases: [(&[&str], &str); 5] = [
+        (&["rollback", "HEAD~1"], "name the nodes"),
+        (
+            &["rollback", "HEAD~1", "REQ-AUTH-0001", "--all"],
+            "not both",
+        ),
+        (
+            &["rollback", "HEAD~1", "REQ-NOPE-0001"],
+            "no node REQ-NOPE-0001",
+        ),
+        (
+            &["rollback", "no-such-rev", "REQ-AUTH-0001"],
+            "unknown revision",
+        ),
+        (
+            &[
+                "rollback",
+                "HEAD~1",
+                "REQ-AUTH-0001",
+                "--dry-run",
+                "--force",
+                "--all",
+            ],
+            "not both",
+        ),
+    ];
+    for (args, expected) in cases {
+        let out = run(p, args);
+        assert_eq!(out.code, 2, "{args:?}");
+        assert!(out.stderr.contains(expected), "{args:?}: {}", out.stderr);
+    }
+    assert!(git_status(p).is_empty());
+
+    let plain = tempfile::tempdir().unwrap();
+    assert_eq!(run(plain.path(), &["init"]).code, 0);
+    let out = run(plain.path(), &["rollback", "HEAD", "REQ-AUTH-0001"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("git repository"), "{}", out.stderr);
+}
+
+#[test]
+fn tags_name_revisions_and_work_with_at() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+
+    let out = run(p, &["tag"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("no spec tags yet"), "{}", out.stdout);
+
+    // Tag the first commit, then the latest one.
+    let out = run(p, &["tag", "v1", "--at", "HEAD~3", "-m", "first draft"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("as specs-v1"), "{}", out.stdout);
+    assert_eq!(run(p, &["tag", "v2"]).code, 0);
+
+    let out = run(p, &["tag"]);
+    assert!(out.stdout.contains("v1"), "{}", out.stdout);
+    assert!(out.stdout.contains("first draft"), "{}", out.stdout);
+    assert!(out.stdout.contains("v2"), "{}", out.stdout);
+    let tags = json(&run(p, &["tag", "--json"]));
+    assert_eq!(tags["schema_version"], 1);
+    assert_eq!(tags["tags"].as_array().unwrap().len(), 2);
+
+    // The tag is a revision for every history command.
+    assert!(
+        run(p, &["show", "REQ-AUTH-0001", "--at", "v1"])
+            .stdout
+            .contains("[draft]")
+    );
+    assert!(
+        run(p, &["show", "REQ-AUTH-0001", "--at", "v2"])
+            .stdout
+            .contains("[accepted]")
+    );
+    let out = run(p, &["diff", "v1", "v2"]);
+    assert!(out.stdout.contains("+ REQ-AUTH-0002"), "{}", out.stdout);
+    assert_eq!(
+        run(p, &["rollback", "v1", "REQ-AUTH-0001", "--dry-run"]).code,
+        0
+    );
+
+    // Tags are never moved, and names must be valid.
+    let out = run(p, &["tag", "v1"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("already exists"), "{}", out.stderr);
+    let out = run(p, &["tag", "bad name"]);
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("not a valid tag name"),
+        "{}",
+        out.stderr
+    );
+    let out = run(p, &["tag", "--at", "HEAD"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("give it a name"), "{}", out.stderr);
+}
+
+#[test]
+fn a_tag_says_when_spec_changes_are_left_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+    let file = auth_path(p, "session-timeout");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, format!("{text}\nNot committed.\n")).unwrap();
+
+    let out = run(p, &["tag", "v1"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout
+            .contains("1 spec file(s) have changes that are not committed"),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["tag", "v0", "--at", "HEAD~1"]);
+    assert!(!out.stdout.contains("not committed"), "{}", out.stdout);
 }
