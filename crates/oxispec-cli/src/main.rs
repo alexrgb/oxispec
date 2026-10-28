@@ -8,8 +8,12 @@ use clap::{Parser, Subcommand, ValueEnum};
 use oxispec_core::check::{LinkResolution, resolve_link};
 use oxispec_core::config::{self, Config, IdScheme};
 use oxispec_core::edit::{LinkEdit, add_link};
+use oxispec_core::impact::{impact, in_scope};
+use oxispec_core::index;
 use oxispec_core::node::KNOWN_LINK_KINDS;
 use oxispec_core::{Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, modules};
+
+mod git;
 
 #[derive(Parser)]
 #[command(
@@ -21,6 +25,9 @@ struct Cli {
     /// Project folder (default: the nearest parent with .oxispec/config.yaml)
     #[arg(long, global = true)]
     root: Option<PathBuf>,
+    /// Do not read or write the local index in .oxispec/cache
+    #[arg(long, global = true)]
+    no_cache: bool,
     #[command(subcommand)]
     command: Command,
 }
@@ -93,6 +100,20 @@ enum Command {
         /// Also print informational findings
         #[arg(long, short)]
         verbose: bool,
+        /// Only report findings for spec files that changed since BASE, and the nodes that link to them
+        #[arg(long)]
+        changed: bool,
+        /// The git ref to compare with, for --changed
+        #[arg(long, default_value = "HEAD", requires = "changed")]
+        base: String,
+    },
+    /// Build or refresh the local index in .oxispec/cache
+    Index {
+        /// Delete the cache first, so every file is parsed again
+        #[arg(long)]
+        rebuild: bool,
+        #[arg(long)]
+        json: bool,
     },
     /// Show a node, its links, and the nodes that link to it
     Show {
@@ -131,6 +152,7 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> Result<ExitCode> {
+    let cache = !cli.no_cache;
     match cli.command {
         Command::Init {
             preset,
@@ -153,11 +175,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let created = match kind {
                 NewKind::Requirement { domain, title } => {
                     require_module(&cfg, "specs")?;
-                    new_requirement(&root, &domain, &title, scheme)?
+                    new_requirement(&root, &domain, &title, scheme, cache)?
                 }
                 NewKind::Adr { title } => {
                     require_module(&cfg, "adrs")?;
-                    new_adr(&root, &title, scheme)?
+                    new_adr(&root, &title, scheme, cache)?
                 }
             };
             println!("created {} ({})", created.0, created.1.display());
@@ -166,16 +188,33 @@ fn run(cli: Cli) -> Result<ExitCode> {
         Command::Link { from, kind, to } => {
             let root = project_root(cli.root.as_deref())?;
             config::load(&root)?;
-            link_command(&root, &from, &kind, &to)?;
+            link_command(&root, &from, &kind, &to, cache)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Check {
             json,
             strict,
             verbose,
-        } => check_command(&project_root(cli.root.as_deref())?, json, strict, verbose),
+            changed,
+            base,
+        } => {
+            let options = CheckOptions {
+                json,
+                strict,
+                verbose,
+                changed_since: changed.then_some(base),
+            };
+            check_command(&project_root(cli.root.as_deref())?, &options, cache)
+        }
+        Command::Index { rebuild, json } => {
+            if !cache {
+                bail!("`index` builds the local index, so it cannot be used with --no-cache");
+            }
+            index_command(&project_root(cli.root.as_deref())?, rebuild, json)?;
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Show { id, json } => {
-            show(&project_root(cli.root.as_deref())?, &id, json)?;
+            show(&project_root(cli.root.as_deref())?, &id, json, cache)?;
             Ok(ExitCode::SUCCESS)
         }
     }
@@ -349,8 +388,8 @@ fn modules_command(explicit: Option<&Path>, action: ModulesAction) -> Result<()>
     }
 }
 
-fn link_command(root: &Path, from: &str, kind: &str, to: &str) -> Result<()> {
-    let graph = Graph::load(root);
+fn link_command(root: &Path, from: &str, kind: &str, to: &str, cache: bool) -> Result<()> {
+    let graph = load_graph(root, cache);
     let parsed = id::parse(from).with_context(|| format!("{from:?} is not a valid id"))?;
     if parsed.namespace.is_some() || parsed.child.is_some() {
         bail!("a link starts at a node of this project, not at {from}");
@@ -393,16 +432,76 @@ fn link_command(root: &Path, from: &str, kind: &str, to: &str) -> Result<()> {
     Ok(())
 }
 
-fn check_command(root: &Path, json: bool, strict: bool, verbose: bool) -> Result<ExitCode> {
+struct CheckOptions {
+    json: bool,
+    strict: bool,
+    verbose: bool,
+    /// `Some(base)` limits the report to files changed since that git ref.
+    changed_since: Option<String>,
+}
+
+fn load_graph(root: &Path, cache: bool) -> Graph {
+    index::load(root, cache).0
+}
+
+fn index_command(root: &Path, rebuild: bool, json: bool) -> Result<()> {
     config::load(root)?;
-    let graph = Graph::load(root);
-    let findings = check(&graph);
-    let count = |s: Severity| findings.iter().filter(|f| f.severity == s).count();
-    let (errors, warnings) = (count(Severity::Error), count(Severity::Warning));
+    if rebuild {
+        index::clear(root).context("cannot delete the old cache")?;
+    }
+    let (graph, stats) = index::load(root, true);
     if json {
         let out = serde_json::json!({
             "schema_version": OUTPUT_SCHEMA_VERSION,
             "nodes": graph.nodes.len(),
+            "files": stats.files,
+            "read": stats.read,
+            "parsed": stats.parsed,
+            "reused": stats.reused,
+            "removed": stats.removed,
+            "cache_written": stats.cache_written,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        println!(
+            "indexed {} markdown files ({} nodes): {} parsed, {} reused, {} removed",
+            stats.files,
+            graph.nodes.len(),
+            stats.parsed,
+            stats.reused,
+            stats.removed
+        );
+        if stats.parsed > 0 && !stats.cache_written {
+            println!(
+                "note: the cache could not be written, so the next run parses everything again"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<ExitCode> {
+    config::load(root)?;
+    let graph = load_graph(root, cache);
+    let mut findings = check(&graph);
+    let total = graph.nodes.len();
+    let mut checked = total;
+    let mut scope = None;
+    if let Some(base) = &options.changed_since {
+        let changes = git::changes(root, base)?;
+        let touched = impact(&graph, &changes.paths, &changes.old_ids);
+        findings.retain(|f| in_scope(f, &touched));
+        checked = touched.nodes;
+        scope = Some((base.as_str(), changes.paths.len()));
+    }
+    let count = |s: Severity| findings.iter().filter(|f| f.severity == s).count();
+    let (errors, warnings) = (count(Severity::Error), count(Severity::Warning));
+    if options.json {
+        let out = serde_json::json!({
+            "schema_version": OUTPUT_SCHEMA_VERSION,
+            "nodes": total,
+            "checked_nodes": checked,
+            "scope": scope.map(|(base, files)| serde_json::json!({"base": base, "changed_files": files})),
             "errors": errors,
             "warnings": warnings,
             "findings": findings,
@@ -410,7 +509,7 @@ fn check_command(root: &Path, json: bool, strict: bool, verbose: bool) -> Result
         println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
         for f in &findings {
-            if f.severity == Severity::Info && !verbose {
+            if f.severity == Severity::Info && !options.verbose {
                 continue;
             }
             let level = match f.severity {
@@ -426,12 +525,14 @@ fn check_command(root: &Path, json: bool, strict: bool, verbose: bool) -> Result
                 }
             }
         }
-        println!(
-            "{} nodes checked: {errors} errors, {warnings} warnings",
-            graph.nodes.len()
-        );
+        match scope {
+            Some((base, files)) => println!(
+                "{checked} of {total} nodes checked ({files} changed files since {base}, and the nodes that link to them): {errors} errors, {warnings} warnings"
+            ),
+            None => println!("{total} nodes checked: {errors} errors, {warnings} warnings"),
+        }
     }
-    let failed = errors > 0 || (strict && warnings > 0);
+    let failed = errors > 0 || (options.strict && warnings > 0);
     Ok(if failed {
         ExitCode::from(1)
     } else {
@@ -439,9 +540,9 @@ fn check_command(root: &Path, json: bool, strict: bool, verbose: bool) -> Result
     })
 }
 
-fn show(root: &Path, id: &str, json: bool) -> Result<()> {
+fn show(root: &Path, id: &str, json: bool, cache: bool) -> Result<()> {
     config::load(root)?;
-    let graph = Graph::load(root);
+    let graph = load_graph(root, cache);
     let node = graph
         .get(id)
         .with_context(|| format!("no node with id {id}"))?;
@@ -598,12 +699,13 @@ fn new_requirement(
     domain: &str,
     title: &str,
     scheme: IdScheme,
+    cache: bool,
 ) -> Result<(String, PathBuf)> {
     let domain = domain.to_ascii_uppercase();
     if domain.is_empty() || !domain.chars().all(|c| c.is_ascii_alphanumeric()) {
         bail!("the domain must be letters and digits, for example AUTH");
     }
-    let id = allocate_id(&Graph::load(root), &format!("REQ-{domain}-"), scheme)?;
+    let id = allocate_id(&load_graph(root, cache), &format!("REQ-{domain}-"), scheme)?;
     let rel = PathBuf::from("specs/requirements")
         .join(domain.to_ascii_lowercase())
         .join(format!("{}.md", slug(title)?));
@@ -614,8 +716,8 @@ fn new_requirement(
     Ok((id, rel))
 }
 
-fn new_adr(root: &Path, title: &str, scheme: IdScheme) -> Result<(String, PathBuf)> {
-    let id = allocate_id(&Graph::load(root), "ADR-", scheme)?;
+fn new_adr(root: &Path, title: &str, scheme: IdScheme, cache: bool) -> Result<(String, PathBuf)> {
+    let id = allocate_id(&load_graph(root, cache), "ADR-", scheme)?;
     let suffix = id.strip_prefix("ADR-").unwrap_or(&id);
     let rel = PathBuf::from("specs/adr").join(format!("{suffix}-{}.md", slug(title)?));
     let body = ADR_TEMPLATE.replace("@ID@", &id).replace("@TITLE@", title);

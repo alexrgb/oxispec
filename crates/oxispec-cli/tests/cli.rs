@@ -321,3 +321,301 @@ fn a_project_from_iteration_one_without_format_still_works() {
     assert!(out.stdout.contains("REQ-AUTH-0001"));
     assert_eq!(run(p, &["check"]).code, 0);
 }
+
+// ---- local index ----
+
+fn json(out: &Out) -> serde_json::Value {
+    serde_json::from_str(&out.stdout).unwrap_or_else(|e| panic!("{e}: {}", out.stdout))
+}
+
+/// Makes every markdown file look like it was last modified an hour ago, so
+/// the index trusts its size and time.
+fn age_markdown_files(dir: &Path) {
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(folder) = stack.pop() {
+        for entry in fs::read_dir(folder).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "md") {
+                let file = fs::OpenOptions::new().write(true).open(&path).unwrap();
+                file.set_modified(
+                    std::time::SystemTime::now() - std::time::Duration::from_secs(3600),
+                )
+                .unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn index_parses_files_once_and_then_reuses_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    age_markdown_files(p);
+
+    let first = json(&run(p, &["index", "--rebuild", "--json"]));
+    assert_eq!(first["schema_version"], 1);
+    assert_eq!(first["files"], 3);
+    assert_eq!(first["nodes"], 3);
+    assert_eq!(first["parsed"], 3);
+    assert_eq!(first["cache_written"], true);
+
+    // Nothing changed: nothing is read or parsed.
+    let second = json(&run(p, &["index", "--json"]));
+    assert_eq!(second["parsed"], 0);
+    assert_eq!(second["read"], 0);
+    assert_eq!(second["reused"], 3);
+    assert_eq!(second["cache_written"], false);
+
+    // Change one file and delete another.
+    let changed = p.join("specs/requirements/auth/password-length.md");
+    let text = fs::read_to_string(&changed).unwrap();
+    fs::write(&changed, format!("{text}\nMore detail.\n")).unwrap();
+    fs::remove_file(p.join("specs/requirements/auth/admin-session-timeout.md")).unwrap();
+    let third = json(&run(p, &["index", "--json"]));
+    assert_eq!(third["parsed"], 1);
+    assert_eq!(third["reused"], 1);
+    assert_eq!(third["removed"], 1);
+    assert_eq!(third["nodes"], 2);
+
+    let human = run(p, &["index"]);
+    assert_eq!(human.code, 0);
+    assert!(
+        human.stdout.contains("0 parsed, 2 reused, 0 removed"),
+        "{}",
+        human.stdout
+    );
+}
+
+#[test]
+fn commands_give_the_same_answers_with_and_without_the_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    let file = p.join("specs/requirements/auth/password-length.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        text.replace(
+            "status: draft\n",
+            "status: draft\nlinks:\n  refines: REQ-NOPE-0001\n",
+        ),
+    )
+    .unwrap();
+
+    let cold = run(p, &["check"]);
+    let warm = run(p, &["check"]);
+    let uncached = run(p, &["check", "--no-cache"]);
+    assert_eq!(cold.code, 1);
+    assert_eq!(cold.stdout, warm.stdout);
+    assert_eq!(cold.stdout, uncached.stdout);
+    assert!(cold.stdout.contains("E002"), "{}", cold.stdout);
+}
+
+#[test]
+fn no_cache_leaves_no_cache_behind_and_index_refuses_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    let _ = fs::remove_dir_all(p.join(".oxispec/cache"));
+
+    assert_eq!(run(p, &["check", "--no-cache"]).code, 0);
+    assert!(!p.join(".oxispec/cache").exists());
+
+    let out = run(p, &["index", "--no-cache"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("--no-cache"), "{}", out.stderr);
+}
+
+#[test]
+fn a_damaged_cache_is_replaced_without_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    assert_eq!(run(p, &["check"]).code, 0);
+    let cache = p.join(".oxispec/cache/index.json");
+    assert!(cache.is_file());
+
+    fs::write(&cache, "{ this is not json").unwrap();
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let repaired = fs::read_to_string(&cache).unwrap();
+    assert!(serde_json::from_str::<serde_json::Value>(&repaired).is_ok());
+}
+
+// ---- check --changed ----
+
+fn git(dir: &Path, args: &[&str]) {
+    let out = Command::new("git")
+        .args([
+            "-c",
+            "user.name=test",
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "core.autocrlf=false",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("git runs");
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+fn auth_path(p: &Path, slug: &str) -> std::path::PathBuf {
+    p.join("specs/requirements/auth").join(format!("{slug}.md"))
+}
+
+/// Four nodes, committed:
+/// - REQ-AUTH-0001 `a`, decided by ADR-0001
+/// - REQ-AUTH-0002 `b`, refines scenario S1 of `a`
+/// - REQ-AUTH-0003 `broken`, which has no scenario (an error nobody touches)
+/// - ADR-0001
+fn committed_project_with_an_old_error(p: &Path) {
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    for title in ["a", "b", "broken"] {
+        assert_eq!(run(p, &["new", "requirement", "auth", title]).code, 0);
+    }
+    assert_eq!(run(p, &["new", "adr", "Use Postgres"]).code, 0);
+    assert_eq!(
+        run(p, &["link", "REQ-AUTH-0002", "refines", "REQ-AUTH-0001.S1"]).code,
+        0
+    );
+    assert_eq!(
+        run(p, &["link", "REQ-AUTH-0001", "decided-by", "ADR-0001"]).code,
+        0
+    );
+    let broken = auth_path(p, "broken");
+    let text = fs::read_to_string(&broken).unwrap();
+    let without_scenario = text.split("#### Scenario:").next().unwrap().to_string();
+    fs::write(&broken, without_scenario).unwrap();
+    git(p, &["add", "-A"]);
+    git(p, &["commit", "-q", "-m", "base"]);
+}
+
+#[test]
+fn check_changed_reports_only_what_the_change_touches() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    committed_project_with_an_old_error(p);
+
+    // The old error fails a full check, but nothing has changed yet.
+    assert_eq!(run(p, &["check"]).code, 1);
+    let out = run(p, &["check", "--changed"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(
+        out.stdout.contains("0 of 4 nodes checked"),
+        "{}",
+        out.stdout
+    );
+
+    // A harmless edit to `a` checks `a` and `b`, which links to it.
+    let a = auth_path(p, "a");
+    let original = fs::read_to_string(&a).unwrap();
+    fs::write(&a, format!("{original}\nMore detail.\n")).unwrap();
+    let out = run(p, &["check", "--changed"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(
+        out.stdout
+            .contains("2 of 4 nodes checked (1 changed files since HEAD"),
+        "{}",
+        out.stdout
+    );
+
+    // Renaming the scenario anchor breaks `b`, which did not change itself.
+    fs::write(&a, original.replace("{#S1}", "{#S2}")).unwrap();
+    let out = run(p, &["check", "--changed"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(out.stdout.contains("E009"), "{}", out.stdout);
+    assert!(out.stdout.contains("b.md"), "{}", out.stdout);
+    assert!(
+        !out.stdout.contains("E006"),
+        "the old error is not reported: {}",
+        out.stdout
+    );
+
+    // Deleting ADR-0001 breaks `a`, which links to it. The old ID comes from git.
+    fs::write(&a, &original).unwrap();
+    let adr = fs::read_dir(p.join("specs/adr"))
+        .unwrap()
+        .flatten()
+        .next()
+        .unwrap()
+        .path();
+    fs::remove_file(adr).unwrap();
+    let out = run(p, &["check", "--changed"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(out.stdout.contains("E002"), "{}", out.stdout);
+    assert!(out.stdout.contains("ADR-0001"), "{}", out.stdout);
+    assert!(!out.stdout.contains("E006"), "{}", out.stdout);
+
+    let out = run(p, &["check", "--changed", "--json"]);
+    let report = json(&out);
+    assert_eq!(report["scope"]["base"], "HEAD");
+    assert_eq!(report["scope"]["changed_files"], 1);
+    assert_eq!(report["errors"], 1);
+}
+
+#[test]
+fn check_changed_can_compare_with_an_older_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    committed_project_with_an_old_error(p);
+    let a = auth_path(p, "a");
+    let original = fs::read_to_string(&a).unwrap();
+    fs::write(&a, format!("{original}\nMore detail.\n")).unwrap();
+    git(p, &["commit", "-q", "-am", "edit a"]);
+
+    let out = run(p, &["check", "--changed"]);
+    assert!(
+        out.stdout.contains("0 of 4 nodes checked"),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["check", "--changed", "--base", "HEAD~1"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(
+        out.stdout.contains("2 of 4 nodes checked"),
+        "{}",
+        out.stdout
+    );
+
+    let out = run(p, &["check", "--changed", "--base", "no-such-ref"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("unknown git ref"), "{}", out.stderr);
+}
+
+#[test]
+fn check_changed_in_a_repository_without_commits_checks_everything() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init"]).code, 0);
+    assert_eq!(run(p, &["new", "requirement", "auth", "Login"]).code, 0);
+    let out = run(p, &["check", "--changed"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("1 of 1 nodes checked"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn check_changed_outside_a_git_repository_explains_itself() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init"]).code, 0);
+    let out = run(p, &["check", "--changed"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("git repository"), "{}", out.stderr);
+}

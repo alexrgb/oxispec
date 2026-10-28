@@ -17,8 +17,8 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | # | Branch | Scope | Done when |
 |---|---|---|---|
 | 1 | `feat/1-core-foundation` | Node model, frontmatter parser, graph, structural checks, modules and presets, CLI: `init`, `modules`, `new`, `check`, `show`, CI | Tests pass on Linux and macOS. `init`, `new`, `check` round trip works. **Merged** (#1). |
-| 2 | `feat/2-links-and-ids` | `oxispec link` command, scenario IDs (`{#S1}`) and child-link checks, random ID scheme option, `format` version in the config and `schema_version` in JSON output ([versioning.md](versioning.md)) | A link to a missing scenario is reported. IDs can be allocated without collisions on parallel branches. **In review.** |
-| 3 | `feat/3-local-index` | `RevisionStore` and `TextIndex` traits, `files` store with a cache under `.oxispec/cache`, content hashing, `oxispec index`, `check --changed` | A second `check` on an unchanged project reparses nothing. `--changed` checks only touched nodes and what links to them |
+| 2 | `feat/2-links-and-ids` | `oxispec link` command, scenario IDs (`{#S1}`) and child-link checks, random ID scheme option, `format` version in the config and `schema_version` in JSON output ([versioning.md](versioning.md)) | A link to a missing scenario is reported. IDs can be allocated without collisions on parallel branches. **Merged** (#7). |
+| 3 | `feat/3-local-index` | Local index under `.oxispec/cache` with content hashing and a size-and-time shortcut, `oxispec index`, `--no-cache`, `check --changed`. The `RevisionStore` and `TextIndex` traits move to iterations 4 and 7, when a second implementation exists | A second `check` on an unchanged project reparses nothing. `--changed` checks only touched nodes and what links to them. **In review.** |
 | 4 | `feat/4-history` | SQLite revision store, git-derived revisions, `history`, `at`, `diff`, `rollback`, `tag` | `at <rev> show` returns an old node. `rollback` creates a new revision and refuses when it would break links |
 | 5 | `feat/5-change-sets-and-releases` | Change sets, release manifest, gates, release notes from change sets | `release check` fails on an unapproved change set. Notes are generated |
 | 6 | `feat/6-ci-command` | `oxispec ci`: graph diff, impact set, new-findings-only, SARIF and JUnit reports, pull request comment, GitHub Actions example | A pull request run reports only new findings and uploads SARIF |
@@ -38,4 +38,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 1** (#1): node model and frontmatter parser, graph with computed reverse links, structural checks, module registry and presets, CLI `init`, `modules`, `new`, `check`, `show`.
 - **CI hardening** (#5): Linux, macOS and Windows tests, minimum Rust version job, `cargo-deny`, lint with rustdoc.
 - **YAML parser** (#6): replaced the unmaintained `unsafe-libyaml` with `serde-saphyr`.
-- **Iteration 2** (in review): `oxispec link`, scenario anchors and checks for links to scenarios, random ID scheme, `format` in the config, `schema_version` in JSON output. The format is described in [format.md](format.md).
+- **Iteration 2** (#7): `oxispec link`, scenario anchors and checks for links to scenarios, random ID scheme, `format` in the config, `schema_version` in JSON output. The format is described in [format.md](format.md).
+- **Iteration 3** (in review): the local index with content hashing, `oxispec index`, `--no-cache` and `check --changed`. See [format.md](format.md).

@@ -6,6 +6,8 @@ pub mod edit;
 pub mod finding;
 pub mod graph;
 pub mod id;
+pub mod impact;
+pub mod index;
 pub mod modules;
 pub mod node;
 pub mod parse;

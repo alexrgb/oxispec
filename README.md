@@ -13,10 +13,11 @@ oxispec new requirement auth "Admin session timeout"
 oxispec new adr "Use Postgres"
 oxispec link REQ-AUTH-0001 decided-by ADR-0001
 oxispec check
+oxispec check --changed   # only what differs from git HEAD, and what links to it
 oxispec show ADR-0001
 ```
 
-Use `oxispec init --id-scheme random` when several branches add specs at the same time. The file format, link kinds and check codes are in [docs/format.md](docs/format.md).
+Use `oxispec init --id-scheme random` when several branches add specs at the same time. The file format, link kinds, check codes and the local index are in [docs/format.md](docs/format.md).
 
 `oxispec check` reports dangling links (including links to scenarios that do not exist), duplicate IDs, supersede cycles, and requirements without a scenario or a SHALL/MUST. It exits with code 1 when there are errors.
 

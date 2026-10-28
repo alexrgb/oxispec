@@ -20,4 +20,4 @@ oxispec-core = { path = "../oxispec-core" }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }
