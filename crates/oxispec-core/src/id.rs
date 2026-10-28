@@ -71,11 +71,20 @@ pub fn base_of(s: &str) -> &str {
 const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /// A 4 character suffix for IDs that must not collide across parallel
-/// branches, built from the low 20 bits of `random`. About one million values.
+/// branches, built from the low 20 bits of `random`. Close to one million values.
+///
+/// A suffix always contains a letter. Sequential IDs are all digits
+/// (`REQ-AUTH-0001`), and a random suffix such as `0425` would be mistaken
+/// for one when the next sequential number is chosen.
 pub fn random_suffix(random: u32) -> String {
-    (0..4)
-        .map(|i| ALPHABET[((random >> (5 * i)) & 31) as usize] as char)
-        .collect()
+    let mut chars: Vec<u8> = (0..4)
+        .map(|i| ALPHABET[((random >> (5 * i)) & 31) as usize])
+        .collect();
+    if chars.iter().all(u8::is_ascii_digit) {
+        // Letters are the last 22 entries of the alphabet.
+        chars[3] = ALPHABET[10 + ((random >> 20) % 22) as usize];
+    }
+    chars.into_iter().map(char::from).collect()
 }
 
 #[cfg(test)]
@@ -123,7 +132,7 @@ mod tests {
 
     #[test]
     fn random_suffixes_are_short_readable_and_valid() {
-        assert_eq!(random_suffix(0), "0000");
+        assert_eq!(random_suffix(0), "000A");
         assert_eq!(random_suffix(u32::MAX), "ZZZZ");
         for n in [1u32, 12345, 0xDEAD_BEEF, 987_654_321] {
             let suffix = random_suffix(n);
@@ -132,5 +141,19 @@ mod tests {
             assert!(is_valid(&format!("REQ-ORD-{suffix}")), "{suffix}");
         }
         assert_ne!(random_suffix(1), random_suffix(2));
+    }
+
+    #[test]
+    fn a_random_suffix_never_looks_like_a_sequential_number() {
+        // Digits 0, 4, 2, 5 in the four 5-bit groups: would be "0425".
+        let all_digits: u32 = 4 << 5 | 2 << 10 | 5 << 15;
+        let suffix = random_suffix(all_digits);
+        assert!(suffix.starts_with("042"), "{suffix}");
+        assert!(suffix.bytes().any(|b| b.is_ascii_uppercase()), "{suffix}");
+        assert!(suffix.parse::<u32>().is_err(), "{suffix}");
+        for n in (0..2_000_000u32).step_by(7) {
+            let suffix = random_suffix(n);
+            assert!(suffix.parse::<u32>().is_err(), "{n} gave {suffix}");
+        }
     }
 }

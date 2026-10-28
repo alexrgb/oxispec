@@ -51,7 +51,7 @@ An ID is letters and digits in segments separated by hyphens, starting with a le
 | Scheme | Example | Use when |
 |---|---|---|
 | `sequential` (default) | `REQ-AUTH-0001` | One branch adds specs at a time |
-| `random` | `REQ-AUTH-7K3F` | Several branches add specs in parallel. A four character suffix from 32 readable characters, about a million values, checked against the specs on disk. |
+| `random` | `REQ-AUTH-7K3F` | Several branches add specs in parallel. A four character suffix from 32 readable characters, close to a million values, checked against the specs on disk. A random suffix always contains a letter, so it is never mistaken for a sequential number. |
 
 ## Requirements and scenarios
 
