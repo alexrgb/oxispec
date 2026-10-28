@@ -44,15 +44,33 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --locked
 
-  # Keep the toolchain version in step with `rust-version` in Cargo.toml.
+  # The oldest Rust we support, read from `rust-version` in Cargo.toml so there
+  # is one place to change it.
   msrv:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.89
+      - name: Install the minimum supported Rust
+        run: |
+          version=$(sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml)
+          test -n "$version"
+          rustup toolchain install "$version" --profile minimal
+          rustup default "$version"
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --all-targets --locked
+
+  # An early warning for what the next stable release will break. It does not
+  # block merging.
+  beta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@beta
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --locked
 
   deny:
     runs-on: ubuntu-latest

@@ -16,3 +16,6 @@ updates:
       interval: weekly
     commit-message:
       prefix: "ci(deps)"
+    ignore:
+      # Rust is pinned on purpose: stable in most jobs, `rust-version` for msrv.
+      - dependency-name: dtolnay/rust-toolchain
