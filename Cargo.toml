@@ -7,7 +7,9 @@ version = "0.0.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/alexrgb/oxispec"
-rust-version = "1.85"
+rust-version = "1.88"
+# Not published to crates.io yet. Remove when the first release is published.
+publish = false
 
 [workspace.dependencies]
 anyhow = "1"

@@ -63,10 +63,11 @@ pub fn parse_requirements(body: &str, line_offset: usize) -> Vec<RequirementBloc
             in_description = false;
         } else if line.starts_with('#') {
             in_description = false;
-        } else if in_description && has_normative(line) {
-            if let Some(b) = blocks.last_mut() {
-                b.has_normative = true;
-            }
+        } else if in_description
+            && has_normative(line)
+            && let Some(b) = blocks.last_mut()
+        {
+            b.has_normative = true;
         }
     }
     blocks

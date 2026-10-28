@@ -27,7 +27,7 @@ cargo test --workspace
 
 ## Making a change
 
-1. Branch from `main`. Names: `feat/<n>-<slug>` for an iteration, `fix/<slug>`, `docs/<slug>`.
+1. Branch from `main`. Names: `feat/<n>-<slug>` for an iteration, `fix/<slug>`, `docs/<slug>`, `ci/<slug>`.
 2. Keep the change small and focused. A reviewer should be able to read the whole diff.
 3. Add tests for new behavior. Fix the test first for a bug fix when you can.
 4. Update the docs when behavior changes. If a design decision changes, update `docs/design.md` in the same pull request.
