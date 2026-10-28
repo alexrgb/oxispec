@@ -5,10 +5,13 @@
 //! E007 requirement without SHALL or MUST            E008 requirement node without requirements
 //! E009 link to a scenario that does not exist       E010 duplicate scenario anchor
 //! E011 invalid scenario anchor
+//! E012 change set with a missing or unknown status
+//! E013 approved or merged change set without `approved_by`
 //! W001 unknown node type  W004 unknown link kind    I001 external reference, not checked
 
 use std::collections::{HashMap, HashSet};
 
+use crate::change;
 use crate::finding::{Finding, Severity};
 use crate::graph::Graph;
 use crate::id;
@@ -22,6 +25,9 @@ pub fn check(graph: &Graph) -> Vec<Finding> {
         links(graph, node, &mut findings);
         if node.ty == "requirement" {
             requirements(node, &mut findings);
+        }
+        if node.ty == "change" {
+            change_set(node, &mut findings);
         }
     }
     supersede_cycles(graph, &mut findings);
@@ -185,6 +191,41 @@ fn requirements(node: &Node, out: &mut Vec<Finding>) {
         }
     }
     scenario_anchors(node, out);
+}
+
+fn change_set(node: &Node, out: &mut Vec<Finding>) {
+    let known = change::STATUSES.join(", ");
+    match node.status.as_deref() {
+        Some(status) if change::STATUSES.contains(&status) => {
+            let approver = node.approved_by.as_deref().unwrap_or("").trim();
+            if change::needs_approval(status) && approver.is_empty() {
+                out.push(
+                    Finding::error(
+                        "E013",
+                        format!("change set is {status} but has no `approved_by`"),
+                    )
+                    .at(&node.path, Some(1))
+                    .node(&node.id),
+                );
+            }
+        }
+        Some(other) => out.push(
+            Finding::error(
+                "E012",
+                format!("change set status {other:?} is not one of {known}"),
+            )
+            .at(&node.path, Some(1))
+            .node(&node.id),
+        ),
+        None => out.push(
+            Finding::error(
+                "E012",
+                format!("change set has no `status`; use one of {known}"),
+            )
+            .at(&node.path, Some(1))
+            .node(&node.id),
+        ),
+    }
 }
 
 fn scenario_anchors(node: &Node, out: &mut Vec<Finding>) {
@@ -404,5 +445,40 @@ mod tests {
         assert_eq!(resolve_link(&g, "REQ-X-0001"), LinkResolution::MissingNode);
         assert_eq!(resolve_link(&g, "not an id"), LinkResolution::Invalid);
         assert_eq!(resolve_link(&g, "p/q:REQ-A-1"), LinkResolution::External);
+    }
+
+    fn change_set(status_lines: &str) -> String {
+        format!(
+            "---\nid: CHG-0001\ntype: change\n{status_lines}---\n# CHG-0001: Tighten timeouts\n"
+        )
+    }
+
+    #[test]
+    fn change_set_statuses_are_checked() {
+        let ok = |lines: &str| codes(&graph(&[("c.md", &change_set(lines))]));
+        assert!(ok("status: draft\n").is_empty());
+        assert!(ok("status: in-review\n").is_empty());
+        assert!(ok("status: reverted\n").is_empty());
+        assert_eq!(ok(""), vec!["E012"]);
+        assert_eq!(ok("status: finished\n"), vec!["E012"]);
+    }
+
+    #[test]
+    fn approved_and_merged_change_sets_need_an_approver() {
+        let ok = |lines: &str| codes(&graph(&[("c.md", &change_set(lines))]));
+        assert_eq!(ok("status: approved\n"), vec!["E013"]);
+        assert_eq!(ok("status: merged\napproved_by: \"  \"\n"), vec!["E013"]);
+        assert!(
+            ok("status: approved\napproved_by: Ann Lee\napproved_on: \"2026-10-28\"\n").is_empty()
+        );
+        assert!(ok("status: merged\napproved_by: Ann Lee\n").is_empty());
+    }
+
+    #[test]
+    fn change_sets_can_link_to_what_they_change() {
+        let c =
+            "---\nid: CHG-0001\ntype: change\nstatus: draft\nlinks:\n  changes: REQ-A-0001\n---\n";
+        let r = "---\nid: REQ-A-0001\ntype: requirement\n---\n### Requirement: X\nIt SHALL.\n\n#### Scenario: S\n";
+        assert!(codes(&graph(&[("c.md", c), ("r.md", r)])).is_empty());
     }
 }

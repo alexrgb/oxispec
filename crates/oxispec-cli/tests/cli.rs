@@ -1278,3 +1278,201 @@ fn a_tag_says_when_spec_changes_are_left_out() {
     let out = run(p, &["tag", "v0", "--at", "HEAD~1"]);
     assert!(!out.stdout.contains("not committed"), "{}", out.stdout);
 }
+
+// ---- change sets ----
+
+fn change_file(p: &Path) -> std::path::PathBuf {
+    p.join("specs/changes/0001-tighten-timeouts.md")
+}
+
+fn project_with_a_change_set(p: &Path) {
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    assert_eq!(
+        run(p, &["new", "requirement", "auth", "Admin session timeout"]).code,
+        0
+    );
+    let out = run(p, &["new", "change", "Tighten timeouts"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("CHG-0001"), "{}", out.stdout);
+    assert!(change_file(p).is_file());
+    assert_eq!(
+        run(p, &["link", "CHG-0001", "changes", "REQ-AUTH-0001"]).code,
+        0
+    );
+}
+
+#[test]
+fn a_change_set_moves_through_its_lifecycle_and_records_the_approval() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_a_change_set(p);
+    assert_eq!(run(p, &["check"]).code, 0);
+
+    let out = run(p, &["change", "list"]);
+    assert!(out.stdout.contains("CHG-0001"), "{}", out.stdout);
+    assert!(out.stdout.contains("draft"), "{}", out.stdout);
+    assert!(out.stdout.contains("Tighten timeouts"), "{}", out.stdout);
+
+    // Steps cannot be skipped.
+    let out = run(p, &["change", "status", "CHG-0001", "approved"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("in-review"), "{}", out.stderr);
+    assert!(out.stderr.contains("--force"), "{}", out.stderr);
+
+    assert_eq!(
+        run(p, &["change", "status", "CHG-0001", "in-review"]).code,
+        0
+    );
+    let out = run(
+        p,
+        &[
+            "change", "status", "CHG-0001", "approved", "--by", "Ann Lee",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("approved by Ann Lee on 20"),
+        "{}",
+        out.stdout
+    );
+    let text = fs::read_to_string(change_file(p)).unwrap();
+    assert!(text.contains("status: approved"), "{text}");
+    assert!(text.contains("approved_by: \"Ann Lee\""), "{text}");
+    assert!(text.contains("approved_on: \"20"), "{text}");
+    assert!(
+        text.contains("links:\n  changes:\n    - REQ-AUTH-0001\n"),
+        "{text}"
+    );
+    assert!(text.contains("# CHG-0001: Tighten timeouts"), "{text}");
+    assert_eq!(run(p, &["check"]).code, 0);
+
+    // Merging keeps who approved it.
+    assert_eq!(run(p, &["change", "status", "CHG-0001", "merged"]).code, 0);
+    let out = run(p, &["change", "list", "--status", "merged"]);
+    assert!(out.stdout.contains("approved by Ann Lee"), "{}", out.stdout);
+    let out = run(p, &["change", "list", "--status", "draft"]);
+    assert!(
+        out.stdout.contains("no change sets that are draft"),
+        "{}",
+        out.stdout
+    );
+
+    // A merged change set can be reverted, and nothing else comes after that.
+    assert_eq!(
+        run(p, &["change", "status", "CHG-0001", "reverted"]).code,
+        0
+    );
+    let out = run(p, &["change", "status", "CHG-0001", "draft"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("--force"), "{}", out.stderr);
+    let out = run(p, &["change", "status", "CHG-0001", "draft", "--force"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("withdrawn"), "{}", out.stdout);
+    let text = fs::read_to_string(change_file(p)).unwrap();
+    assert!(
+        !text.contains("approved_by") && !text.contains("approved_on"),
+        "{text}"
+    );
+
+    let out = run(p, &["change", "status", "CHG-0001", "draft"]);
+    assert!(out.stdout.contains("already draft"), "{}", out.stdout);
+}
+
+#[test]
+fn approving_needs_a_name_from_git_or_from_the_command() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_a_change_set(p);
+    assert_eq!(
+        run(p, &["change", "status", "CHG-0001", "in-review"]).code,
+        0
+    );
+
+    // A git configuration with no user name at all.
+    let empty = p.join("empty-gitconfig");
+    fs::write(&empty, "").unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_oxispec"))
+        .args(["change", "status", "CHG-0001", "approved"])
+        .current_dir(p)
+        .env("GIT_CONFIG_GLOBAL", &empty)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--by NAME"), "{stderr}");
+    assert!(
+        !fs::read_to_string(change_file(p))
+            .unwrap()
+            .contains("approved")
+    );
+}
+
+#[test]
+fn hand_edited_change_sets_are_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_a_change_set(p);
+    let file = change_file(p);
+    let original = fs::read_to_string(&file).unwrap();
+
+    fs::write(&file, original.replace("status: draft", "status: approved")).unwrap();
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 1);
+    assert!(out.stdout.contains("E013"), "{}", out.stdout);
+
+    fs::write(&file, original.replace("status: draft", "status: finished")).unwrap();
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 1);
+    assert!(out.stdout.contains("E012"), "{}", out.stdout);
+}
+
+#[test]
+fn change_commands_refuse_nodes_and_statuses_that_do_not_fit() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_a_change_set(p);
+    let cases: [(&[&str], &str); 4] = [
+        (
+            &["change", "status", "REQ-AUTH-0001", "approved"],
+            "not a change set",
+        ),
+        (&["change", "status", "CHG-9999", "approved"], "no node"),
+        (
+            &["change", "status", "CHG-0001", "finished"],
+            "unknown status",
+        ),
+        (
+            &["change", "list", "--status", "finished"],
+            "unknown status",
+        ),
+    ];
+    for (args, expected) in cases {
+        let out = run(p, args);
+        assert_eq!(out.code, 2, "{args:?}");
+        assert!(out.stderr.contains(expected), "{args:?}: {}", out.stderr);
+    }
+}
+
+#[test]
+fn change_list_json_has_what_a_release_needs() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_a_change_set(p);
+    run(p, &["change", "status", "CHG-0001", "in-review"]);
+    run(
+        p,
+        &[
+            "change", "status", "CHG-0001", "approved", "--by", "Ann Lee",
+        ],
+    );
+
+    let report = json(&run(p, &["change", "list", "--json"]));
+    assert_eq!(report["schema_version"], 1);
+    let first = &report["change_sets"][0];
+    assert_eq!(first["id"], "CHG-0001");
+    assert_eq!(first["status"], "approved");
+    assert_eq!(first["title"], "Tighten timeouts");
+    assert_eq!(first["approved_by"], "Ann Lee");
+    assert_eq!(first["changes"][0], "REQ-AUTH-0001");
+}

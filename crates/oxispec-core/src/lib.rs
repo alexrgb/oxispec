@@ -1,5 +1,6 @@
 //! OxiSpec core: node model, parser, graph and structural checks.
 
+pub mod change;
 pub mod check;
 pub mod config;
 pub mod diff;

@@ -13,6 +13,8 @@ pub struct Frontmatter {
     pub ty: Option<String>,
     pub status: Option<String>,
     pub owner: Option<String>,
+    pub approved_by: Option<String>,
+    pub approved_on: Option<String>,
     #[serde(default)]
     pub links: BTreeMap<String, OneOrMany>,
 }
@@ -57,6 +59,11 @@ pub struct Node {
     pub ty: String,
     pub status: Option<String>,
     pub owner: Option<String>,
+    /// Who approved a change set, and when (`YYYY-MM-DD`).
+    pub approved_by: Option<String>,
+    pub approved_on: Option<String>,
+    /// The first `# ` heading, without a leading `ID: `.
+    pub title: Option<String>,
     /// Path relative to the project root.
     pub path: PathBuf,
     /// Link kind to target IDs, for example `decided-by` to `[ADR-0007]`.
@@ -112,4 +119,5 @@ pub const KNOWN_LINK_KINDS: &[&str] = &[
     "overrides",
     "conflicts-with",
     "depends-on",
+    "changes",
 ];

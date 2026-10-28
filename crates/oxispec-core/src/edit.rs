@@ -79,6 +79,57 @@ pub fn add_link(text: &str, kind: &str, target: &str) -> Result<LinkEdit, EditEr
     Ok(LinkEdit::Added(out))
 }
 
+/// A value as it is written in the frontmatter: plain when it is a simple
+/// lowercase word such as `in-review`, otherwise in double quotes.
+fn yaml_scalar(value: &str) -> String {
+    let simple = value.chars().next().is_some_and(|c| c.is_ascii_lowercase())
+        && value
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if simple {
+        value.to_string()
+    } else {
+        let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+        format!("\"{escaped}\"")
+    }
+}
+
+/// Sets, adds or removes top-level single-line keys in the frontmatter,
+/// for example `status` or `approved_by`. `Some(value)` sets the key and
+/// `None` removes it. Everything else in the file is kept byte for byte.
+pub fn set_fields(text: &str, updates: &[(&str, Option<&str>)]) -> Result<String, EditError> {
+    let span = frontmatter_span(text).ok_or(EditError::NoFrontmatter)?;
+    let yaml = &text[span.yaml.clone()];
+    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut lines: Vec<String> = yaml.split_inclusive('\n').map(str::to_string).collect();
+
+    for (key, value) in updates {
+        let prefix = format!("{key}:");
+        let found = lines.iter().position(|l| l.starts_with(&prefix));
+        match (found, value) {
+            (Some(i), Some(v)) => lines[i] = format!("{key}: {}{newline}", yaml_scalar(v)),
+            (Some(i), None) => {
+                lines.remove(i);
+            }
+            (None, Some(v)) => {
+                if let Some(last) = lines.last_mut()
+                    && !last.ends_with('\n')
+                {
+                    last.push_str(newline);
+                }
+                lines.push(format!("{key}: {}{newline}", yaml_scalar(v)));
+            }
+            (None, None) => {}
+        }
+    }
+
+    let mut out = String::with_capacity(text.len() + 64);
+    out.push_str(&text[..span.yaml.start]);
+    out.extend(lines.iter().map(String::as_str));
+    out.push_str(&text[span.yaml.end..]);
+    Ok(out)
+}
+
 fn render_links(links: &BTreeMap<String, Vec<String>>, newline: &str) -> String {
     let mut out = format!("links:{newline}");
     for (kind, targets) in links {
@@ -200,6 +251,77 @@ mod tests {
     fn needs_frontmatter() {
         assert!(matches!(
             add_link("# Title\n", "refines", "A-1"),
+            Err(EditError::NoFrontmatter)
+        ));
+    }
+
+    const CHANGE: &str = "---\nid: CHG-0001\ntype: change\nstatus: draft\nlinks:\n  changes: REQ-A-0001\n---\n# CHG-0001: T\n";
+
+    #[test]
+    fn set_fields_replaces_adds_and_removes() {
+        let out = set_fields(
+            CHANGE,
+            &[
+                ("status", Some("approved")),
+                ("approved_by", Some("Ann Lee")),
+                ("approved_on", Some("2026-10-28")),
+            ],
+        )
+        .unwrap();
+        assert!(out.contains("\nstatus: approved\n"), "{out}");
+        assert!(out.contains("\napproved_by: \"Ann Lee\"\n"), "{out}");
+        assert!(out.contains("\napproved_on: \"2026-10-28\"\n"), "{out}");
+        // The links block and the body are untouched, and the file still parses.
+        assert!(out.contains("links:\n  changes: REQ-A-0001\n"), "{out}");
+        assert!(out.ends_with("---\n# CHG-0001: T\n"), "{out}");
+        let node = parse_file_text(Path::new("c.md"), &out).0.unwrap();
+        assert_eq!(node.status.as_deref(), Some("approved"));
+        assert_eq!(node.approved_by.as_deref(), Some("Ann Lee"));
+        assert_eq!(node.approved_on.as_deref(), Some("2026-10-28"));
+        assert_eq!(node.links["changes"], vec!["REQ-A-0001"]);
+
+        let back = set_fields(
+            &out,
+            &[
+                ("status", Some("in-review")),
+                ("approved_by", None),
+                ("approved_on", None),
+            ],
+        )
+        .unwrap();
+        assert!(
+            !back.contains("approved_by") && !back.contains("approved_on"),
+            "{back}"
+        );
+        assert!(back.contains("status: in-review"), "{back}");
+    }
+
+    #[test]
+    fn set_fields_does_not_confuse_keys_that_share_a_prefix() {
+        let text = "---\nid: A-1\ntype: change\nstatus_note: keep\nstatus: draft\n---\n";
+        let out = set_fields(text, &[("status", Some("merged"))]).unwrap();
+        assert!(out.contains("status_note: keep"), "{out}");
+        assert!(out.contains("\nstatus: merged\n"), "{out}");
+        assert_eq!(set_fields(text, &[("missing", None)]).unwrap(), text);
+    }
+
+    #[test]
+    fn set_fields_quotes_awkward_values_and_keeps_crlf() {
+        let text = "---\r\nid: A-1\r\ntype: change\r\n---\r\nbody\r\n";
+        let out = set_fields(text, &[("approved_by", Some("Ann \"A\" Lee: lead # 1"))]).unwrap();
+        assert!(
+            out.contains("approved_by: \"Ann \\\"A\\\" Lee: lead # 1\"\r\n"),
+            "{out:?}"
+        );
+        assert!(!out.replace("\r\n", "").contains('\n'), "{out:?}");
+        let node = parse_file_text(Path::new("c.md"), &out).0.unwrap();
+        assert_eq!(node.approved_by.as_deref(), Some("Ann \"A\" Lee: lead # 1"));
+    }
+
+    #[test]
+    fn set_fields_needs_frontmatter() {
+        assert!(matches!(
+            set_fields("# Title\n", &[("status", Some("draft"))]),
             Err(EditError::NoFrontmatter)
         ));
     }
