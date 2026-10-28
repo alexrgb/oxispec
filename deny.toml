@@ -5,15 +5,12 @@ all-features = true
 
 [advisories]
 yanked = "deny"
-ignore = [
-  { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml is unmaintained and comes in through serde_yaml_ng. Replacing the YAML crate is a follow-up change." },
-]
 
 [licenses]
 allow = [
   "MIT",
   "Apache-2.0",
-  "BSL-1.0",
+  "BSD-3-Clause",
   "Unicode-3.0",
   "Unlicense",
 ]
