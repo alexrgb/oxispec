@@ -169,6 +169,7 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
         owner: fm.owner,
         approved_by: fm.approved_by,
         approved_on: fm.approved_on,
+        version: fm.version,
         title,
         path: path.to_path_buf(),
         links: fm
