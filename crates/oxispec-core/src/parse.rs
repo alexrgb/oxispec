@@ -1,35 +1,69 @@
 //! Parsing a markdown file with frontmatter into a node.
 
+use std::ops::Range;
 use std::path::Path;
 
 use crate::finding::Finding;
-use crate::node::{Frontmatter, Node, RequirementBlock};
+use crate::node::{Frontmatter, Node, RequirementBlock, Scenario};
 
-/// Splits `---` delimited frontmatter from the body.
-/// Returns the YAML text, the body, and the number of lines before the body.
-pub fn split_frontmatter(text: &str) -> Option<(&str, &str, usize)> {
+/// Where the frontmatter sits in a file.
+pub struct FrontmatterSpan {
+    /// The YAML text between the two `---` lines.
+    pub yaml: Range<usize>,
+    /// Byte offset where the body starts.
+    pub body_start: usize,
+    /// Number of lines before the body, including both `---` lines.
+    pub lines_before_body: usize,
+}
+
+pub fn frontmatter_span(text: &str) -> Option<FrontmatterSpan> {
     let mut lines = text.split_inclusive('\n');
     let first = lines.next()?;
     if first.trim_end() != "---" {
         return None;
     }
-    let mut offset = first.len();
-    let mut line_no = 1usize;
-    for line in lines {
-        line_no += 1;
+    let yaml_start = first.len();
+    let mut offset = yaml_start;
+    // `lines` starts at the second line of the file.
+    for (line_no, line) in (2usize..).zip(lines) {
         if line.trim_end() == "---" {
-            let yaml = &text[first.len()..offset];
-            let body = &text[offset + line.len()..];
-            return Some((yaml, body, line_no));
+            return Some(FrontmatterSpan {
+                yaml: yaml_start..offset,
+                body_start: offset + line.len(),
+                lines_before_body: line_no,
+            });
         }
         offset += line.len();
     }
     None
 }
 
+/// Splits `---` delimited frontmatter from the body.
+/// Returns the YAML text, the body, and the number of lines before the body.
+pub fn split_frontmatter(text: &str) -> Option<(&str, &str, usize)> {
+    let span = frontmatter_span(text)?;
+    Some((
+        &text[span.yaml],
+        &text[span.body_start..],
+        span.lines_before_body,
+    ))
+}
+
 fn has_normative(line: &str) -> bool {
     line.split(|c: char| !c.is_ascii_alphanumeric())
         .any(|w| w == "SHALL" || w == "MUST")
+}
+
+/// Splits a trailing `{#anchor}` off a scenario heading.
+fn split_anchor(heading: &str) -> (String, Option<String>) {
+    let s = heading.trim();
+    if let Some(rest) = s.strip_suffix('}')
+        && let Some(pos) = rest.rfind("{#")
+    {
+        let name = rest[..pos].trim_end().to_string();
+        return (name, Some(rest[pos + 2..].to_string()));
+    }
+    (s.to_string(), None)
 }
 
 /// Finds `### Requirement:` blocks and their `#### Scenario:` children.
@@ -56,9 +90,14 @@ pub fn parse_requirements(body: &str, line_offset: usize) -> Vec<RequirementBloc
                 scenarios: Vec::new(),
             });
             in_description = true;
-        } else if let Some(name) = line.strip_prefix("#### Scenario:") {
+        } else if let Some(heading) = line.strip_prefix("#### Scenario:") {
             if let Some(b) = blocks.last_mut() {
-                b.scenarios.push(name.trim().to_string());
+                let (name, anchor) = split_anchor(heading);
+                b.scenarios.push(Scenario {
+                    name,
+                    anchor,
+                    line: n,
+                });
             }
             in_description = false;
         } else if line.starts_with('#') {
@@ -134,8 +173,22 @@ mod tests {
         assert_eq!(node.links["governed-by"], vec!["STD-GO-001"]);
         assert_eq!(node.requirements.len(), 1);
         assert!(node.requirements[0].has_normative);
-        assert_eq!(node.requirements[0].scenarios, vec!["Valid"]);
+        assert_eq!(node.requirements[0].scenarios[0].name, "Valid");
+        assert_eq!(node.requirements[0].scenarios[0].anchor, None);
         assert_eq!(node.requirements[0].line, 8);
+        assert_eq!(node.requirements[0].scenarios[0].line, 11);
+    }
+
+    #[test]
+    fn scenario_anchors_are_split_from_the_name() {
+        let body = "### Requirement: A\nIt SHALL.\n#### Scenario: Idle admin  {#S1}\n#### Scenario: Plain\n#### Scenario: Odd {#bad-id}\n#### Scenario: Empty {#}\n";
+        let s = &parse_requirements(body, 0)[0].scenarios;
+        assert_eq!(s[0].name, "Idle admin");
+        assert_eq!(s[0].anchor.as_deref(), Some("S1"));
+        assert_eq!(s[1].name, "Plain");
+        assert_eq!(s[1].anchor, None);
+        assert_eq!(s[2].anchor.as_deref(), Some("bad-id"));
+        assert_eq!(s[3].anchor.as_deref(), Some(""));
     }
 
     #[test]
@@ -172,5 +225,16 @@ mod tests {
         assert!(!blocks[0].has_normative);
         let blocks = parse_requirements("### Requirement: A\nIt MUST NOT fail.\n", 0);
         assert!(blocks[0].has_normative);
+    }
+
+    #[test]
+    fn span_points_at_the_yaml_and_the_body() {
+        let text = "---\nid: A-1\n---\nbody\n";
+        let span = frontmatter_span(text).unwrap();
+        assert_eq!(&text[span.yaml.clone()], "id: A-1\n");
+        assert_eq!(&text[span.body_start..], "body\n");
+        assert_eq!(span.lines_before_body, 3);
+        assert!(frontmatter_span("no frontmatter\n").is_none());
+        assert!(frontmatter_span("---\nnever closed\n").is_none());
     }
 }

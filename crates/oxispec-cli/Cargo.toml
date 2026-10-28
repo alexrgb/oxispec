@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
+getrandom = { workspace = true }
 oxispec-core = { path = "../oxispec-core" }
 serde_json = { workspace = true }
 

@@ -29,7 +29,7 @@ pub fn parse(s: &str) -> Option<ParsedId<'_>> {
     if !valid_base(base) {
         return None;
     }
-    if child.is_some_and(|c| !valid_segment(c)) {
+    if child.is_some_and(|c| !is_valid_segment(c)) {
         return None;
     }
     Some(ParsedId {
@@ -39,7 +39,7 @@ pub fn parse(s: &str) -> Option<ParsedId<'_>> {
     })
 }
 
-fn valid_segment(s: &str) -> bool {
+pub fn is_valid_segment(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
@@ -50,12 +50,12 @@ fn valid_base(b: &str) -> bool {
         .chars()
         .next()
         .is_some_and(|c| c.is_ascii_alphabetic())
-        || !valid_segment(first)
+        || !is_valid_segment(first)
     {
         return false;
     }
     let rest: Vec<&str> = parts.collect();
-    !rest.is_empty() && rest.iter().all(|p| valid_segment(p))
+    !rest.is_empty() && rest.iter().all(|p| is_valid_segment(p))
 }
 
 pub fn is_valid(s: &str) -> bool {
@@ -65,6 +65,17 @@ pub fn is_valid(s: &str) -> bool {
 /// The ID without a child suffix, for example `REQ-AUTH-0012.S1` gives `REQ-AUTH-0012`.
 pub fn base_of(s: &str) -> &str {
     parse(s).map_or(s, |p| p.base)
+}
+
+/// Crockford base32 without I, L, O and U, so IDs are easy to read aloud.
+const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/// A 4 character suffix for IDs that must not collide across parallel
+/// branches, built from the low 20 bits of `random`. About one million values.
+pub fn random_suffix(random: u32) -> String {
+    (0..4)
+        .map(|i| ALPHABET[((random >> (5 * i)) & 31) as usize] as char)
+        .collect()
 }
 
 #[cfg(test)]
@@ -108,5 +119,18 @@ mod tests {
         assert_eq!(p.base, "REQ-CHK-0004");
         assert_eq!(p.child, Some("S2"));
         assert_eq!(base_of("REQ-AUTH-0012.S1"), "REQ-AUTH-0012");
+    }
+
+    #[test]
+    fn random_suffixes_are_short_readable_and_valid() {
+        assert_eq!(random_suffix(0), "0000");
+        assert_eq!(random_suffix(u32::MAX), "ZZZZ");
+        for n in [1u32, 12345, 0xDEAD_BEEF, 987_654_321] {
+            let suffix = random_suffix(n);
+            assert_eq!(suffix.len(), 4);
+            assert!(suffix.bytes().all(|b| ALPHABET.contains(&b)), "{suffix}");
+            assert!(is_valid(&format!("REQ-ORD-{suffix}")), "{suffix}");
+        }
+        assert_ne!(random_suffix(1), random_suffix(2));
     }
 }

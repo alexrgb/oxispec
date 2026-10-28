@@ -6,19 +6,43 @@ use serde::{Deserialize, Serialize};
 
 pub const CONFIG_PATH: &str = ".oxispec/config.yaml";
 
+/// The project format this version reads and writes. See docs/versioning.md.
+pub const FORMAT: u32 = 1;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{0}: {1}")]
     Io(PathBuf, std::io::Error),
     #[error("invalid config {0}: {1}")]
     Yaml(PathBuf, String),
+    #[error("{0} uses format {1}, but this oxispec supports up to format {2}; upgrade oxispec")]
+    FormatTooNew(PathBuf, u32, u32),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// How new node IDs are numbered.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IdScheme {
+    /// `REQ-AUTH-0001`, the next free number. Simple, and fine for one branch at a time.
+    #[default]
+    Sequential,
+    /// `REQ-AUTH-7K3F`, a random suffix, so parallel branches do not collide.
+    Random,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default = "default_format")]
+    pub format: u32,
     pub modules: Vec<String>,
     #[serde(default = "default_topology")]
     pub topology: String,
+    #[serde(default)]
+    pub id_scheme: IdScheme,
+}
+
+fn default_format() -> u32 {
+    FORMAT
 }
 
 fn default_topology() -> String {
@@ -26,6 +50,15 @@ fn default_topology() -> String {
 }
 
 impl Config {
+    pub fn new(modules: Vec<String>, id_scheme: IdScheme) -> Self {
+        Self {
+            format: FORMAT,
+            modules,
+            topology: default_topology(),
+            id_scheme,
+        }
+    }
+
     pub fn has(&self, module: &str) -> bool {
         self.modules.iter().any(|m| m == module)
     }
@@ -39,10 +72,23 @@ pub fn find_root(start: &Path) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
+fn parse_text(path: &Path, text: &str) -> Result<Config, Error> {
+    let config: Config =
+        serde_saphyr::from_str(text).map_err(|e| Error::Yaml(path.to_path_buf(), e.to_string()))?;
+    if config.format > FORMAT {
+        return Err(Error::FormatTooNew(
+            path.to_path_buf(),
+            config.format,
+            FORMAT,
+        ));
+    }
+    Ok(config)
+}
+
 pub fn load(root: &Path) -> Result<Config, Error> {
     let path = root.join(CONFIG_PATH);
     let text = std::fs::read_to_string(&path).map_err(|e| Error::Io(path.clone(), e))?;
-    serde_saphyr::from_str(&text).map_err(|e| Error::Yaml(path, e.to_string()))
+    parse_text(&path, &text)
 }
 
 pub fn save(root: &Path, config: &Config) -> Result<(), Error> {
@@ -53,4 +99,45 @@ pub fn save(root: &Path, config: &Config) -> Result<(), Error> {
     let text =
         serde_saphyr::to_string(config).map_err(|e| Error::Yaml(path.clone(), e.to_string()))?;
     std::fs::write(&path, text).map_err(|e| Error::Io(path, e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn path() -> &'static Path {
+        Path::new(CONFIG_PATH)
+    }
+
+    #[test]
+    fn config_from_iteration_one_still_loads() {
+        // No `format` and no `id_scheme`.
+        let c = parse_text(path(), "modules:\n- core\n- specs\ntopology: single\n").unwrap();
+        assert_eq!(c.format, FORMAT);
+        assert_eq!(c.id_scheme, IdScheme::Sequential);
+        assert!(c.has("specs"));
+    }
+
+    #[test]
+    fn a_newer_format_is_refused() {
+        let e = parse_text(path(), "format: 99\nmodules: [core]\n").unwrap_err();
+        let message = e.to_string();
+        assert!(message.contains("format 99"), "{message}");
+        assert!(message.contains("upgrade oxispec"), "{message}");
+    }
+
+    #[test]
+    fn the_current_format_and_scheme_survive_a_round_trip() {
+        let config = Config::new(vec!["core".into(), "specs".into()], IdScheme::Random);
+        let text = serde_saphyr::to_string(&config).unwrap();
+        assert!(text.contains("format: 1"), "{text}");
+        assert!(text.contains("id_scheme: random"), "{text}");
+        assert_eq!(parse_text(path(), &text).unwrap(), config);
+    }
+
+    #[test]
+    fn an_unknown_scheme_is_an_error() {
+        let e = parse_text(path(), "modules: [core]\nid_scheme: lucky\n").unwrap_err();
+        assert!(matches!(e, Error::Yaml(..)), "{e}");
+    }
 }

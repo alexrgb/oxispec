@@ -4,18 +4,21 @@ Agent-first spec engine in Rust. Specs, ADRs, test cases, standards, API contrac
 
 **Status: early.** The design is written and the first iteration is under way. See [docs/design.md](docs/design.md) for the full design and [docs/iterations.md](docs/iterations.md) for the plan and what is built so far.
 
-## Try it (once iteration 1 is merged)
+## Try it
 
 ```bash
 cargo install --path crates/oxispec-cli
 oxispec init --preset standard
 oxispec new requirement auth "Admin session timeout"
 oxispec new adr "Use Postgres"
+oxispec link REQ-AUTH-0001 decided-by ADR-0001
 oxispec check
-oxispec show REQ-AUTH-0001
+oxispec show ADR-0001
 ```
 
-`oxispec check` reports dangling links, duplicate IDs, supersede cycles, and requirements without a scenario or a SHALL/MUST. It exits with code 1 when there are errors.
+Use `oxispec init --id-scheme random` when several branches add specs at the same time. The file format, link kinds and check codes are in [docs/format.md](docs/format.md).
+
+`oxispec check` reports dangling links (including links to scenarios that do not exist), duplicate IDs, supersede cycles, and requirements without a scenario or a SHALL/MUST. It exits with code 1 when there are errors.
 
 ## Contributing
 
