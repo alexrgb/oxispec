@@ -33,7 +33,7 @@ impl OneOrMany {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Scenario {
     pub name: String,
     /// Raw text of a trailing `{#anchor}` on the heading. The checks validate it.
@@ -41,7 +41,7 @@ pub struct Scenario {
     pub line: usize,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequirementBlock {
     pub name: String,
     pub line: usize,
@@ -50,7 +50,7 @@ pub struct RequirementBlock {
     pub scenarios: Vec<Scenario>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
     pub id: String,
     #[serde(rename = "type")]

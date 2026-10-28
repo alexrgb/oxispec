@@ -108,6 +108,31 @@ id_scheme: sequential
 
 `format` is the project format version. A project without it is read as format 1. A project with a higher number than this version knows stops with a message to upgrade oxispec.
 
+## Local index
+
+`oxispec` keeps a cache of parsed nodes in `.oxispec/cache/` so that a second run does not parse files that did not change. It is git-ignored, and safe to delete at any time.
+
+- A file is reused without being read when its size and modification time match the cache. Otherwise it is read and hashed (BLAKE3), and reused when the hash matches. A file modified in the 2 seconds before the cache was written is always hashed, because it may have changed again within the same timestamp tick.
+- A cache from another version of `oxispec`, or a damaged one, is ignored and replaced. A cache that cannot be written is skipped. The answers are the same either way, only slower.
+- `oxispec index` builds or refreshes the cache and prints how many files it parsed and reused. `oxispec index --rebuild` starts again from nothing.
+- `--no-cache` on any command neither reads nor writes the cache.
+- If you restore a file's modification time after changing its content, the size-and-time shortcut cannot see the change. Run `oxispec index --rebuild`.
+
+Measured on 20,000 requirement files (release build, macOS, Apple silicon): a full parse takes about 3.5 s, a run with a warm cache about 0.25 s, and one edited file is re-parsed alone. Cold start with a cache write takes about 4.6 s. The cache file is about 8 MB. These are one machine's numbers, not a promise.
+
+## Checking only what changed
+
+```bash
+oxispec check --changed              # compared with HEAD
+oxispec check --changed --base main  # compared with another ref
+```
+
+`--changed` reports findings for the spec files that differ from the base (staged, unstaged and new files), and for the nodes that link to the changed nodes. An old error in a file nobody touched, and not linked to anything that changed, is not reported, so a pre-commit hook does not fail on someone else's work. It needs a git repository.
+
+A node you delete or rename is still found: its old ID is read from git, so the nodes that linked to it are checked and their dangling links are reported. In a repository with no commits yet, every spec file counts as changed.
+
+The JSON output adds `checked_nodes` and a `scope` object (`base` and `changed_files`, or `null` for a full check).
+
 ## Machine output
 
 `oxispec check --json` and `oxispec show --json` include `"schema_version": 1`. Adding fields does not change it. Removing, renaming or retyping a field does.

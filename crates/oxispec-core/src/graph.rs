@@ -1,60 +1,49 @@
 //! The graph: all nodes found under a project root, plus reverse links.
 
+use std::collections::HashMap;
 use std::path::Path;
 
-use crate::finding::{Finding, Severity};
+use crate::finding::Finding;
 use crate::id;
 use crate::node::Node;
-use crate::parse::parse_file_text;
 
 #[derive(Debug, Default)]
 pub struct Graph {
     pub nodes: Vec<Node>,
     /// Findings from reading files, before any check runs.
     pub findings: Vec<Finding>,
+    /// Position of the first node with each ID, so lookups do not scan.
+    by_id: HashMap<String, usize>,
 }
 
 impl Graph {
-    /// Walks `root` for markdown files. Hidden folders and anything ignored
-    /// by `.gitignore` are skipped, so `.oxispec/` and `target/` are not read.
-    pub fn load(root: &Path) -> Graph {
-        let mut graph = Graph::default();
-        let walker = ignore::WalkBuilder::new(root).require_git(false).build();
-        for entry in walker.flatten() {
-            let path = entry.path();
-            let is_md = path.extension().is_some_and(|e| e == "md");
-            if !is_md || !entry.file_type().is_some_and(|t| t.is_file()) {
-                continue;
-            }
-            let rel = path.strip_prefix(root).unwrap_or(path);
-            match std::fs::read_to_string(path) {
-                Ok(text) => {
-                    let (node, findings) = parse_file_text(rel, &text);
-                    graph.findings.extend(findings);
-                    graph.nodes.extend(node);
-                }
-                Err(e) => graph.findings.push(
-                    Finding::new("W003", Severity::Warning, format!("cannot read file: {e}"))
-                        .at(rel, None),
-                ),
-            }
+    /// Sorts the nodes by ID and path, and indexes them.
+    pub fn new(mut nodes: Vec<Node>, findings: Vec<Finding>) -> Graph {
+        nodes.sort_by(|a, b| a.id.cmp(&b.id).then_with(|| a.path.cmp(&b.path)));
+        let mut by_id = HashMap::with_capacity(nodes.len());
+        for (position, node) in nodes.iter().enumerate() {
+            by_id.entry(node.id.clone()).or_insert(position);
         }
-        graph
-            .nodes
-            .sort_by(|a, b| a.id.cmp(&b.id).then_with(|| a.path.cmp(&b.path)));
-        graph
+        Graph {
+            nodes,
+            findings,
+            by_id,
+        }
+    }
+
+    /// Walks `root` for markdown files and parses all of them, without
+    /// touching the local index. See [`crate::index::load`] for the cached version.
+    pub fn load(root: &Path) -> Graph {
+        crate::index::load(root, false).0
     }
 
     pub fn from_nodes(nodes: Vec<Node>) -> Graph {
-        Graph {
-            nodes,
-            findings: Vec::new(),
-        }
+        Graph::new(nodes, Vec::new())
     }
 
     pub fn get(&self, node_id: &str) -> Option<&Node> {
         let base = id::base_of(node_id);
-        self.nodes.iter().find(|n| n.id == base)
+        self.by_id.get(base).map(|&position| &self.nodes[position])
     }
 
     /// Nodes that link to `node_id`, with the link kind. Reverse links are
