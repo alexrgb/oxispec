@@ -2,6 +2,7 @@
 
 pub mod check;
 pub mod config;
+pub mod edit;
 pub mod finding;
 pub mod graph;
 pub mod id;
@@ -12,4 +13,8 @@ pub mod parse;
 pub use check::check;
 pub use finding::{Finding, Severity};
 pub use graph::Graph;
-pub use node::{Node, RequirementBlock};
+pub use node::{Node, RequirementBlock, Scenario};
+
+/// Version of the JSON output of `check` and `show`. Adding fields does not
+/// change it. Removing, renaming or retyping a field does. See docs/versioning.md.
+pub const OUTPUT_SCHEMA_VERSION: u32 = 1;

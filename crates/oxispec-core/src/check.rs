@@ -3,14 +3,16 @@
 //! E001 duplicate id       E002 dangling link        E003 missing id or type
 //! E004 supersedes cycle   E005 invalid id format    E006 requirement without scenario
 //! E007 requirement without SHALL or MUST            E008 requirement node without requirements
-//! W001 unknown node type  I001 external reference, not checked
+//! E009 link to a scenario that does not exist       E010 duplicate scenario anchor
+//! E011 invalid scenario anchor
+//! W001 unknown node type  W004 unknown link kind    I001 external reference, not checked
 
 use std::collections::{HashMap, HashSet};
 
 use crate::finding::{Finding, Severity};
 use crate::graph::Graph;
 use crate::id;
-use crate::node::{KNOWN_TYPES, Node};
+use crate::node::{KNOWN_LINK_KINDS, KNOWN_TYPES, Node};
 
 pub fn check(graph: &Graph) -> Vec<Finding> {
     let mut findings = graph.findings.clone();
@@ -26,6 +28,39 @@ pub fn check(graph: &Graph) -> Vec<Finding> {
     findings
         .sort_by(|a, b| (a.path.as_ref(), a.line, a.code).cmp(&(b.path.as_ref(), b.line, b.code)));
     findings
+}
+
+/// What a link target points at.
+#[derive(Debug, PartialEq, Eq)]
+pub enum LinkResolution {
+    /// A node, or a scenario of a node, in this project.
+    Ok,
+    /// A namespaced ID that belongs to another project. Not checked here.
+    External,
+    /// Not a valid ID.
+    Invalid,
+    /// The node does not exist.
+    MissingNode,
+    /// The node exists but has no scenario with this anchor.
+    MissingScenario(String),
+}
+
+pub fn resolve_link(graph: &Graph, target: &str) -> LinkResolution {
+    let Some(parsed) = id::parse(target) else {
+        return LinkResolution::Invalid;
+    };
+    if parsed.namespace.is_some() {
+        return LinkResolution::External;
+    }
+    let Some(node) = graph.get(parsed.base) else {
+        return LinkResolution::MissingNode;
+    };
+    match parsed.child {
+        Some(child) if !node.has_scenario(child) => {
+            LinkResolution::MissingScenario(child.to_string())
+        }
+        _ => LinkResolution::Ok,
+    }
 }
 
 fn duplicates(graph: &Graph, out: &mut Vec<Finding>) {
@@ -76,34 +111,42 @@ fn node_format(node: &Node, out: &mut Vec<Finding>) {
 
 fn links(graph: &Graph, node: &Node, out: &mut Vec<Finding>) {
     for (kind, targets) in &node.links {
+        if !KNOWN_LINK_KINDS.contains(&kind.as_str()) {
+            out.push(
+                Finding::warning(
+                    "W004",
+                    format!(
+                        "unknown link kind `{kind}` (known: {})",
+                        KNOWN_LINK_KINDS.join(", ")
+                    ),
+                )
+                .at(&node.path, Some(1))
+                .node(&node.id),
+            );
+        }
         for target in targets {
-            let Some(parsed) = id::parse(target) else {
-                out.push(
+            let finding = match resolve_link(graph, target) {
+                LinkResolution::Ok => continue,
+                LinkResolution::Invalid => {
                     Finding::error("E005", format!("invalid id {target:?} in `{kind}` link"))
-                        .at(&node.path, Some(1))
-                        .node(&node.id),
-                );
-                continue;
+                }
+                LinkResolution::External => Finding::info(
+                    "I001",
+                    format!("external reference {target} in `{kind}` link is not checked"),
+                ),
+                LinkResolution::MissingNode => Finding::error(
+                    "E002",
+                    format!("dangling link: `{kind}` points to {target}, which does not exist"),
+                ),
+                LinkResolution::MissingScenario(anchor) => Finding::error(
+                    "E009",
+                    format!(
+                        "dangling link: `{kind}` points to {target}, but {} has no scenario with anchor {{#{anchor}}}",
+                        id::base_of(target)
+                    ),
+                ),
             };
-            if parsed.namespace.is_some() {
-                out.push(
-                    Finding::info(
-                        "I001",
-                        format!("external reference {target} in `{kind}` link is not checked"),
-                    )
-                    .at(&node.path, Some(1))
-                    .node(&node.id),
-                );
-            } else if graph.get(parsed.base).is_none() {
-                out.push(
-                    Finding::error(
-                        "E002",
-                        format!("dangling link: `{kind}` points to {target}, which does not exist"),
-                    )
-                    .at(&node.path, Some(1))
-                    .node(&node.id),
-                );
-            }
+            out.push(finding.at(&node.path, Some(1)).node(&node.id));
         }
     }
 }
@@ -137,6 +180,37 @@ fn requirements(node: &Node, out: &mut Vec<Finding>) {
                     ),
                 )
                 .at(&node.path, Some(r.line))
+                .node(&node.id),
+            );
+        }
+    }
+    scenario_anchors(node, out);
+}
+
+fn scenario_anchors(node: &Node, out: &mut Vec<Finding>) {
+    let mut seen: HashMap<&str, usize> = HashMap::new();
+    for scenario in node.requirements.iter().flat_map(|r| &r.scenarios) {
+        let Some(anchor) = scenario.anchor.as_deref() else {
+            continue;
+        };
+        if !id::is_valid_segment(anchor) {
+            out.push(
+                Finding::error(
+                    "E011",
+                    format!(
+                        "invalid scenario anchor {{#{anchor}}}: use letters and digits only, for example {{#S1}}"
+                    ),
+                )
+                .at(&node.path, Some(scenario.line))
+                .node(&node.id),
+            );
+        } else if let Some(first) = seen.insert(anchor, scenario.line) {
+            out.push(
+                Finding::error(
+                    "E010",
+                    format!("scenario anchor {{#{anchor}}} is used twice (first on line {first})"),
+                )
+                .at(&node.path, Some(scenario.line))
                 .node(&node.id),
             );
         }
@@ -212,6 +286,11 @@ mod tests {
 
     const REQ: &str = "---\nid: REQ-A-0001\ntype: requirement\nlinks:\n  decided-by: ADR-0001\n---\n### Requirement: X\nIt SHALL work.\n\n#### Scenario: S\n- **WHEN** a\n- **THEN** b\n";
     const ADR: &str = "---\nid: ADR-0001\ntype: adr\n---\n# Decision\n";
+    const REQ_ANCHORS: &str = "---\nid: REQ-A-0010\ntype: requirement\n---\n### Requirement: X\nIt SHALL work.\n\n#### Scenario: One {#S1}\n- **WHEN** a\n- **THEN** b\n\n#### Scenario: Two {#S2}\n- **WHEN** c\n- **THEN** d\n";
+
+    fn adr_with_link(kind: &str, target: &str) -> String {
+        format!("---\nid: ADR-0002\ntype: adr\nlinks:\n  {kind}: {target}\n---\n")
+    }
 
     #[test]
     fn clean_graph_has_no_findings() {
@@ -272,5 +351,58 @@ mod tests {
         assert_eq!(incoming.len(), 1);
         assert_eq!(incoming[0].0.id, "REQ-A-0001");
         assert_eq!(incoming[0].1, "decided-by");
+    }
+
+    #[test]
+    fn link_to_an_existing_scenario_is_clean() {
+        let adr = adr_with_link("refines", "REQ-A-0010.S2");
+        let g = graph(&[("r.md", REQ_ANCHORS), ("a.md", &adr)]);
+        assert!(codes(&g).is_empty());
+    }
+
+    #[test]
+    fn link_to_a_missing_scenario_is_reported() {
+        let adr = adr_with_link("refines", "REQ-A-0010.S9");
+        let g = graph(&[("r.md", REQ_ANCHORS), ("a.md", &adr)]);
+        assert_eq!(codes(&g), vec!["E009"]);
+        let message = &check(&g)[0].message;
+        assert!(message.contains("{#S9}"), "{message}");
+    }
+
+    #[test]
+    fn scenario_link_to_a_node_without_scenarios_is_reported() {
+        let target = "---\nid: ADR-0001\ntype: adr\n---\n";
+        let source = adr_with_link("refines", "ADR-0001.S1");
+        let g = graph(&[("a.md", target), ("b.md", &source)]);
+        assert_eq!(codes(&g), vec!["E009"]);
+    }
+
+    #[test]
+    fn duplicate_and_invalid_anchors() {
+        let dup = REQ_ANCHORS.replace("{#S2}", "{#S1}");
+        assert_eq!(codes(&graph(&[("r.md", &dup)])), vec!["E010"]);
+        let bad = REQ_ANCHORS.replace("{#S2}", "{#bad-id}");
+        assert_eq!(codes(&graph(&[("r.md", &bad)])), vec!["E011"]);
+    }
+
+    #[test]
+    fn unknown_link_kind_warns_once_per_kind() {
+        let adr = adr_with_link("frobnicates", "REQ-A-0010");
+        let g = graph(&[("r.md", REQ_ANCHORS), ("a.md", &adr)]);
+        assert_eq!(codes(&g), vec!["W004"]);
+    }
+
+    #[test]
+    fn resolve_link_covers_every_case() {
+        let g = graph(&[("r.md", REQ_ANCHORS)]);
+        assert_eq!(resolve_link(&g, "REQ-A-0010"), LinkResolution::Ok);
+        assert_eq!(resolve_link(&g, "REQ-A-0010.S1"), LinkResolution::Ok);
+        assert_eq!(
+            resolve_link(&g, "REQ-A-0010.S7"),
+            LinkResolution::MissingScenario("S7".into())
+        );
+        assert_eq!(resolve_link(&g, "REQ-X-0001"), LinkResolution::MissingNode);
+        assert_eq!(resolve_link(&g, "not an id"), LinkResolution::Invalid);
+        assert_eq!(resolve_link(&g, "p/q:REQ-A-1"), LinkResolution::External);
     }
 }

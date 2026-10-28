@@ -3,10 +3,13 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use anyhow::{Context, Result, bail};
-use clap::{Parser, Subcommand};
-use oxispec_core::config::{self, Config};
-use oxispec_core::{Graph, Severity, check, modules};
+use anyhow::{Context, Result, anyhow, bail};
+use clap::{Parser, Subcommand, ValueEnum};
+use oxispec_core::check::{LinkResolution, resolve_link};
+use oxispec_core::config::{self, Config, IdScheme};
+use oxispec_core::edit::{LinkEdit, add_link};
+use oxispec_core::node::KNOWN_LINK_KINDS;
+use oxispec_core::{Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, modules};
 
 #[derive(Parser)]
 #[command(
@@ -22,6 +25,24 @@ struct Cli {
     command: Command,
 }
 
+/// How new IDs are numbered.
+#[derive(Clone, Copy, ValueEnum)]
+enum IdSchemeArg {
+    /// REQ-AUTH-0001: the next free number
+    Sequential,
+    /// REQ-AUTH-7K3F: a random suffix, safe with parallel branches
+    Random,
+}
+
+impl From<IdSchemeArg> for IdScheme {
+    fn from(arg: IdSchemeArg) -> Self {
+        match arg {
+            IdSchemeArg::Sequential => IdScheme::Sequential,
+            IdSchemeArg::Random => IdScheme::Random,
+        }
+    }
+}
+
 #[derive(Subcommand)]
 enum Command {
     /// Create .oxispec/config.yaml and the folders for the enabled modules
@@ -35,6 +56,9 @@ enum Command {
         /// Modules to leave out of the preset, comma separated
         #[arg(long, value_delimiter = ',')]
         without: Vec<String>,
+        /// How new IDs are numbered. Use random when several branches add specs at once.
+        #[arg(long, value_enum, default_value_t = IdSchemeArg::Sequential)]
+        id_scheme: IdSchemeArg,
     },
     /// List, add or remove modules
     Modules {
@@ -43,8 +67,21 @@ enum Command {
     },
     /// Create a node from a template
     New {
+        /// Override the project's ID scheme for this node
+        #[arg(long, global = true, value_enum)]
+        id_scheme: Option<IdSchemeArg>,
         #[command(subcommand)]
         kind: NewKind,
+    },
+    /// Add a typed link from one node to another, for example: link REQ-AUTH-0001 decided-by ADR-0001
+    Link {
+        /// The node that holds the link
+        from: String,
+        /// satisfies, verifies, implements, decided-by, supersedes, refines, governed-by,
+        /// describes, overrides, conflicts-with or depends-on
+        kind: String,
+        /// A node, or a scenario of a node such as REQ-AUTH-0001.S1
+        to: String,
     },
     /// Run structural checks. Exit code 1 when there are errors.
     Check {
@@ -99,29 +136,37 @@ fn run(cli: Cli) -> Result<ExitCode> {
             preset,
             with,
             without,
+            id_scheme,
         } => {
             let dir = cli.root.unwrap_or_else(|| PathBuf::from("."));
-            init(&dir, &preset, &with, &without)?;
+            init(&dir, &preset, &with, &without, id_scheme.into())?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Modules { action } => {
             modules_command(cli.root.as_deref(), action.unwrap_or(ModulesAction::List))?;
             Ok(ExitCode::SUCCESS)
         }
-        Command::New { kind } => {
+        Command::New { id_scheme, kind } => {
             let root = project_root(cli.root.as_deref())?;
             let cfg = config::load(&root)?;
+            let scheme = id_scheme.map_or(cfg.id_scheme, IdScheme::from);
             let created = match kind {
                 NewKind::Requirement { domain, title } => {
                     require_module(&cfg, "specs")?;
-                    new_requirement(&root, &domain, &title)?
+                    new_requirement(&root, &domain, &title, scheme)?
                 }
                 NewKind::Adr { title } => {
                     require_module(&cfg, "adrs")?;
-                    new_adr(&root, &title)?
+                    new_adr(&root, &title, scheme)?
                 }
             };
             println!("created {} ({})", created.0, created.1.display());
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Link { from, kind, to } => {
+            let root = project_root(cli.root.as_deref())?;
+            config::load(&root)?;
+            link_command(&root, &from, &kind, &to)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Check {
@@ -169,7 +214,13 @@ fn ensure_module_dirs(root: &Path, cfg: &Config) -> Result<()> {
     Ok(())
 }
 
-fn init(dir: &Path, preset: &str, with: &[String], without: &[String]) -> Result<()> {
+fn init(
+    dir: &Path,
+    preset: &str,
+    with: &[String],
+    without: &[String],
+    id_scheme: IdScheme,
+) -> Result<()> {
     if dir.join(config::CONFIG_PATH).exists() {
         bail!("{} is already initialized", dir.display());
     }
@@ -196,16 +247,17 @@ fn init(dir: &Path, preset: &str, with: &[String], without: &[String]) -> Result
             bail!("cannot leave out `{name}`: module `{needed_by}` needs it");
         }
     }
-    let cfg = Config {
-        modules: resolved,
-        topology: "single".to_string(),
-    };
+    let cfg = Config::new(resolved, id_scheme);
     fs::create_dir_all(dir)?;
     config::save(dir, &cfg)?;
     fs::write(dir.join(".oxispec/.gitignore"), "cache/\n")?;
     ensure_module_dirs(dir, &cfg)?;
+    let scheme = match cfg.id_scheme {
+        IdScheme::Sequential => "sequential",
+        IdScheme::Random => "random",
+    };
     println!(
-        "initialized {} with modules: {}",
+        "initialized {} with modules: {} (ids: {scheme})",
         dir.display(),
         cfg.modules.join(", ")
     );
@@ -297,13 +349,59 @@ fn modules_command(explicit: Option<&Path>, action: ModulesAction) -> Result<()>
     }
 }
 
+fn link_command(root: &Path, from: &str, kind: &str, to: &str) -> Result<()> {
+    let graph = Graph::load(root);
+    let parsed = id::parse(from).with_context(|| format!("{from:?} is not a valid id"))?;
+    if parsed.namespace.is_some() || parsed.child.is_some() {
+        bail!("a link starts at a node of this project, not at {from}");
+    }
+    let node = graph
+        .get(parsed.base)
+        .with_context(|| format!("no node with id {from}"))?;
+    if !KNOWN_LINK_KINDS.contains(&kind) {
+        bail!(
+            "unknown link kind `{kind}` (known: {})",
+            KNOWN_LINK_KINDS.join(", ")
+        );
+    }
+    match resolve_link(&graph, to) {
+        LinkResolution::Ok | LinkResolution::External => {}
+        LinkResolution::Invalid => bail!("{to:?} is not a valid id"),
+        LinkResolution::MissingNode => bail!("{to} does not exist"),
+        LinkResolution::MissingScenario(anchor) => bail!(
+            "{} has no scenario with anchor {{#{anchor}}}; add it to the scenario heading first",
+            id::base_of(to)
+        ),
+    }
+    if id::base_of(to) == node.id {
+        bail!("a node cannot link to itself");
+    }
+
+    let path = root.join(&node.path);
+    let text =
+        fs::read_to_string(&path).with_context(|| format!("cannot read {}", path.display()))?;
+    match add_link(&text, kind, to)
+        .with_context(|| format!("cannot edit {}", node.path.display()))?
+    {
+        LinkEdit::Added(updated) => {
+            fs::write(&path, updated)
+                .with_context(|| format!("cannot write {}", path.display()))?;
+            println!("linked {} -[{kind}]-> {to}", node.id);
+        }
+        LinkEdit::AlreadyLinked => println!("{} already has {kind} -> {to}", node.id),
+    }
+    Ok(())
+}
+
 fn check_command(root: &Path, json: bool, strict: bool, verbose: bool) -> Result<ExitCode> {
+    config::load(root)?;
     let graph = Graph::load(root);
     let findings = check(&graph);
     let count = |s: Severity| findings.iter().filter(|f| f.severity == s).count();
     let (errors, warnings) = (count(Severity::Error), count(Severity::Warning));
     if json {
         let out = serde_json::json!({
+            "schema_version": OUTPUT_SCHEMA_VERSION,
             "nodes": graph.nodes.len(),
             "errors": errors,
             "warnings": warnings,
@@ -342,6 +440,7 @@ fn check_command(root: &Path, json: bool, strict: bool, verbose: bool) -> Result
 }
 
 fn show(root: &Path, id: &str, json: bool) -> Result<()> {
+    config::load(root)?;
     let graph = Graph::load(root);
     let node = graph
         .get(id)
@@ -352,7 +451,11 @@ fn show(root: &Path, id: &str, json: bool) -> Result<()> {
             .iter()
             .map(|(n, kind)| serde_json::json!({"id": n.id, "kind": kind, "path": n.path}))
             .collect();
-        let out = serde_json::json!({"node": node, "incoming": incoming});
+        let out = serde_json::json!({
+            "schema_version": OUTPUT_SCHEMA_VERSION,
+            "node": node,
+            "incoming": incoming,
+        });
         println!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
@@ -367,7 +470,22 @@ fn show(root: &Path, id: &str, json: bool) -> Result<()> {
         println!("owner: {owner}");
     }
     for r in &node.requirements {
-        println!("requirement: {} ({} scenarios)", r.name, r.scenarios.len());
+        let anchors: Vec<&str> = r
+            .scenarios
+            .iter()
+            .filter_map(|s| s.anchor.as_deref())
+            .collect();
+        let count = r.scenarios.len();
+        let noun = if count == 1 { "scenario" } else { "scenarios" };
+        if anchors.is_empty() {
+            println!("requirement: {} ({count} {noun})", r.name);
+        } else {
+            println!(
+                "requirement: {} ({count} {noun}, anchors {})",
+                r.name,
+                anchors.join(", ")
+            );
+        }
     }
     if !node.links.is_empty() {
         println!("links:");
@@ -413,6 +531,26 @@ fn next_number(graph: &Graph, prefix: &str) -> u32 {
         + 1
 }
 
+/// Picks a free ID starting with `prefix`. Random IDs are checked against
+/// the nodes on disk, and another branch can still pick the same one, but
+/// with about a million values that is rare and `oxispec check` reports it.
+fn allocate_id(graph: &Graph, prefix: &str, scheme: IdScheme) -> Result<String> {
+    match scheme {
+        IdScheme::Sequential => Ok(format!("{prefix}{:04}", next_number(graph, prefix))),
+        IdScheme::Random => {
+            for _ in 0..50 {
+                let mut bytes = [0u8; 4];
+                getrandom::fill(&mut bytes).map_err(|e| anyhow!("cannot read randomness: {e}"))?;
+                let candidate = format!("{prefix}{}", id::random_suffix(u32::from_le_bytes(bytes)));
+                if graph.get(&candidate).is_none() {
+                    return Ok(candidate);
+                }
+            }
+            bail!("could not find a free random id; try again")
+        }
+    }
+}
+
 /// Writes a new file, failing if it already exists.
 fn write_new(root: &Path, rel: &Path, content: &str) -> Result<()> {
     let path = root.join(rel);
@@ -436,7 +574,7 @@ status: draft
 ### Requirement: @TITLE@
 The system SHALL <describe the behavior>.
 
-#### Scenario: <name>
+#### Scenario: <name> {#S1}
 - **WHEN** <condition>
 - **THEN** <outcome>
 ";
@@ -455,13 +593,17 @@ status: proposed
 ## Consequences
 ";
 
-fn new_requirement(root: &Path, domain: &str, title: &str) -> Result<(String, PathBuf)> {
+fn new_requirement(
+    root: &Path,
+    domain: &str,
+    title: &str,
+    scheme: IdScheme,
+) -> Result<(String, PathBuf)> {
     let domain = domain.to_ascii_uppercase();
     if domain.is_empty() || !domain.chars().all(|c| c.is_ascii_alphanumeric()) {
         bail!("the domain must be letters and digits, for example AUTH");
     }
-    let prefix = format!("REQ-{domain}-");
-    let id = format!("{prefix}{:04}", next_number(&Graph::load(root), &prefix));
+    let id = allocate_id(&Graph::load(root), &format!("REQ-{domain}-"), scheme)?;
     let rel = PathBuf::from("specs/requirements")
         .join(domain.to_ascii_lowercase())
         .join(format!("{}.md", slug(title)?));
@@ -472,10 +614,10 @@ fn new_requirement(root: &Path, domain: &str, title: &str) -> Result<(String, Pa
     Ok((id, rel))
 }
 
-fn new_adr(root: &Path, title: &str) -> Result<(String, PathBuf)> {
-    let number = next_number(&Graph::load(root), "ADR-");
-    let id = format!("ADR-{number:04}");
-    let rel = PathBuf::from("specs/adr").join(format!("{number:04}-{}.md", slug(title)?));
+fn new_adr(root: &Path, title: &str, scheme: IdScheme) -> Result<(String, PathBuf)> {
+    let id = allocate_id(&Graph::load(root), "ADR-", scheme)?;
+    let suffix = id.strip_prefix("ADR-").unwrap_or(&id);
+    let rel = PathBuf::from("specs/adr").join(format!("{suffix}-{}.md", slug(title)?));
     let body = ADR_TEMPLATE.replace("@ID@", &id).replace("@TITLE@", title);
     write_new(root, &rel, &body)?;
     Ok((id, rel))

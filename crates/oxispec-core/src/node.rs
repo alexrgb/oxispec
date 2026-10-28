@@ -34,12 +34,20 @@ impl OneOrMany {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct Scenario {
+    pub name: String,
+    /// Raw text of a trailing `{#anchor}` on the heading. The checks validate it.
+    pub anchor: Option<String>,
+    pub line: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct RequirementBlock {
     pub name: String,
     pub line: usize,
     /// The description contains SHALL or MUST.
     pub has_normative: bool,
-    pub scenarios: Vec<String>,
+    pub scenarios: Vec<Scenario>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -54,6 +62,16 @@ pub struct Node {
     /// Link kind to target IDs, for example `decided-by` to `[ADR-0007]`.
     pub links: BTreeMap<String, Vec<String>>,
     pub requirements: Vec<RequirementBlock>,
+}
+
+impl Node {
+    /// True when some scenario heading in this node carries the anchor.
+    pub fn has_scenario(&self, anchor: &str) -> bool {
+        self.requirements
+            .iter()
+            .flat_map(|r| &r.scenarios)
+            .any(|s| s.anchor.as_deref() == Some(anchor))
+    }
 }
 
 /// Node types known to this version. Others get a warning, not an error,
@@ -75,4 +93,20 @@ pub const KNOWN_TYPES: &[&str] = &[
     "person",
     "deployment-environment",
     "release",
+];
+
+/// Link kinds known to this version (design section 4). Others get a
+/// warning, which catches typos while leaving room for later modules.
+pub const KNOWN_LINK_KINDS: &[&str] = &[
+    "satisfies",
+    "verifies",
+    "implements",
+    "decided-by",
+    "supersedes",
+    "refines",
+    "governed-by",
+    "describes",
+    "overrides",
+    "conflicts-with",
+    "depends-on",
 ];
