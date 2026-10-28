@@ -17,6 +17,10 @@ oxispec show REQ-AUTH-0001
 
 `oxispec check` reports dangling links, duplicate IDs, supersede cycles, and requirements without a scenario or a SHALL/MUST. It exits with code 1 when there are errors.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Work is planned in iterations, one branch and one pull request each. Version numbers follow [docs/versioning.md](docs/versioning.md). To report a security problem, see [SECURITY.md](SECURITY.md).
+
 ## Acknowledgements
 
 OxiSpec is inspired by [OpenSpec](https://github.com/Fission-AI/OpenSpec) (MIT). It shares the idea of requirements with scenarios and delta changes, and extends it with a typed graph, history, consistency checking and hosted access control.
