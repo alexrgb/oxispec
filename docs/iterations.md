@@ -6,6 +6,7 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 
 - **One iteration, one branch.** Branch from `main` as `feat/<n>-<slug>`, for example `feat/2-local-index`. Fixes use `fix/<slug>`, docs use `docs/<slug>`.
 - **No direct pushes to `main`** after the baseline commit. Everything goes through a pull request.
+- **Commit and PR titles** follow Conventional Commits. Version numbers and `CHANGELOG.md` change only in release pull requests. See [versioning.md](versioning.md).
 - **A pull request needs:** passing CI (format, clippy with warnings denied, tests), tests for new behavior, and an updated design doc if a decision changed.
 - **Merge with squash**, so `main` has one commit per iteration or fix. Delete the branch after merging.
 - **Keep each iteration small:** about a day of work and a diff a person can review. Split anything larger.
@@ -16,7 +17,7 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | # | Branch | Scope | Done when |
 |---|---|---|---|
 | 1 | `feat/1-core-foundation` | Node model, frontmatter parser, graph, structural checks, modules and presets, CLI: `init`, `modules`, `new`, `check`, `show`, CI | Tests pass on Linux and macOS. `init`, `new`, `check` round trip works. **In review.** |
-| 2 | `feat/2-links-and-ids` | `oxispec link` command, scenario IDs (`{#S1}`) and child-link checks, random ID scheme option, Windows in CI | A link to a missing scenario is reported. IDs can be allocated without collisions on parallel branches |
+| 2 | `feat/2-links-and-ids` | `oxispec link` command, scenario IDs (`{#S1}`) and child-link checks, random ID scheme option, `format` version in the config and `schema_version` in JSON output ([versioning.md](versioning.md)), Windows in CI | A link to a missing scenario is reported. IDs can be allocated without collisions on parallel branches |
 | 3 | `feat/3-local-index` | `RevisionStore` and `TextIndex` traits, `files` store with a cache under `.oxispec/cache`, content hashing, `oxispec index`, `check --changed` | A second `check` on an unchanged project reparses nothing. `--changed` checks only touched nodes and what links to them |
 | 4 | `feat/4-history` | SQLite revision store, git-derived revisions, `history`, `at`, `diff`, `rollback`, `tag` | `at <rev> show` returns an old node. `rollback` creates a new revision and refuses when it would break links |
 | 5 | `feat/5-change-sets-and-releases` | Change sets, release manifest, gates, release notes from change sets | `release check` fails on an unapproved change set. Notes are generated |

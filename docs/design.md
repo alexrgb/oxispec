@@ -990,6 +990,5 @@ Phases 0 to 4 ship as a CLI plus MCP server with no hosted server (decided). Ser
 | 7 | Registry for small organizations: **static index in git** first | The server-backed registry comes with server mode (section 10) |
 | 8 | CI platform order: **GitHub first, then GitLab** | `oxispec ci` ships GitHub Actions and SARIF output first (section 11) |
 | 9 | Specs are **colocated, as near the code as possible** | Placement rule in section 12 and section 13 |
-
-**Still open**
-10. GitHub owner or organization, repository visibility, and the license. I suggest dual MIT and Apache-2.0, the Rust convention. Both are compatible with OpenSpec's MIT license, and we keep its notice wherever we copy code or prompts.
+| 10 | GitHub repository `alexrgb/oxispec`, private for now, dual MIT and Apache-2.0 | Public later, once there is something to show |
+| 11 | Versioning: SemVer for the software, Conventional Commits, separate compatibility rules for formats and outputs | [versioning.md](versioning.md) |
