@@ -14,6 +14,7 @@ pub mod modules;
 pub mod node;
 pub mod parse;
 pub mod release;
+pub mod report;
 pub mod rollback;
 
 pub use check::check;

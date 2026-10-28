@@ -57,3 +57,80 @@ impl Finding {
         self
     }
 }
+
+/// Every check code with a one-line meaning, for reports. Kept in step with
+/// the table in docs/format.md by a test.
+pub const CODES: &[(&str, &str)] = &[
+    ("E001", "Two nodes have the same ID"),
+    ("E002", "A link points to a node that does not exist"),
+    ("E003", "Frontmatter has `id` or `type`, but not both"),
+    ("E004", "`supersedes` links form a cycle"),
+    ("E005", "An ID is not valid"),
+    ("E006", "A requirement has no scenario"),
+    ("E007", "A requirement has no SHALL or MUST"),
+    ("E008", "A requirement node has no `### Requirement:` block"),
+    ("E009", "A link points to a scenario that does not exist"),
+    ("E010", "A scenario anchor is used twice in one file"),
+    ("E011", "A scenario anchor is not letters and digits"),
+    (
+        "E012",
+        "A change set has no status, or one that is not in the lifecycle",
+    ),
+    (
+        "E013",
+        "A change set is approved or merged but has no `approved_by`",
+    ),
+    ("W001", "Unknown node type"),
+    (
+        "W002",
+        "Frontmatter is not valid YAML, so the file was skipped",
+    ),
+    ("W003", "A file could not be read"),
+    ("W004", "Unknown link kind"),
+    ("I001", "A link to another project is not checked"),
+];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Codes written as string literals in the sources.
+    fn codes_in(source: &str) -> Vec<String> {
+        let bytes = source.as_bytes();
+        let mut found = Vec::new();
+        for i in 0..bytes.len().saturating_sub(6) {
+            let w = &bytes[i..i + 6];
+            if w[0] == b'"'
+                && matches!(w[1], b'E' | b'W' | b'I')
+                && w[2..5].iter().all(u8::is_ascii_digit)
+                && w[5] == b'"'
+            {
+                found.push(String::from_utf8_lossy(&w[1..5]).into_owned());
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn the_table_matches_the_checks_and_the_docs() {
+        let sources = [
+            include_str!("check.rs"),
+            include_str!("parse.rs"),
+            include_str!("graph.rs"),
+            include_str!("index.rs"),
+        ];
+        let docs = include_str!("../../../docs/format.md");
+        let known: Vec<&str> = CODES.iter().map(|(c, _)| *c).collect();
+        for source in sources {
+            for code in codes_in(source) {
+                assert!(known.contains(&code.as_str()), "{code} is not in CODES");
+            }
+        }
+        for (code, _) in CODES {
+            assert!(
+                docs.contains(&format!("| {code} |")),
+                "{code} is not in docs/format.md"
+            );
+        }
+    }
+}
