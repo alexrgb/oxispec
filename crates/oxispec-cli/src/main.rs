@@ -16,6 +16,7 @@ use oxispec_core::{Finding, Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, m
 mod changes;
 mod git;
 mod history;
+mod releases;
 mod rollback;
 
 #[derive(Parser)]
@@ -88,12 +89,17 @@ enum Command {
         #[command(subcommand)]
         action: ChangeAction,
     },
+    /// Prepare, check and publish releases of the specs
+    Release {
+        #[command(subcommand)]
+        action: ReleaseAction,
+    },
     /// Add a typed link from one node to another, for example: link REQ-AUTH-0001 decided-by ADR-0001
     Link {
         /// The node that holds the link
         from: String,
         /// satisfies, verifies, implements, decided-by, supersedes, refines, governed-by,
-        /// describes, overrides, conflicts-with or depends-on
+        /// describes, overrides, conflicts-with, depends-on, changes or includes
         kind: String,
         /// A node, or a scenario of a node such as REQ-AUTH-0001.S1
         to: String,
@@ -231,6 +237,40 @@ enum ChangeAction {
     },
 }
 
+#[derive(Subcommand)]
+enum ReleaseAction {
+    /// Work out the version and notes since the last release, and write the manifest
+    Prepare {
+        /// The version, for example 0.2.0 (default: the suggested one)
+        version: Option<String>,
+        /// Write the notes again for a version that already has a manifest
+        #[arg(long)]
+        force: bool,
+        /// Show the manifest and write nothing
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run the gates for a release. Exits with 1 when it is not ready
+    Check {
+        version: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run the gates on the last commit and tag it specs-vVERSION
+    Publish {
+        version: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// List releases and whether they are published
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+}
+
 fn main() -> ExitCode {
     match run(Cli::parse()) {
         Ok(code) => code,
@@ -293,6 +333,35 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 }
             }
             Ok(ExitCode::SUCCESS)
+        }
+        Command::Release { action } => {
+            let root = project_root(cli.root.as_deref())?;
+            let ready = match action {
+                ReleaseAction::Prepare {
+                    version,
+                    force,
+                    dry_run,
+                    json,
+                } => {
+                    releases::prepare(&root, version.as_deref(), force, dry_run, json, cache)?;
+                    true
+                }
+                ReleaseAction::Check { version, json } => {
+                    releases::check(&root, &version, json, cache)?
+                }
+                ReleaseAction::Publish { version, json } => {
+                    releases::publish(&root, &version, json)?
+                }
+                ReleaseAction::List { json } => {
+                    releases::list(&root, json, cache)?;
+                    true
+                }
+            };
+            Ok(if ready {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            })
         }
         Command::Link { from, kind, to } => {
             let root = project_root(cli.root.as_deref())?;
@@ -419,6 +488,9 @@ fn ensure_module_dirs(root: &Path, cfg: &Config) -> Result<()> {
     }
     if cfg.has("adrs") {
         fs::create_dir_all(root.join("specs/adr"))?;
+    }
+    if cfg.has("releases") {
+        fs::create_dir_all(root.join("specs/releases"))?;
     }
     Ok(())
 }

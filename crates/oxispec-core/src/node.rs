@@ -15,6 +15,8 @@ pub struct Frontmatter {
     pub owner: Option<String>,
     pub approved_by: Option<String>,
     pub approved_on: Option<String>,
+    /// The version a release node stands for.
+    pub version: Option<String>,
     #[serde(default)]
     pub links: BTreeMap<String, OneOrMany>,
 }
@@ -62,6 +64,8 @@ pub struct Node {
     /// Who approved a change set, and when (`YYYY-MM-DD`).
     pub approved_by: Option<String>,
     pub approved_on: Option<String>,
+    /// The version of a release node, as written in its frontmatter.
+    pub version: Option<String>,
     /// The first `# ` heading, without a leading `ID: `.
     pub title: Option<String>,
     /// Path relative to the project root.
@@ -120,4 +124,5 @@ pub const KNOWN_LINK_KINDS: &[&str] = &[
     "conflicts-with",
     "depends-on",
     "changes",
+    "includes",
 ];

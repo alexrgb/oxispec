@@ -210,6 +210,8 @@ report: {conflicts: 0, suspect-links: 0, scenario-coverage: 96%}
 notes: generated                 # built from the change sets
 ```
 
+The first implementation (iteration 5b) differs in small ways: the ID is sequential (`REL-0001`) because a dot in an ID means a child, the version is a `version` field, the change sets are an `includes` link, and the status stays `candidate` because a release exists once its tag does. See [format.md](format.md#releases).
+
 **Commands**
 
 ```bash

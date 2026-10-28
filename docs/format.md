@@ -90,6 +90,7 @@ oxispec link REQ-AUTH-0001 decided-by ADR-0001
 | `conflicts-with` | A declared conflict |
 | `depends-on` | This node needs that one |
 | `changes` | This change set modifies that node |
+| `includes` | This release includes that change set |
 
 Other kinds are accepted with a warning, which catches typos.
 
@@ -117,7 +118,54 @@ oxispec change list --status approved                    # also --json
 - `oxispec check` reports a change set with a missing or unknown status (E012) and an approved or merged one with no approver (E013).
 - **The approval is recorded, not enforced.** Anyone who can edit the file can write a name into it. Until access control exists, what stops someone approving their own change is your repository's review rules. An agent should propose a change set and leave approval to a person.
 
-Releases (next) use the change sets: a release can require that none are still draft or in review.
+## Releases
+
+A release of the specs is a **manifest** node of type `release`, written by `oxispec release prepare` as `specs/releases/<version>.md`, and an annotated git tag `specs-v<version>` on the commit that holds it. Enable the `releases` module (`oxispec modules add releases`) to use it.
+
+```yaml
+---
+id: REL-0001
+type: release
+status: candidate
+version: "0.2.0"
+links:
+  includes: [CHG-0001, CHG-0003]
+---
+# REL-0001: Release 0.2.0
+
+Changes since 0.1.0.
+
+## Breaking
+## Added
+## Changed
+## Change sets
+```
+
+```bash
+oxispec release prepare              # the suggested version, notes, and the manifest file
+oxispec release prepare 0.2.0        # choose the version (--force rewrites the notes, --dry-run writes nothing)
+oxispec release check 0.2.0          # the gates, exit code 1 when not ready
+oxispec release publish 0.2.0        # runs the gates on HEAD, then tags it specs-v0.2.0
+oxispec release list                 # candidates and published releases
+```
+
+- **The release is the tag.** A manifest is a *candidate* until its tag exists, so publishing never edits a file. Commit the manifest first (a pull request is a good place to review the notes), then publish. Push the tag yourself.
+- **The base** is the newest published, final release below the new version (tags `specs-v<semver>`, never a pre-release). With none, this is the first release and the suggestion is `0.1.0`.
+- **Notes** come from the graph diff between the base and now: removed requirements or scenarios are *Breaking*, new nodes, requirements or scenarios are *Added*, any other change is *Changed*. Change sets and release manifests are not counted as changes. The change sets listed are the ones added or edited since the base.
+- **The suggested version** follows [versioning.md](versioning.md#versions-of-the-specs-you-ship): breaking is major, added is minor, anything else is a patch, and before 1.0 a breaking change bumps the minor version. You confirm or choose another version.
+- **Gates**, run by `check` and again by `publish`, which runs them on the committed state so the tag is on exactly what was checked:
+
+| Gate | Blocks | Passes when |
+|---|---|---|
+| `not-released` | yes | the version has no tag yet |
+| `version-increases` | yes | it is newer than the base |
+| `has-changes` | yes | something changed since the base (not for the first release) |
+| `no-errors` | yes | `oxispec check` reports no errors |
+| `change-sets-approved` | yes | every included change set is approved or merged |
+| `manifest-current` | yes | the manifest lists the included change sets (otherwise `prepare --force`) |
+| `version-matches-changes` | no, warns | the version is at least the suggested one |
+
+Not built yet, from the design: pinned code commits, test results and coverage thresholds as gates (they need the scanners), `deprecate`, `release diff`, supported-until dates, and release lines.
 
 ## Project config
 

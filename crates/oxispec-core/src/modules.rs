@@ -79,7 +79,7 @@ pub const MODULES: &[ModuleInfo] = &[
         name: "releases",
         description: "Release manifests and gates",
         needs: &["core"],
-        implemented: false,
+        implemented: true,
     },
     ModuleInfo {
         name: "ci",

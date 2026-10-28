@@ -1476,3 +1476,201 @@ fn change_list_json_has_what_a_release_needs() {
     assert_eq!(first["approved_by"], "Ann Lee");
     assert_eq!(first["changes"][0], "REQ-AUTH-0001");
 }
+
+fn release_project(p: &Path) {
+    git(p, &["init", "-q"]);
+    let out = run(p, &["init", "--preset", "standard", "--with", "releases"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    run(p, &["new", "requirement", "auth", "Admin session timeout"]);
+    commit_all(p, "first requirement");
+}
+
+fn release_tags(p: &Path) -> String {
+    let out = Command::new("git")
+        .args(["tag", "--list", "specs-v*"])
+        .current_dir(p)
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+#[test]
+fn a_first_release_is_prepared_checked_and_published() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    release_project(p);
+
+    let out = run(p, &["release", "prepare", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let v = json(&out);
+    assert_eq!(v["version"], "0.1.0");
+    assert_eq!(v["base"], serde_json::Value::Null);
+    assert_eq!(v["id"], "REL-0001");
+    let manifest = p.join("specs/releases/0.1.0.md");
+    let text = fs::read_to_string(&manifest).unwrap();
+    assert!(text.contains("type: release") && text.contains("version: \"0.1.0\""));
+    assert!(text.contains("The first release."), "{text}");
+    assert!(text.contains("requirement REQ-AUTH-0001: Admin session timeout"));
+
+    // A second prepare for the same version does not overwrite the notes.
+    let again = run(p, &["release", "prepare", "0.1.0"]);
+    assert_eq!(again.code, 2);
+    assert!(again.stderr.contains("--force"), "{}", again.stderr);
+
+    // The manifest has to be committed before publishing.
+    let out = run(p, &["release", "publish", "0.1.0"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("not committed"), "{}", out.stderr);
+    assert_eq!(release_tags(p), "");
+
+    let out = run(p, &["release", "check", "0.1.0"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(out.stdout.contains("ready to publish"));
+    commit_all(p, "prepare release 0.1.0");
+
+    let out = run(p, &["release", "publish", "0.1.0"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("specs-v0.1.0"));
+    assert_eq!(release_tags(p).trim(), "specs-v0.1.0");
+
+    // It is released once, and the tag works with --at.
+    let out = run(p, &["release", "publish", "0.1.0"]);
+    assert_eq!(out.code, 1);
+    assert!(out.stdout.contains("already released"), "{}", out.stdout);
+    let out = run(p, &["show", "REQ-AUTH-0001", "--at", "v0.1.0"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+
+    let out = run(p, &["release", "list", "--json"]);
+    let v = json(&out);
+    assert_eq!(v["releases"][0]["version"], "0.1.0");
+    assert_eq!(v["releases"][0]["state"], "released");
+    assert_eq!(v["releases"][0]["tag"], "specs-v0.1.0");
+
+    // Nothing changed since, so there is nothing to release.
+    let out = run(p, &["release", "prepare"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("nothing has changed"), "{}", out.stderr);
+}
+
+#[test]
+fn a_release_waits_for_its_change_sets_to_be_approved() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    release_project(p);
+    assert_eq!(run(p, &["release", "prepare", "0.1.0"]).code, 0);
+    commit_all(p, "release 0.1.0");
+    assert_eq!(run(p, &["release", "publish", "0.1.0"]).code, 0);
+
+    // A new requirement, with a change set that is still a draft.
+    run(p, &["new", "requirement", "auth", "Password length"]);
+    run(p, &["new", "change", "Add a password rule"]);
+    run(p, &["link", "CHG-0001", "changes", "REQ-AUTH-0002"]);
+    let out = run(p, &["release", "prepare", "--json"]);
+    let v = json(&out);
+    assert_eq!(v["version"], "0.2.0", "{}", out.stdout);
+    assert_eq!(v["base"], "0.1.0");
+    assert_eq!(v["bump"], "minor");
+    assert_eq!(v["change_sets"][0]["id"], "CHG-0001");
+    let text = fs::read_to_string(p.join("specs/releases/0.2.0.md")).unwrap();
+    assert!(text.contains("includes: [CHG-0001]"), "{text}");
+    assert!(text.contains("## Added") && text.contains("## Change sets"));
+    commit_all(p, "prepare 0.2.0");
+
+    let out = run(p, &["release", "check", "0.2.0"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(
+        out.stdout.contains("not approved yet: CHG-0001"),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["release", "publish", "0.2.0"]);
+    assert_eq!(out.code, 1);
+    assert_eq!(release_tags(p).trim(), "specs-v0.1.0");
+
+    run(p, &["change", "status", "CHG-0001", "in-review"]);
+    run(
+        p,
+        &[
+            "change", "status", "CHG-0001", "approved", "--by", "Ann Lee",
+        ],
+    );
+    commit_all(p, "approve the change set");
+    let out = run(p, &["release", "check", "0.2.0", "--json"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert_eq!(json(&out)["can_release"], true);
+    assert_eq!(run(p, &["release", "publish", "0.2.0"]).code, 0);
+    assert!(release_tags(p).contains("specs-v0.2.0"));
+}
+
+#[test]
+fn removing_a_requirement_is_breaking_and_a_low_version_only_warns() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    release_project(p);
+    run(p, &["new", "requirement", "auth", "Password length"]);
+    commit_all(p, "second requirement");
+    assert_eq!(run(p, &["release", "prepare", "0.1.0"]).code, 0);
+    commit_all(p, "release 0.1.0");
+    assert_eq!(run(p, &["release", "publish", "0.1.0"]).code, 0);
+
+    fs::remove_file(auth_path(p, "password-length")).unwrap();
+    let out = run(p, &["release", "prepare", "--dry-run"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("suggested version: 0.2.0"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("## Breaking"), "{}", out.stdout);
+    assert!(out.stdout.contains("removed requirement REQ-AUTH-0002"));
+    assert!(!p.join("specs/releases/0.2.0.md").exists());
+
+    // A patch version for a breaking change is allowed, with a warning.
+    let out = run(p, &["release", "prepare", "0.1.1"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(
+        out.stdout.contains("warning: the changes suggest 0.2.0"),
+        "{}",
+        out.stdout
+    );
+    commit_all(p, "prepare 0.1.1");
+    let out = run(p, &["release", "check", "0.1.1"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(out.stdout.contains("warn "), "{}", out.stdout);
+
+    // Versions have to look like versions, and go up.
+    assert_eq!(run(p, &["release", "check", "one"]).code, 2);
+    assert_eq!(run(p, &["release", "prepare", "0.1.0"]).code, 2);
+}
+
+#[test]
+fn releases_need_the_module_and_a_repository() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "minimal"]).code, 0);
+    let out = run(p, &["release", "list"]);
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("modules add releases"),
+        "{}",
+        out.stderr
+    );
+    assert_eq!(run(p, &["modules", "add", "releases"]).code, 0);
+    let out = run(p, &["release", "list"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("no releases yet"));
+
+    let plain = tempfile::tempdir().unwrap();
+    assert_eq!(
+        run(
+            plain.path(),
+            &["init", "--preset", "minimal", "--with", "releases"]
+        )
+        .code,
+        0
+    );
+    let out = run(plain.path(), &["release", "list"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("git repository"), "{}", out.stderr);
+}
