@@ -1858,3 +1858,62 @@ fn ci_explains_a_missing_base() {
     let out = run(plain.path(), &["ci"]);
     assert_eq!(out.code, 2);
 }
+
+#[test]
+fn search_finds_nodes_and_keeps_its_index_up_to_date() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    fs::write(
+        auth_path(p, "admin-session-timeout"),
+        "---\nid: REQ-AUTH-0001\ntype: requirement\nstatus: draft\n---\n### Requirement: Admin session timeout\nThe system SHALL end an idle administrator session.\n\n#### Scenario: Idle {#S1}\n- **WHEN** idle\n- **THEN** ended\n",
+    )
+    .unwrap();
+
+    let out = run(p, &["search", "idle", "administrators", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let v = json(&out);
+    assert_eq!(v["hits"][0]["id"], "REQ-AUTH-0001");
+    assert!(
+        v["hits"][0]["snippet"]
+            .as_str()
+            .unwrap()
+            .contains("**idle**"),
+        "{v}"
+    );
+    assert_eq!(v["index"]["added"], 3);
+    assert!(p.join(".oxispec/cache/search/manifest.json").is_file());
+
+    // The second search reads nothing again, and an edit is picked up.
+    let v = json(&run(p, &["search", "idle", "--json"]));
+    assert_eq!(v["index"]["unchanged"], 3);
+    let text = fs::read_to_string(auth_path(p, "admin-session-timeout")).unwrap();
+    fs::write(
+        auth_path(p, "admin-session-timeout"),
+        text.replace("idle administrator", "inactive operator")
+            .replace("Idle", "Quiet")
+            .replace("idle", "quiet"),
+    )
+    .unwrap();
+    let out = run(p, &["search", "idle"]);
+    assert!(out.stdout.contains("no matches"), "{}", out.stdout);
+    assert!(out.stderr.contains("1 changed"), "{}", out.stderr);
+    let out = run(p, &["search", "inactive", "--type", "requirement"]);
+    assert!(out.stdout.contains("REQ-AUTH-0001"), "{}", out.stdout);
+    let out = run(p, &["search", "inactive", "--type", "adr"]);
+    assert!(out.stdout.contains("no matches"), "{}", out.stdout);
+    assert_eq!(run(p, &["search", "inactive", "--rebuild"]).code, 0);
+}
+
+#[test]
+fn search_without_a_cache_leaves_nothing_behind() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    let _ = fs::remove_dir_all(p.join(".oxispec/cache"));
+    let out = run(p, &["--no-cache", "search", "postgres"]);
+    assert_eq!(out.code, 0, "{}{}", out.stderr, out.stdout);
+    assert!(out.stdout.contains("ADR-0001"), "{}", out.stdout);
+    assert!(!p.join(".oxispec/cache").exists());
+    assert_eq!(run(p, &["search", "   "]).code, 2);
+}

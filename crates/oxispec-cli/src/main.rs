@@ -19,6 +19,7 @@ mod git;
 mod history;
 mod releases;
 mod rollback;
+mod search;
 
 #[derive(Parser)]
 #[command(
@@ -144,6 +145,26 @@ enum Command {
         /// Write the pull request comment (markdown) to this file
         #[arg(long, value_name = "FILE")]
         markdown: Option<PathBuf>,
+    },
+    /// Search the text of all nodes, for example: search "session timeout" --type requirement
+    Search {
+        /// The words to look for. All of them have to match. Quotes make a phrase
+        #[arg(required = true)]
+        query: Vec<String>,
+        /// Only nodes of this type
+        #[arg(long = "type", value_name = "TYPE")]
+        ty: Option<String>,
+        /// Only nodes with this status
+        #[arg(long)]
+        status: Option<String>,
+        /// How many results to show
+        #[arg(long, short = 'n', default_value_t = 10)]
+        limit: usize,
+        /// Delete the stored search index and build it again
+        #[arg(long)]
+        rebuild: bool,
+        #[arg(long)]
+        json: bool,
     },
     /// Show how a node changed over time, from git history
     History {
@@ -374,6 +395,27 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 cache,
             };
             ci::ci_command(&root, &options)
+        }
+        Command::Search {
+            query,
+            ty,
+            status,
+            limit,
+            rebuild,
+            json,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            let options = search::SearchOptions {
+                query: query.join(" "),
+                ty,
+                status,
+                limit,
+                rebuild,
+                json,
+                cache,
+            };
+            search::search_command(&root, &options)?;
+            Ok(ExitCode::SUCCESS)
         }
         Command::Release { action } => {
             let root = project_root(cli.root.as_deref())?;
