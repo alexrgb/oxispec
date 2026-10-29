@@ -61,6 +61,16 @@ impl Default for Lock {
     }
 }
 
+/// Reads a lock file from its text, for example as it is in a git revision.
+pub fn parse(origin: &Path, text: &str) -> Result<Lock, Error> {
+    let lock: Lock = serde_json::from_str(text)
+        .map_err(|e| Error::Parse(origin.to_path_buf(), e.to_string()))?;
+    if lock.version > LOCK_VERSION {
+        return Err(Error::TooNew(origin.to_path_buf(), lock.version));
+    }
+    Ok(lock)
+}
+
 /// Reads the lock file. A missing file is an empty lock.
 pub fn load(root: &Path) -> Result<Lock, Error> {
     let path = root.join(LOCK_PATH);
@@ -69,12 +79,7 @@ pub fn load(root: &Path) -> Result<Lock, Error> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Lock::default()),
         Err(e) => return Err(Error::Io(path, e)),
     };
-    let lock: Lock =
-        serde_json::from_str(&text).map_err(|e| Error::Parse(path.clone(), e.to_string()))?;
-    if lock.version > LOCK_VERSION {
-        return Err(Error::TooNew(path, lock.version));
-    }
-    Ok(lock)
+    parse(&path, &text)
 }
 
 /// Writes the lock file, sorted, one link per entry, so diffs are small.

@@ -309,6 +309,22 @@ impl Gate {
     }
 }
 
+/// What the code and the tests say, for the gates. Only given for a project
+/// that uses trace annotations.
+pub struct TraceFacts {
+    /// Links between specs and code that changed since they were confirmed.
+    pub suspect: usize,
+    /// Scenarios whose tests failed in the imported results.
+    pub failing: Vec<String>,
+    /// What was imported. `None` when no results were imported.
+    pub results: Option<ResultsFacts>,
+}
+
+pub struct ResultsFacts {
+    /// The results are from the commit that is being released.
+    pub current: bool,
+}
+
 /// Everything the gates look at.
 pub struct Candidate<'a> {
     pub version: &'a Version,
@@ -318,6 +334,7 @@ pub struct Candidate<'a> {
     pub diff: &'a GraphDiff,
     /// A tag for this version already exists.
     pub tag_exists: bool,
+    pub trace: Option<TraceFacts>,
 }
 
 /// Runs the gates. The release can go ahead when no blocking gate failed.
@@ -329,6 +346,7 @@ pub fn gates(candidate: &Candidate) -> Vec<Gate> {
         graph,
         diff,
         tag_exists,
+        trace,
     } = candidate;
     let summary = summarize(graph, diff);
     let included = included_change_sets(graph, diff);
@@ -411,6 +429,53 @@ pub fn gates(candidate: &Candidate) -> Vec<Gate> {
             "the manifest is out of date; run `oxispec release prepare --force`".to_string()
         },
     ));
+
+    if let Some(facts) = trace {
+        gates.push(Gate::new(
+            "no-suspect-links",
+            facts.suspect == 0,
+            if facts.suspect == 0 {
+                "no link between a spec and code is suspect".to_string()
+            } else {
+                format!(
+                    "{} link(s) between specs and code changed since they were confirmed; run `oxispec suspect`",
+                    facts.suspect
+                )
+            },
+        ));
+        gates.push(match &facts.results {
+            None => Gate::new(
+                "tests-passing",
+                false,
+                "no test results were imported; run `oxispec results import`",
+            )
+            .advisory(),
+            Some(_) => Gate::new(
+                "tests-passing",
+                facts.failing.is_empty(),
+                if facts.failing.is_empty() {
+                    "no scenario has a failing test".to_string()
+                } else {
+                    format!("failing: {}", facts.failing.join(", "))
+                },
+            ),
+        });
+        if let Some(results) = &facts.results {
+            gates.push(
+                Gate::new(
+                    "results-current",
+                    results.current,
+                    if results.current {
+                        "the test results are from this commit".to_string()
+                    } else {
+                        "the test results are from another commit; run the tests and import again"
+                            .to_string()
+                    },
+                )
+                .advisory(),
+            );
+        }
+    }
 
     if let Some(suggested) = suggest(*base, summary.bump()) {
         let enough = version.core() >= suggested.core();
@@ -653,6 +718,7 @@ mod tests {
             graph: &new,
             diff: &diff,
             tag_exists,
+            trace: None,
         };
 
         let all = gates(&candidate(&target, &ready, false));
@@ -683,6 +749,7 @@ mod tests {
             graph: &removed,
             diff: &diff_removed,
             tag_exists: false,
+            trace: None,
         });
         let warning = gate(&all, "version-matches-changes");
         assert!(!warning.passed && !warning.blocking, "{warning:?}");
@@ -709,6 +776,7 @@ mod tests {
             graph: &in_review,
             diff: &diff,
             tag_exists: false,
+            trace: None,
         });
         assert_eq!(
             gate(&all, "change-sets-approved").detail,
@@ -732,6 +800,7 @@ mod tests {
             graph: &broken,
             diff: &diff,
             tag_exists: false,
+            trace: None,
         });
         assert!(!gate(&all, "no-errors").passed);
         assert!(!can_release(&all));
@@ -746,8 +815,74 @@ mod tests {
             graph: &old,
             diff: &same,
             tag_exists: false,
+            trace: None,
         });
         assert!(!gate(&all, "has-changes").passed);
+    }
+
+    #[test]
+    fn suspect_links_and_failing_tests_block_a_release() {
+        let new = graph(&[("a.md", req("REQ-A-0001", "", REQ))]);
+        let diff = diff_graphs(&Graph::default(), &new);
+        let target = v("0.1.0");
+        let ready = manifest("");
+        let run = |trace| {
+            gates(&Candidate {
+                version: &target,
+                base: None,
+                manifest: &ready,
+                graph: &new,
+                diff: &diff,
+                tag_exists: false,
+                trace,
+            })
+        };
+
+        // A project that does not use trace has none of these gates.
+        assert!(!run(None).iter().any(|g| g.name == "no-suspect-links"));
+
+        let clean = run(Some(TraceFacts {
+            suspect: 0,
+            failing: vec![],
+            results: Some(ResultsFacts { current: true }),
+        }));
+        assert!(can_release(&clean), "{clean:?}");
+        assert!(clean.iter().all(|g| g.passed), "{clean:?}");
+
+        let suspect = run(Some(TraceFacts {
+            suspect: 2,
+            failing: vec![],
+            results: Some(ResultsFacts { current: true }),
+        }));
+        assert!(!gate(&suspect, "no-suspect-links").passed);
+        assert!(!can_release(&suspect));
+
+        let failing = run(Some(TraceFacts {
+            suspect: 0,
+            failing: vec!["REQ-A-0001.S1".into()],
+            results: Some(ResultsFacts { current: true }),
+        }));
+        assert_eq!(
+            gate(&failing, "tests-passing").detail,
+            "failing: REQ-A-0001.S1"
+        );
+        assert!(!can_release(&failing));
+
+        // No results, or old ones, only warn.
+        let none = run(Some(TraceFacts {
+            suspect: 0,
+            failing: vec![],
+            results: None,
+        }));
+        assert!(!gate(&none, "tests-passing").passed && !gate(&none, "tests-passing").blocking);
+        assert!(can_release(&none), "{none:?}");
+        let old = run(Some(TraceFacts {
+            suspect: 0,
+            failing: vec![],
+            results: Some(ResultsFacts { current: false }),
+        }));
+        assert!(!gate(&old, "results-current").passed && !gate(&old, "results-current").blocking);
+        assert!(can_release(&old), "{old:?}");
     }
 
     #[test]
@@ -763,6 +898,7 @@ mod tests {
             graph: &new,
             diff: &diff,
             tag_exists: false,
+            trace: None,
         });
         assert!(can_release(&all), "{all:?}");
     }

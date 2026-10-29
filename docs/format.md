@@ -164,6 +164,7 @@ oxispec release list                 # candidates and published releases
 | `change-sets-approved` | yes | every included change set is approved or merged |
 | `manifest-current` | yes | the manifest lists the included change sets (otherwise `prepare --force`) |
 | `version-matches-changes` | no, warns | the version is at least the suggested one |
+| `no-suspect-links`, `tests-passing`, `results-current` | yes, yes, no | only for a project that uses trace annotations: see [trace.md](trace.md#release-gates) |
 
 Not built yet, from the design: pinned code commits, test results and coverage thresholds as gates (they need the scanners), `deprecate`, `release diff`, supported-until dates, and release lines.
 

@@ -2332,3 +2332,176 @@ fn ci_reports_suspect_links_until_they_are_confirmed() {
     assert_eq!(run(p, &["confirm", "REQ-AUTH-0001"]).code, 0);
     assert_eq!(run(p, &["ci", "--base", "main"]).code, 0);
 }
+
+const JUNIT_PASS: &str = r#"<?xml version="1.0"?>
+<testsuites><testsuite name="s" tests="1">
+<testcase classname="auth" name="idle"/>
+</testsuite></testsuites>"#;
+
+const JUNIT_FAIL: &str = r#"<?xml version="1.0"?>
+<testsuites><testsuite name="s" tests="1">
+<testcase classname="auth" name="idle"><failure message="boom"/></testcase>
+</testsuite></testsuites>"#;
+
+#[test]
+fn imported_test_results_say_which_scenarios_pass() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    trace_project(p);
+    fs::write(
+        p.join("tests/auth.rs"),
+        "// verifies: REQ-AUTH-0001.S1\n#[test]\nfn idle() {}\n",
+    )
+    .unwrap();
+    fs::write(p.join("pass.xml"), JUNIT_PASS).unwrap();
+    fs::write(p.join("fail.xml"), JUNIT_FAIL).unwrap();
+
+    // `--require-pass` needs results first.
+    let out = run(p, &["coverage", "--require-pass"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("results import"), "{}", out.stderr);
+    assert_eq!(run(p, &["results", "show"]).code, 2);
+
+    let out = run(p, &["results", "import", "pass.xml"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("1 passed, 0 failed"), "{}", out.stdout);
+    let out = run(p, &["coverage", "--require-pass"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("passing:      1 of 2 (50%)"),
+        "{}",
+        out.stdout
+    );
+    let v = json(&run(p, &["coverage", "--json"]));
+    assert_eq!(v["results"]["passing"], 1);
+    assert_eq!(v["results"]["failing"].as_array().unwrap().len(), 0);
+    // The percentage that counts is the passing one.
+    assert_eq!(
+        run(p, &["coverage", "--require-pass", "--fail-under", "60"]).code,
+        1
+    );
+    assert_eq!(run(p, &["coverage", "--fail-under", "60"]).code, 1);
+    assert_eq!(run(p, &["coverage", "--fail-under", "50"]).code, 0);
+
+    // A failing test fails the run with --require-pass only.
+    assert_eq!(run(p, &["results", "import", "fail.xml"]).code, 0);
+    let out = run(p, &["coverage", "--require-pass"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(out.stdout.contains("failing:"), "{}", out.stdout);
+    assert!(out.stdout.contains("REQ-AUTH-0001.S1"), "{}", out.stdout);
+    assert_eq!(run(p, &["coverage"]).code, 0);
+    let out = run(p, &["results", "show"]);
+    assert!(out.stdout.contains("FAIL auth::idle"), "{}", out.stdout);
+
+    // A test can name its scenario in its own name, and go test -json works.
+    fs::write(
+        p.join("go.json"),
+        "{\"Action\":\"pass\",\"Package\":\"p\",\"Test\":\"TestX [REQ-AUTH-0001.S2]\"}\n",
+    )
+    .unwrap();
+    assert_eq!(
+        run(p, &["results", "import", "go.json", "--replace"]).code,
+        0
+    );
+    let v = json(&run(p, &["coverage", "--json"]));
+    assert_eq!(v["results"]["passing"], 1);
+    assert_eq!(v["results"]["tests"], 1);
+
+    assert_eq!(run(p, &["results", "clear"]).code, 0);
+    assert_eq!(run(p, &["results", "show"]).code, 2);
+    fs::write(p.join("bad.txt"), "hello").unwrap();
+    assert_eq!(run(p, &["results", "import", "bad.txt"]).code, 2);
+    assert_eq!(run(p, &["results", "import", "missing.xml"]).code, 2);
+}
+
+#[test]
+fn a_release_waits_for_confirmed_links_and_passing_tests() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    trace_project(p);
+    assert_eq!(run(p, &["modules", "add", "releases"]).code, 0);
+    fs::write(
+        p.join("tests/auth.rs"),
+        "// verifies: REQ-AUTH-0001.S1\n#[test]\nfn idle() {}\n",
+    )
+    .unwrap();
+    fs::write(p.join("pass.xml"), JUNIT_PASS).unwrap();
+    fs::write(p.join("fail.xml"), JUNIT_FAIL).unwrap();
+    fs::write(p.join(".gitignore"), ".oxispec/cache/\n*.xml\n").unwrap();
+    assert_eq!(run(p, &["confirm", "--all"]).code, 0);
+    assert_eq!(run(p, &["release", "prepare", "0.1.0"]).code, 0);
+    commit_all(p, "release 0.1.0");
+    assert_eq!(run(p, &["results", "import", "pass.xml"]).code, 0);
+
+    let out = run(p, &["release", "check", "0.1.0"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    for gate in ["no-suspect-links", "tests-passing", "results-current"] {
+        assert!(out.stdout.contains(gate), "{gate}: {}", out.stdout);
+    }
+    assert_eq!(run(p, &["release", "publish", "0.1.0"]).code, 0);
+
+    // Code changes without being confirmed: the link is suspect.
+    fs::write(
+        p.join("src/auth.rs"),
+        "/// spec: REQ-AUTH-0001\nfn expire_admin_session() {\n    end_after(30);\n}\n",
+    )
+    .unwrap();
+    run(p, &["new", "requirement", "auth", "Password length"]);
+    assert_eq!(run(p, &["release", "prepare", "0.2.0"]).code, 0);
+    commit_all(p, "release 0.2.0");
+    let out = run(p, &["release", "check", "0.2.0"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(
+        out.stdout.contains("FAIL no-suspect-links"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(run(p, &["release", "publish", "0.2.0"]).code, 1);
+
+    // Confirmed, but the tests are from another commit: a warning only.
+    assert_eq!(run(p, &["confirm", "--all"]).code, 0);
+    commit_all(p, "confirm");
+    let out = run(p, &["release", "check", "0.2.0"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(
+        out.stdout.contains("warn results-current"),
+        "{}",
+        out.stdout
+    );
+
+    // A failing test blocks it.
+    assert_eq!(run(p, &["results", "import", "fail.xml"]).code, 0);
+    let out = run(p, &["release", "check", "0.2.0"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(out.stdout.contains("FAIL tests-passing"), "{}", out.stdout);
+    assert!(out.stdout.contains("REQ-AUTH-0001.S1"), "{}", out.stdout);
+    assert_eq!(run(p, &["results", "import", "pass.xml"]).code, 0);
+
+    // Publishing reads the committed code, not the working tree.
+    fs::write(
+        p.join("src/auth.rs"),
+        "/// spec: REQ-AUTH-0001\nfn expire_admin_session() {\n    end_after(99);\n}\n",
+    )
+    .unwrap();
+    assert_eq!(
+        run(p, &["release", "check", "0.2.0"]).code,
+        1,
+        "the working tree is suspect"
+    );
+    let out = run(p, &["release", "publish", "0.2.0"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(release_tags(p).contains("specs-v0.2.0"));
+}
+
+#[test]
+fn a_project_without_trace_annotations_has_no_trace_gates() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    release_project(p);
+    assert_eq!(run(p, &["release", "prepare", "0.1.0"]).code, 0);
+    commit_all(p, "release");
+    let out = run(p, &["release", "check", "0.1.0"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(!out.stdout.contains("no-suspect-links"), "{}", out.stdout);
+}

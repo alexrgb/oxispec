@@ -192,6 +192,11 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Import test results (JUnit XML or `go test -json`), so coverage can say what passes
+    Results {
+        #[command(subcommand)]
+        action: ResultsAction,
+    },
     /// Report requirements nothing implements and scenarios no test verifies
     Coverage {
         /// Only requirements in this status, since a draft is not built yet
@@ -200,6 +205,9 @@ enum Command {
         /// Exit with 1 when either percentage is below this
         #[arg(long, value_name = "PERCENT")]
         fail_under: Option<f64>,
+        /// Count a scenario only when its tests passed in the imported results, and fail on a failing one
+        #[arg(long)]
+        require_pass: bool,
         /// List everything, not the first 20
         #[arg(long)]
         all: bool,
@@ -337,6 +345,25 @@ enum ChangeAction {
         #[arg(long)]
         json: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum ResultsAction {
+    /// Read results from files and keep them in the cache
+    Import {
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+        /// Forget earlier imports first
+        #[arg(long)]
+        replace: bool,
+    },
+    /// Show the imported results
+    Show {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Forget the imported results
+    Clear,
 }
 
 #[derive(Subcommand)]
@@ -510,9 +537,21 @@ fn run(cli: Cli) -> Result<ExitCode> {
             trace::confirm_command(&root, &ids, all, dry_run, cache)?;
             Ok(ExitCode::SUCCESS)
         }
+        Command::Results { action } => {
+            let root = project_root(cli.root.as_deref())?;
+            match action {
+                ResultsAction::Import { files, replace } => {
+                    trace::results_import(&root, &files, replace)?
+                }
+                ResultsAction::Show { json } => trace::results_show(&root, json)?,
+                ResultsAction::Clear => trace::results_clear(&root)?,
+            }
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Coverage {
             status,
             fail_under,
+            require_pass,
             all,
             json,
         } => {
@@ -520,6 +559,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let options = trace::CoverageOptions {
                 status,
                 fail_under,
+                require_pass,
                 all,
                 json,
                 cache,

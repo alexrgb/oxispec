@@ -11,8 +11,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use oxispec_core::config::{self, Config};
 use oxispec_core::diff::{GraphDiff, diff_graphs};
-use oxispec_core::release::{self, Candidate, Gate, Summary, Version};
+use oxispec_core::release::{self, Candidate, Gate, ResultsFacts, Summary, TraceFacts, Version};
 use oxispec_core::{Graph, Node, OUTPUT_SCHEMA_VERSION, index};
+use oxispec_core::{results, suspect, trace};
 use serde_json::json;
 
 use crate::git::{self, SpecTag};
@@ -221,7 +222,70 @@ struct Evaluation {
     gates: Vec<Gate>,
 }
 
-fn evaluate(root: &Path, version: &Version, graph: &Graph) -> Result<Evaluation> {
+/// What the code and tests say, for a project that uses trace annotations.
+/// `at` reads the code from a revision. Without it the working tree is read.
+fn trace_facts(
+    root: &Path,
+    cfg: &Config,
+    graph: &Graph,
+    at: Option<&git::Revision>,
+) -> Result<Option<TraceFacts>> {
+    if !cfg.has("tests") {
+        return Ok(None);
+    }
+    let scan = match at {
+        Some(rev) => git::scan_at(root, rev, &cfg.trace.exclude)?,
+        None => trace::scan_tree(root, &cfg.trace.exclude)?,
+    };
+    let lock = match at {
+        Some(rev) => match git::file_at(root, &rev.oid, Path::new(suspect::LOCK_PATH))? {
+            Some(bytes) => suspect::parse(
+                Path::new(suspect::LOCK_PATH),
+                &String::from_utf8_lossy(&bytes),
+            )?,
+            None => suspect::Lock::default(),
+        },
+        None => suspect::load(root)?,
+    };
+    let imported = results::load(root)?;
+    if scan.annotations.is_empty() && lock.links.is_empty() && imported.is_none() {
+        return Ok(None);
+    }
+    let suspects = suspect::links(graph, &scan.annotations, &lock)
+        .iter()
+        .filter(|l| l.state.is_suspect())
+        .count();
+    let head = git::resolve_rev(root, "HEAD")?;
+    let (failing, facts) = match &imported {
+        Some(found) => {
+            let failing = results::scenario_status(graph, &scan.annotations, found)
+                .into_iter()
+                .filter(|(_, status)| *status == results::Status::Failing)
+                .map(|(scenario, _)| scenario)
+                .collect();
+            (
+                failing,
+                Some(ResultsFacts {
+                    current: found.commit.as_deref() == Some(head.oid.as_str()),
+                }),
+            )
+        }
+        None => (Vec::new(), None),
+    };
+    Ok(Some(TraceFacts {
+        suspect: suspects,
+        failing,
+        results: facts,
+    }))
+}
+
+fn evaluate(
+    root: &Path,
+    version: &Version,
+    graph: &Graph,
+    at: Option<&git::Revision>,
+) -> Result<Evaluation> {
+    let cfg = config::load(root)?;
     let manifest = manifest_for(graph, version).with_context(|| {
         format!("no release manifest for {version}; run `oxispec release prepare {version}`")
     })?;
@@ -237,6 +301,7 @@ fn evaluate(root: &Path, version: &Version, graph: &Graph) -> Result<Evaluation>
         graph,
         diff: &diff,
         tag_exists,
+        trace: trace_facts(root, &cfg, graph, at)?,
     });
     Ok(Evaluation {
         version: version.clone(),
@@ -281,7 +346,7 @@ pub fn check(root: &Path, version: &str, json_output: bool, cache: bool) -> Resu
     git::require_repository(root, "release")?;
     let version = parse_version(version)?;
     let graph = index::load(root, cache).0;
-    let evaluation = evaluate(root, &version, &graph)?;
+    let evaluation = evaluate(root, &version, &graph, None)?;
     print_gates(&evaluation, json_output)?;
     Ok(release::can_release(&evaluation.gates))
 }
@@ -304,7 +369,7 @@ pub fn publish(root: &Path, version: &str, json_output: bool) -> Result<bool> {
             bail!("the manifest for {version} is not committed yet; commit it, then publish");
         }
     }
-    let evaluation = evaluate(root, &version, &graph)?;
+    let evaluation = evaluate(root, &version, &graph, Some(&head))?;
     if !release::can_release(&evaluation.gates) {
         print_gates(&evaluation, json_output)?;
         return Ok(false);

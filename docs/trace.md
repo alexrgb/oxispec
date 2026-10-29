@@ -83,6 +83,35 @@ oxispec confirm --all --dry-run
 |---|---|
 | E016 | A link between a spec and code is suspect: either one changed since it was confirmed |
 
+## Test results
+
+Coverage says a test *names* a scenario. Test results say it *passed*. Import what your test runner wrote, then ask:
+
+```bash
+cargo nextest run --profile ci        # or: go test -json ./... > go.json, vitest --reporter=junit, pytest --junitxml=...
+oxispec results import target/nextest/ci/junit.xml go.json
+oxispec coverage --require-pass       # only passing scenarios count, a failing one fails the run
+oxispec results show
+```
+
+- **Formats.** JUnit XML (nextest, Vitest, Jest with a JUnit reporter, pytest, Maven, `go-junit-report`) and the JSON lines of `go test -json`. The format is detected from the file.
+- **Matching a result to a scenario.** Two ways, and both count. A test whose own name contains the scenario ID in brackets (`ends idle sessions [REQ-AUTH-0012.S1]`) names it directly. Otherwise a result belongs to a `verifies:` test when its name matches the test's symbol: `idle` matches `auth::idle`, `crate::auth::tests::idle`, `pkg.idle`, `Class.idle`, and `TestIdle` matches `TestIdle/sub`; for `it('ends idle sessions')` the title must appear in the result's name.
+- **A scenario is passing** when at least one result matches and none failed, **failing** when any matching test failed, **skipped** when every match was skipped, and has **no result** when a test names it but no result matches (usually a naming mismatch).
+- **Results are kept in `.oxispec/cache/results.json`**, which git ignores, with the commit that was checked out. They belong to one run, so import them in the same CI job that ran the tests. Several imports add up (a later one replaces a test of the same name, and `--replace` starts over). `coverage` notes when the results are from a different commit than `HEAD`.
+- With `--fail-under`, the percentage that counts is the passing one when `--require-pass` is on.
+
+## Release gates
+
+For a project that uses trace annotations (any `spec:` or `verifies:` comment, a lock file, or imported results), `oxispec release check` and `publish` add these gates (see [releases](format.md#releases)):
+
+| Gate | Blocks | Passes when |
+|---|---|---|
+| `no-suspect-links` | yes | no link between a spec and code changed since it was confirmed |
+| `tests-passing` | yes | no scenario has a failing test. Only a warning when no results were imported |
+| `results-current` | no, warns | the imported results are from this commit |
+
+`check` reads the working tree. `publish` reads the **committed** code, the lock file at `HEAD` and the imported results, so what is tagged is what was checked, and uncommitted edits do not matter. Reading every file of a revision from git is slower than walking the working tree: with 50,000 source files (195 MB), `release check` took about 2 s and `publish` about 16 s. Spec and code live in one repository, so the tag `specs-v<version>` already pins the code commit. Pinning package versions in other repositories comes with workspaces.
+
 ## Not built yet
 
-Test result import (JUnit, `go test -json`) so coverage can say "verified and passing", suspect links as a release gate and in coverage output, pinning a release to the code commit, commit trailers (`Spec: CHG-0099`), package detection for Go, Rust and Node, and symbols for Python and other languages. The spec side is coarser than the code side: it is the whole node, not the one scenario. A cache of scan results will come if scanning is measured to be too slow on a very large repository.
+Scenario-level hashes for the spec side, coverage thresholds as a release gate, a cache of scan results for very large repositories, commit trailers (`Spec: CHG-0099`), package detection for Go, Rust and Node, and symbols for Python and other languages.
