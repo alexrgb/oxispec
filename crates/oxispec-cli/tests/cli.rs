@@ -1674,3 +1674,187 @@ fn releases_need_the_module_and_a_repository() {
     assert_eq!(out.code, 2);
     assert!(out.stderr.contains("git repository"), "{}", out.stderr);
 }
+
+/// `main` has one good requirement and one that links to a node that does not
+/// exist, an old problem. A branch `feature` starts from there.
+fn ci_project(p: &Path) {
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    run(p, &["new", "requirement", "auth", "Good"]);
+    run(p, &["new", "requirement", "auth", "Old problem"]);
+    run(p, &["link", "REQ-AUTH-0002", "refines", "REQ-AUTH-0001"]);
+    let file = auth_path(p, "old-problem");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, text.replace("REQ-AUTH-0001", "REQ-NOPE-0001")).unwrap();
+    commit_all(p, "main with an old error");
+    git(p, &["checkout", "-q", "-b", "feature"]);
+}
+
+#[test]
+fn ci_reports_only_what_the_change_introduced() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    ci_project(p);
+    assert_eq!(run(p, &["check"]).code, 1, "the old error is there");
+
+    // A clean change passes, although `check` still fails on the old error.
+    run(p, &["new", "requirement", "auth", "Clean"]);
+    let out = run(p, &["ci", "--base", "main"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("0 new errors"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("1 existing not shown"),
+        "{}",
+        out.stdout
+    );
+
+    // A change that adds an error fails, and only that error is reported.
+    run(p, &["new", "requirement", "auth", "Broken"]);
+    let broken = auth_path(p, "broken");
+    let text = fs::read_to_string(&broken).unwrap();
+    fs::write(
+        &broken,
+        text.replace(
+            "status: draft\n",
+            "status: draft\nlinks:\n  refines: REQ-GONE-0001\n",
+        ),
+    )
+    .unwrap();
+    let out = run(p, &["ci", "--base", "main", "--json"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    let v = json(&out);
+    assert_eq!(v["errors"], 1);
+    assert_eq!(v["failed"], true);
+    assert_eq!(v["existing_findings"], 1);
+    assert_eq!(v["new_findings"][0]["id"], "REQ-AUTH-0004");
+    assert_eq!(v["bump"], "minor");
+    assert!(
+        v["new_findings"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("REQ-GONE-0001"),
+        "{v}"
+    );
+}
+
+#[test]
+fn ci_writes_sarif_junit_and_a_pull_request_comment() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    ci_project(p);
+    run(p, &["new", "requirement", "auth", "Broken"]);
+    let broken = auth_path(p, "broken");
+    let text = fs::read_to_string(&broken).unwrap();
+    fs::write(
+        &broken,
+        text.replace(
+            "status: draft\n",
+            "status: draft\nlinks:\n  refines: REQ-GONE-0001\n",
+        ),
+    )
+    .unwrap();
+
+    let out = run(
+        p,
+        &[
+            "ci",
+            "--base",
+            "main",
+            "--sarif",
+            "out/oxispec.sarif",
+            "--junit",
+            "out/junit.xml",
+            "--markdown",
+            "out/comment.md",
+        ],
+    );
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+
+    let sarif: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(p.join("out/oxispec.sarif")).unwrap()).unwrap();
+    assert_eq!(sarif["version"], "2.1.0");
+    let results = sarif["runs"][0]["results"].as_array().unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0]["ruleId"], "E002");
+    assert_eq!(
+        results[0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+        "specs/requirements/auth/broken.md"
+    );
+
+    let junit = fs::read_to_string(p.join("out/junit.xml")).unwrap();
+    assert!(junit.contains("<testsuite name=\"oxispec ci\""), "{junit}");
+    assert!(junit.contains("name=\"REQ-AUTH-0003\""), "{junit}");
+    assert!(junit.contains("<failure"), "{junit}");
+
+    let comment = fs::read_to_string(p.join("out/comment.md")).unwrap();
+    assert!(comment.starts_with("<!-- oxispec-ci -->"), "{comment}");
+    assert!(
+        comment.contains("❌ New findings: **1 error**"),
+        "{comment}"
+    );
+    assert!(
+        comment.contains("specs/requirements/auth/broken.md"),
+        "{comment}"
+    );
+}
+
+#[test]
+fn ci_warnings_fail_only_with_strict() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    ci_project(p);
+    run(p, &["new", "requirement", "auth", "Odd link"]);
+    let file = auth_path(p, "odd-link");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        text.replace(
+            "status: draft\n",
+            "status: draft\nlinks:\n  wibble: REQ-AUTH-0001\n",
+        ),
+    )
+    .unwrap();
+    let out = run(p, &["ci", "--base", "main"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("1 new warnings"), "{}", out.stdout);
+    assert_eq!(run(p, &["ci", "--base", "main", "--strict"]).code, 1);
+}
+
+#[test]
+fn ci_compares_with_where_the_branch_started_not_with_newer_work_on_the_base() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    ci_project(p);
+    run(p, &["new", "requirement", "auth", "On the branch"]);
+    commit_all(p, "branch work");
+
+    // `main` moves on while the branch is open.
+    git(p, &["checkout", "-q", "main"]);
+    run(p, &["new", "requirement", "billing", "Only on main"]);
+    commit_all(p, "main moves on");
+    git(p, &["checkout", "-q", "feature"]);
+
+    let out = run(p, &["ci", "--base", "main", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let v = json(&out);
+    assert_eq!(v["removed"].as_array().unwrap().len(), 0, "{v}");
+    // Only the branch's own requirement is new, even though it is committed.
+    let added = v["added"].as_array().unwrap();
+    assert_eq!(added.len(), 1, "{v}");
+    assert_eq!(added[0]["id"], "REQ-AUTH-0003");
+}
+
+#[test]
+fn ci_explains_a_missing_base() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    ci_project(p);
+    let out = run(p, &["ci"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("origin/main"), "{}", out.stderr);
+    assert!(out.stderr.contains("fetch-depth"), "{}", out.stderr);
+    let plain = tempfile::tempdir().unwrap();
+    assert_eq!(run(plain.path(), &["init", "--preset", "minimal"]).code, 0);
+    let out = run(plain.path(), &["ci"]);
+    assert_eq!(out.code, 2);
+}

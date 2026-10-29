@@ -14,6 +14,7 @@ use oxispec_core::node::KNOWN_LINK_KINDS;
 use oxispec_core::{Finding, Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, modules};
 
 mod changes;
+mod ci;
 mod git;
 mod history;
 mod releases;
@@ -123,6 +124,26 @@ enum Command {
         /// Check the specs as they were at a git revision (a branch, tag, hash or date:YYYY-MM-DD)
         #[arg(long, conflicts_with = "changed")]
         at: Option<String>,
+    },
+    /// Check a change for CI: only the findings it introduces, with reports for pull requests
+    Ci {
+        /// What to compare with (the branch point of HEAD and BASE is used)
+        #[arg(long, default_value = "origin/main")]
+        base: String,
+        /// Warnings that the change introduces fail the run too
+        #[arg(long)]
+        strict: bool,
+        #[arg(long)]
+        json: bool,
+        /// Write SARIF (for code scanning) to this file
+        #[arg(long, value_name = "FILE")]
+        sarif: Option<PathBuf>,
+        /// Write JUnit XML to this file
+        #[arg(long, value_name = "FILE")]
+        junit: Option<PathBuf>,
+        /// Write the pull request comment (markdown) to this file
+        #[arg(long, value_name = "FILE")]
+        markdown: Option<PathBuf>,
     },
     /// Show how a node changed over time, from git history
     History {
@@ -333,6 +354,26 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 }
             }
             Ok(ExitCode::SUCCESS)
+        }
+        Command::Ci {
+            base,
+            strict,
+            json,
+            sarif,
+            junit,
+            markdown,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            let options = ci::CiOptions {
+                base,
+                strict,
+                json,
+                sarif,
+                junit,
+                markdown,
+                cache,
+            };
+            ci::ci_command(&root, &options)
         }
         Command::Release { action } => {
             let root = project_root(cli.root.as_deref())?;

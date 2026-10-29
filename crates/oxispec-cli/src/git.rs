@@ -151,6 +151,25 @@ pub fn resolve_rev(root: &Path, spec: &str) -> Result<Revision> {
     })
 }
 
+/// The commit where the current branch left `base`, so that a pull request
+/// is compared with the state it branched from and not with newer work on `base`.
+pub fn merge_base(root: &Path, base: &str) -> Result<Revision> {
+    require_repository(root, "ci")?;
+    if commit_of(root, base)?.is_none() {
+        bail!(
+            "unknown base `{base}`; choose one with --base. In CI, fetch the history first (for GitHub Actions: `fetch-depth: 0` on actions/checkout)"
+        );
+    }
+    let out = git(root, &["merge-base", base, "HEAD"])?;
+    let oid = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if !out.status.success() || oid.is_empty() {
+        bail!(
+            "`{base}` and HEAD share no history, or the history is shallow; fetch more (for GitHub Actions: `fetch-depth: 0`)"
+        );
+    }
+    resolve_rev(root, &oid)
+}
+
 /// Reads git objects, such as `<commit>:<path>`, with one `git cat-file`
 /// process. An object that does not exist gives `None`.
 pub fn read_objects(root: &Path, specs: &[String]) -> Result<Vec<Option<Vec<u8>>>> {
