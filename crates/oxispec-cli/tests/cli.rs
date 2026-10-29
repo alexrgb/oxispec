@@ -2201,3 +2201,134 @@ fn trace_needs_the_tests_module() {
         assert!(out.stderr.contains("modules add tests"), "{}", out.stderr);
     }
 }
+
+#[test]
+fn links_go_suspect_when_the_code_or_the_spec_changes_until_confirmed() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    trace_project(p);
+    fs::write(
+        p.join("src/auth.rs"),
+        "// spec: REQ-AUTH-0001\nfn expire_admin_session() {\n    end_after(15);\n}\n",
+    )
+    .unwrap();
+
+    // Nothing is confirmed yet: reported, not failed, unless asked.
+    let out = run(p, &["suspect"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("2 ok") || out.stdout.contains("0 ok, 0 suspect, 2 unconfirmed"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(run(p, &["suspect", "--strict"]).code, 1);
+    assert_eq!(
+        run(p, &["confirm"]).code,
+        2,
+        "confirming needs ids or --all"
+    );
+    assert_eq!(run(p, &["confirm", "REQ-NOPE-0001"]).code, 2);
+
+    let out = run(p, &["confirm", "--all", "--dry-run"]);
+    assert!(out.stdout.contains("would confirm 2"), "{}", out.stdout);
+    assert!(!p.join(".oxispec/trace.lock.json").exists());
+    let out = run(p, &["confirm", "--all"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("confirmed 2 link(s)"), "{}", out.stdout);
+    let lock = fs::read_to_string(p.join(".oxispec/trace.lock.json")).unwrap();
+    assert!(
+        lock.contains("spec REQ-AUTH-0001 src/auth.rs expire_admin_session"),
+        "{lock}"
+    );
+    let out = run(p, &["suspect", "--strict"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(out.stdout.contains("2 ok, 0 suspect"), "{}", out.stdout);
+
+    // Formatting and comments are not a change.
+    fs::write(
+        p.join("src/auth.rs"),
+        "// spec: REQ-AUTH-0001 (reviewed)\nfn expire_admin_session() {\n\n        end_after(15); // minutes\n}\n",
+    )
+    .unwrap();
+    assert_eq!(run(p, &["suspect", "--strict"]).code, 0);
+
+    // The code changes.
+    fs::write(
+        p.join("src/auth.rs"),
+        "// spec: REQ-AUTH-0001\nfn expire_admin_session() {\n    end_after(30);\n}\n",
+    )
+    .unwrap();
+    let out = run(p, &["suspect"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(out.stdout.contains("error[E016]"), "{}", out.stdout);
+    assert!(out.stdout.contains("the code changed"), "{}", out.stdout);
+    assert!(out.stdout.contains("--> src/auth.rs:1"), "{}", out.stdout);
+    let v = json(&run(p, &["suspect", "--json"]));
+    assert_eq!(v["suspect"], 1);
+    assert_eq!(v["links"][0]["state"], "suspect_code");
+    assert_eq!(v["links"][0]["symbol"], "expire_admin_session");
+
+    assert_eq!(run(p, &["confirm", "REQ-AUTH-0001"]).code, 0);
+    assert_eq!(run(p, &["suspect"]).code, 0);
+
+    // The spec changes: every link to it is suspect.
+    let file = auth_path(p, "admin-session-timeout");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        text.replace("<describe the behavior>", "end idle admin sessions"),
+    )
+    .unwrap();
+    let out = run(p, &["suspect"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(out.stdout.contains("the spec changed"), "{}", out.stdout);
+    assert_eq!(json(&run(p, &["suspect", "--json"]))["suspect"], 2);
+    assert_eq!(run(p, &["confirm", "--all"]).code, 0);
+    assert_eq!(run(p, &["suspect", "--strict"]).code, 0);
+
+    // The annotation goes away: an orphan, dropped by confirm.
+    fs::write(p.join("src/auth.rs"), "fn expire_admin_session() {}\n").unwrap();
+    let out = run(p, &["suspect", "--strict"]);
+    assert_eq!(out.code, 1);
+    assert!(out.stdout.contains("orphaned"), "{}", out.stdout);
+    let out = run(p, &["confirm", "--all"]);
+    assert!(
+        out.stdout.contains("dropped 1 confirmation"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(run(p, &["suspect", "--strict"]).code, 0);
+}
+
+#[test]
+fn ci_reports_suspect_links_until_they_are_confirmed() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q", "-b", "main"]);
+    trace_project(p);
+    fs::write(
+        p.join("src/auth.rs"),
+        "// spec: REQ-AUTH-0001\nfn expire_admin_session() {\n    end_after(15);\n}\n",
+    )
+    .unwrap();
+    assert_eq!(run(p, &["confirm", "--all"]).code, 0);
+    commit_all(p, "main, with confirmed links");
+    git(p, &["checkout", "-q", "-b", "feature"]);
+
+    assert_eq!(run(p, &["ci", "--base", "main"]).code, 0);
+
+    fs::write(
+        p.join("src/auth.rs"),
+        "// spec: REQ-AUTH-0001\nfn expire_admin_session() {\n    end_after(30);\n}\n",
+    )
+    .unwrap();
+    let out = run(p, &["ci", "--base", "main"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("error[E016]"), "{}", out.stdout);
+    let v = json(&run(p, &["ci", "--base", "main", "--json"]));
+    assert_eq!(v["new_findings"][0]["code"], "E016");
+    assert_eq!(v["new_findings"][0]["path"], "src/auth.rs");
+
+    assert_eq!(run(p, &["confirm", "REQ-AUTH-0001"]).code, 0);
+    assert_eq!(run(p, &["ci", "--base", "main"]).code, 0);
+}

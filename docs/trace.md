@@ -60,6 +60,29 @@ oxispec coverage --json
 
 They are reported by `coverage` with the file and line, not by `oxispec check`, which only reads the specs.
 
+## Suspect links
+
+A `spec:` or `verifies:` comment is a link between a spec and a piece of code. With tree-sitter parsers for **Go, Rust, TypeScript and JavaScript**, OxiSpec knows which function, type or test the comment is about, and hashes it. When a person confirms a link, `.oxispec/trace.lock.json` records the hash of the code and of the spec text. Afterwards the link is **suspect** if either one changed, until someone looks and confirms it again. This is the main way code and specs stay in step.
+
+```bash
+oxispec suspect                  # suspect links (exit 1), and what is unconfirmed
+oxispec suspect --strict         # unconfirmed links and orphans fail too
+oxispec confirm REQ-AUTH-0012    # the links to this node are right, as they are now
+oxispec confirm --all            # confirm everything (a good first step when adopting this)
+oxispec confirm --all --dry-run
+```
+
+- **Which code.** A comment above a function, type or test binds to it. A comment inside a function binds to that function. Above a method in an `impl`, a class or a `describe`, it binds to the method. A scenario ID in a test title binds to the test (`it`, `test`). For a language without a parser the link has no code side, and only the spec is watched.
+- **What counts as a change.** The hash covers the code without comments, blank lines or indentation, so reformatting and editing comments do not make a link suspect. Any other change does, including spaces inside a string. The spec side is the hash of the node's whole text after the frontmatter, so editing any scenario of a requirement makes every link to it suspect.
+- **States.** `ok`; suspect because the `spec`, the `code` or `both` changed; `unconfirmed` (never confirmed, not a failure unless `--strict`); `orphaned` (confirmed once, but the annotation is gone, for example because its function was renamed; `confirm` drops it).
+- **Renames.** A link is identified by its kind, target, file and symbol name, so renaming a function or moving it to another file shows as an orphan plus an unconfirmed link. That is on purpose: a person confirms the new place. Two tests with the same title in one file get `#2`, `#3`.
+- **Confirming is a statement by a person** that the code still satisfies the spec. It is recorded in a file under git, so it is reviewed like code. An agent should list suspect links and leave confirming to a person.
+- **`oxispec ci`** reports every suspect link as error E016 (with the file and line), so a pull request that changes code or a spec without confirming fails. A project that never confirmed anything has no suspect links, so adopting this does not fail anything by itself.
+
+| Code | Meaning |
+|---|---|
+| E016 | A link between a spec and code is suspect: either one changed since it was confirmed |
+
 ## Not built yet
 
-Binding a link to a symbol with tree-sitter and its body hash, **suspect links** that go stale when either end changes, `oxispec confirm`, test result import (JUnit, `go test -json`) so coverage can say "verified and passing", coverage in `oxispec ci` and release gates, commit trailers (`Spec: CHG-0099`), and Go, Rust and Node package detection. Those are iteration 8b. A cache of scan results will come if scanning is measured to be too slow on a very large repository.
+Test result import (JUnit, `go test -json`) so coverage can say "verified and passing", suspect links as a release gate and in coverage output, pinning a release to the code commit, commit trailers (`Spec: CHG-0099`), package detection for Go, Rust and Node, and symbols for Python and other languages. The spec side is coarser than the code side: it is the whole node, not the one scenario. A cache of scan results will come if scanning is measured to be too slow on a very large repository.

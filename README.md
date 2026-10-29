@@ -24,6 +24,7 @@ oxispec ci --base origin/main            # only the findings this branch introdu
 oxispec search session timeout          # full-text search, with a derived index
 oxispec site --out public --releases    # a static site, with a page per node and per version
 oxispec coverage                        # requirements with no code, scenarios with no test
+oxispec suspect                         # code or specs that changed since a person last confirmed the link
 oxispec release prepare                 # notes and a suggested version since the last release
 oxispec release publish 0.2.0           # gates, then the tag specs-v0.2.0 (needs the releases module)
 ```

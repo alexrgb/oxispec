@@ -234,6 +234,7 @@ Codes are stable. A code is never reused.
 | E013 | error | A change set is approved or merged but has no `approved_by` |
 | E014 | error | A `spec:` or `verifies:` comment in code refers to a node that does not exist (reported by `oxispec coverage`) |
 | E015 | error | A `spec:` or `verifies:` comment in code refers to a scenario that does not exist (reported by `oxispec coverage`) |
+| E016 | error | A link between a spec and code is suspect: either one changed since it was confirmed (reported by `oxispec suspect` and `oxispec ci`) |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |
