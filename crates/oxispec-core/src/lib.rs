@@ -16,6 +16,7 @@ pub mod parse;
 pub mod release;
 pub mod report;
 pub mod rollback;
+pub mod search;
 
 pub use check::check;
 pub use finding::{Finding, Severity};
