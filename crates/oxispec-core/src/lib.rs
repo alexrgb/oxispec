@@ -17,6 +17,7 @@ pub mod release;
 pub mod report;
 pub mod rollback;
 pub mod search;
+pub mod site;
 
 pub use check::check;
 pub use finding::{Finding, Severity};

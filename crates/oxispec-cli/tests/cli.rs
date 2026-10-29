@@ -1917,3 +1917,126 @@ fn search_without_a_cache_leaves_nothing_behind() {
     assert!(!p.join(".oxispec/cache").exists());
     assert_eq!(run(p, &["search", "   "]).code, 2);
 }
+
+#[test]
+fn site_builds_a_page_per_node_linked_by_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    run(p, &["link", "REQ-AUTH-0001", "decided-by", "ADR-0001"]);
+
+    let out = run(p, &["site", "--out", "public", "--title", "Demo"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("wrote 4 pages"), "{}", out.stdout);
+    let site = p.join("public");
+    for page in [
+        "index.html",
+        "REQ-AUTH-0001.html",
+        "REQ-AUTH-0002.html",
+        "ADR-0001.html",
+        "style.css",
+    ] {
+        assert!(site.join(page).is_file(), "{page}");
+    }
+    let req = fs::read_to_string(site.join("REQ-AUTH-0001.html")).unwrap();
+    assert!(
+        req.contains("<a href=\"ADR-0001.html\">ADR-0001</a>"),
+        "{req}"
+    );
+    assert!(req.contains("id=\"S1\""), "scenario anchors: {req}");
+    assert!(
+        req.contains("<title>REQ-AUTH-0001 Admin session timeout · Demo</title>"),
+        "{req}"
+    );
+    let adr = fs::read_to_string(site.join("ADR-0001.html")).unwrap();
+    assert!(adr.contains("What links here"), "{adr}");
+    assert!(adr.contains("href=\"REQ-AUTH-0001.html\""), "{adr}");
+
+    // A rebuild removes the page of a node that is gone, and keeps other files.
+    fs::write(site.join("CNAME"), "example.com").unwrap();
+    fs::remove_file(auth_path(p, "password-length")).unwrap();
+    assert_eq!(run(p, &["site", "--out", "public"]).code, 0);
+    assert!(!site.join("REQ-AUTH-0002.html").exists());
+    assert!(site.join("CNAME").is_file());
+
+    // The output folder must not be the project itself.
+    let out = run(p, &["site", "--out", "."]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("folder of its own"), "{}", out.stderr);
+}
+
+#[test]
+fn site_at_a_revision_shows_the_specs_as_they_were() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+    git(p, &["tag", "-a", "-m", "first", "specs-first", "HEAD~3"]);
+
+    assert_eq!(run(p, &["site", "--out", "old", "--at", "first"]).code, 0);
+    assert_eq!(run(p, &["site", "--out", "new"]).code, 0);
+    let old = fs::read_to_string(p.join("old/index.html")).unwrap();
+    let new = fs::read_to_string(p.join("new/index.html")).unwrap();
+    assert!(old.contains("2 nodes"), "{old}");
+    assert!(new.contains("3 nodes"), "{new}");
+    assert!(!p.join("old/REQ-AUTH-0002.html").exists());
+    assert!(p.join("new/REQ-AUTH-0002.html").exists());
+    let page = fs::read_to_string(p.join("old/REQ-AUTH-0001.html")).unwrap();
+    assert!(page.contains("<article>"), "text comes from git: {page}");
+    assert!(page.contains("status-draft"), "{page}");
+}
+
+#[test]
+fn site_releases_builds_every_version_with_a_picker_and_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    run(p, &["new", "requirement", "auth", "Admin session timeout"]);
+    commit_all(p, "first");
+    assert_eq!(run(p, &["tag", "v1"]).code, 0);
+    run(p, &["new", "requirement", "auth", "Password length"]);
+    commit_all(p, "second");
+    assert_eq!(run(p, &["tag", "v2"]).code, 0);
+    run(p, &["new", "adr", "Use Postgres"]);
+
+    let out = run(p, &["site", "--out", "public", "--releases"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("3 versions"), "{}", out.stdout);
+    let site = p.join("public");
+    for version in ["latest", "v1", "v2"] {
+        assert!(site.join(version).join("index.html").is_file(), "{version}");
+        assert!(site.join(version).join("style.css").is_file(), "{version}");
+    }
+    assert!(!site.join("v1/REQ-AUTH-0002.html").exists());
+    assert!(site.join("v2/REQ-AUTH-0002.html").is_file());
+    assert!(site.join("latest/ADR-0001.html").is_file());
+    assert!(!site.join("v2/ADR-0001.html").exists());
+
+    let root = fs::read_to_string(site.join("index.html")).unwrap();
+    assert!(root.contains("url=latest/index.html"), "{root}");
+    assert!(
+        root.contains("v1/index.html") && root.contains("v2/index.html"),
+        "{root}"
+    );
+
+    let page = fs::read_to_string(site.join("v2/REQ-AUTH-0002.html")).unwrap();
+    assert!(
+        page.contains("<option value=\"v2\" selected>v2</option>"),
+        "{page}"
+    );
+    assert!(page.contains("<option value=\"v1\">v1</option>"), "{page}");
+    assert!(
+        page.contains("Since v1") && page.contains("new in this version"),
+        "{page}"
+    );
+    let first = fs::read_to_string(site.join("v1/REQ-AUTH-0001.html")).unwrap();
+    assert!(
+        !first.contains("Since"),
+        "the oldest version has nothing to compare with: {first}"
+    );
+    let latest = fs::read_to_string(site.join("latest/ADR-0001.html")).unwrap();
+    assert!(latest.contains("Since v2"), "{latest}");
+
+    // The two ways of choosing a version do not mix.
+    assert_eq!(run(p, &["site", "--releases", "--at", "v1"]).code, 2);
+}
