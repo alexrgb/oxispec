@@ -88,6 +88,10 @@ pub const CODES: &[(&str, &str)] = &[
         "E015",
         "A code annotation refers to a scenario that does not exist",
     ),
+    (
+        "E016",
+        "A link between a spec and code is suspect: either one changed since it was confirmed",
+    ),
     ("W001", "Unknown node type"),
     (
         "W002",
@@ -127,6 +131,7 @@ mod tests {
             include_str!("graph.rs"),
             include_str!("index.rs"),
             include_str!("trace.rs"),
+            include_str!("suspect.rs"),
         ];
         let docs = include_str!("../../../docs/format.md");
         let known: Vec<&str> = CODES.iter().map(|(c, _)| *c).collect();

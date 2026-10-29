@@ -10,7 +10,7 @@ Thanks for your interest. OxiSpec is early, so the most useful contributions rig
 
 ## Set up
 
-You need a recent stable Rust toolchain. The oldest supported version is `rust-version` in `Cargo.toml`.
+You need a recent stable Rust toolchain. The oldest supported version is `rust-version` in `Cargo.toml`. You also need a C compiler (Xcode command line tools, `build-essential`, or MSVC), because the tree-sitter parsers are built from C source.
 
 ```bash
 cargo build

@@ -170,6 +170,28 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// List links between specs and code that changed since they were confirmed
+    Suspect {
+        /// Also list links that are fine
+        #[arg(long)]
+        all: bool,
+        /// Links that are not confirmed yet, or whose code is gone, fail the run too
+        #[arg(long)]
+        strict: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Record that the code and the spec still agree, so their links stop being suspect
+    Confirm {
+        /// Nodes whose links to confirm
+        ids: Vec<String>,
+        /// Confirm every link
+        #[arg(long, conflicts_with = "ids")]
+        all: bool,
+        /// Show what would be confirmed and write nothing
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Report requirements nothing implements and scenarios no test verifies
     Coverage {
         /// Only requirements in this status, since a draft is not built yet
@@ -477,6 +499,15 @@ fn run(cli: Cli) -> Result<ExitCode> {
         Command::Trace { id, json } => {
             let root = project_root(cli.root.as_deref())?;
             trace::trace_command(&root, id.as_deref(), json, cache)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Suspect { all, strict, json } => {
+            let root = project_root(cli.root.as_deref())?;
+            trace::suspect_command(&root, all, strict, json, cache)
+        }
+        Command::Confirm { ids, all, dry_run } => {
+            let root = project_root(cli.root.as_deref())?;
+            trace::confirm_command(&root, &ids, all, dry_run, cache)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Coverage {

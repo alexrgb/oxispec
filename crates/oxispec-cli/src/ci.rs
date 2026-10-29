@@ -13,6 +13,8 @@ use oxispec_core::diff::diff_graphs;
 use oxispec_core::impact::impact;
 use oxispec_core::release::summarize;
 use oxispec_core::report::{Report, Touched, junit, markdown, sarif};
+use oxispec_core::suspect;
+use oxispec_core::trace::scan_tree;
 use oxispec_core::{OUTPUT_SCHEMA_VERSION, Severity, check, config, index};
 use serde_json::json;
 
@@ -36,11 +38,20 @@ fn write_report(path: &Path, text: &str) -> Result<()> {
 }
 
 pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
-    config::load(root)?;
+    let cfg = config::load(root)?;
     let base = git::merge_base(root, &options.base)?;
     let old = git::graph_at(root, &base)?;
     let new = index::load(root, options.cache).0;
-    let diff = diff_graphs(&old, &new);
+    let mut diff = diff_graphs(&old, &new);
+
+    // A link between code and a spec that changed since it was confirmed is
+    // always reported, as it would be to anyone running `oxispec suspect`.
+    if cfg.has("tests") {
+        let scan = scan_tree(root, &cfg.trace.exclude)?;
+        let lock = suspect::load(root)?;
+        let links = suspect::links(&new, &scan.annotations, &lock);
+        diff.new_findings.extend(suspect::findings(&links));
+    }
 
     let changes = git::changes(root, &base.oid)?;
     let reach = impact(&new, &changes.paths, &changes.old_ids);

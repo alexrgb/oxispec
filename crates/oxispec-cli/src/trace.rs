@@ -4,6 +4,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
+use oxispec_core::suspect::{self, State};
 use oxispec_core::trace::{Annotation, Coverage, Kind, Scan, coverage, scan_tree};
 use oxispec_core::{OUTPUT_SCHEMA_VERSION, config, id, index};
 use serde_json::json;
@@ -224,4 +225,131 @@ pub fn coverage_command(root: &Path, options: &CoverageOptions) -> Result<ExitCo
     } else {
         ExitCode::SUCCESS
     })
+}
+
+fn place_of(link: &suspect::Link) -> String {
+    match (&link.path, link.line) {
+        (Some(path), Some(line)) => format!("{}:{line}", path.display()),
+        _ => "(annotation gone)".to_string(),
+    }
+}
+
+fn count(links: &[suspect::Link], state: State) -> usize {
+    links.iter().filter(|l| l.state == state).count()
+}
+
+pub fn suspect_command(
+    root: &Path,
+    all: bool,
+    strict: bool,
+    json_output: bool,
+    cache: bool,
+) -> Result<ExitCode> {
+    let scan = scan(root)?;
+    let graph = index::load(root, cache).0;
+    let lock = suspect::load(root)?;
+    let links = suspect::links(&graph, &scan.annotations, &lock);
+    let suspects = links.iter().filter(|l| l.state.is_suspect()).count();
+    let unconfirmed = count(&links, State::Unconfirmed);
+    let orphaned = count(&links, State::Orphaned);
+    let ok = count(&links, State::Ok);
+    let failed = suspects > 0 || (strict && unconfirmed + orphaned > 0);
+
+    if json_output {
+        let shown: Vec<&suspect::Link> = links
+            .iter()
+            .filter(|l| all || l.state != State::Ok)
+            .collect();
+        let out = json!({
+            "schema_version": OUTPUT_SCHEMA_VERSION,
+            "ok": ok,
+            "suspect": suspects,
+            "unconfirmed": unconfirmed,
+            "orphaned": orphaned,
+            "links": shown,
+            "failed": failed,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(if failed {
+            ExitCode::from(1)
+        } else {
+            ExitCode::SUCCESS
+        });
+    }
+    for f in suspect::findings(&links) {
+        println!("{}", crate::finding_line(&f));
+        if let Some(path) = &f.path {
+            println!("  --> {}:{}", path.display(), f.line.unwrap_or(1));
+        }
+    }
+    for link in &links {
+        let label = match link.state {
+            State::Unconfirmed => "unconfirmed",
+            State::Orphaned => "orphaned",
+            State::Ok if all => "ok",
+            _ => continue,
+        };
+        println!(
+            "{label:<12} {} {} {}",
+            link.target,
+            place_of(link),
+            link.symbol.as_deref().unwrap_or("")
+        );
+    }
+    println!(
+        "{} links: {ok} ok, {suspects} suspect, {unconfirmed} unconfirmed, {orphaned} orphaned",
+        links.len() - orphaned
+    );
+    if suspects > 0 {
+        println!("look at each one, then run `oxispec confirm ID` for those that are still right");
+    } else if unconfirmed + orphaned > 0 {
+        println!("`oxispec confirm --all` records the links as they are now");
+    }
+    Ok(if failed {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    })
+}
+
+pub fn confirm_command(
+    root: &Path,
+    ids: &[String],
+    all: bool,
+    dry_run: bool,
+    cache: bool,
+) -> Result<()> {
+    if ids.is_empty() && !all {
+        bail!("say which nodes to confirm, or use --all");
+    }
+    let scan = scan(root)?;
+    let graph = index::load(root, cache).0;
+    let mut lock = suspect::load(root)?;
+    for given in ids {
+        let base = id::base_of(given);
+        if graph.get(base).is_none() {
+            bail!("no node with id {given}");
+        }
+    }
+    let bases: Vec<String> = ids.iter().map(|i| id::base_of(i).to_string()).collect();
+    let filter = (!all).then_some(bases.as_slice());
+    let done = suspect::confirm(&graph, &scan.annotations, &mut lock, filter);
+    if dry_run {
+        println!(
+            "would confirm {} link(s) and drop {} confirmation(s) whose link is gone",
+            done.confirmed, done.pruned
+        );
+        return Ok(());
+    }
+    if done.confirmed + done.pruned > 0 {
+        suspect::save(root, &lock)?;
+    }
+    println!(
+        "confirmed {} link(s), dropped {} confirmation(s) whose link is gone",
+        done.confirmed, done.pruned
+    );
+    if done.confirmed + done.pruned > 0 {
+        println!("commit {} to share it", suspect::LOCK_PATH);
+    }
+    Ok(())
 }

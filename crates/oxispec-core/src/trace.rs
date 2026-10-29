@@ -22,6 +22,7 @@ use crate::check::{LinkResolution, resolve_link};
 use crate::finding::Finding;
 use crate::graph::Graph;
 use crate::id;
+use crate::symbol::{Symbol, bind};
 
 /// Files larger than this are not scanned. They are generated or data.
 const MAX_FILE_BYTES: u64 = 1_000_000;
@@ -43,6 +44,10 @@ pub struct Annotation {
     pub kind: Kind,
     pub path: PathBuf,
     pub line: usize,
+    /// The function, type or test the comment is about, when the language has
+    /// a parser. See [`crate::symbol`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<Symbol>,
 }
 
 /// What came out of walking a project.
@@ -110,6 +115,7 @@ pub fn scan_text(path: &Path, text: &str) -> Vec<Annotation> {
                 kind,
                 path: path.to_path_buf(),
                 line: index + 1,
+                symbol: None,
             });
         };
         for (marker, kind) in MARKERS {
@@ -147,6 +153,16 @@ pub fn scan_text(path: &Path, text: &str) -> Vec<Annotation> {
                 }
             }
             rest = &rest[close + 1..];
+        }
+    }
+    if !found.is_empty() {
+        let mut lines: Vec<usize> = found.iter().map(|a| a.line).collect();
+        lines.dedup();
+        let symbols = bind(path, text, &lines);
+        for annotation in &mut found {
+            if let Ok(at) = lines.binary_search(&annotation.line) {
+                annotation.symbol = symbols[at].clone();
+            }
         }
     }
     found
@@ -228,6 +244,7 @@ fn from_links(graph: &Graph) -> Vec<Annotation> {
                     kind,
                     path: node.path.clone(),
                     line: 1,
+                    symbol: None,
                 });
             }
         }
@@ -472,6 +489,7 @@ def test_idle(): pass
             kind,
             path: path.into(),
             line: 7,
+            symbol: None,
         }
     }
 
