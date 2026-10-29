@@ -26,7 +26,8 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | 6 | `feat/6-ci-command` | `oxispec ci`: graph diff, impact set, new-findings-only, SARIF and JUnit reports, pull request comment, GitHub Actions example | A pull request run reports only new findings and uploads SARIF. **In review.** Scope as built: `oxispec ci` with text, JSON, SARIF, JUnit and markdown output, and a GitHub Actions example. The comment is posted by the workflow. |
 | 7a | `feat/7-search-and-site` | tantivy text search: `oxispec search` with a derived index that updates itself, English stemming, type and status filters, snippets. The `TextIndex` trait waits for a second implementation | A search finds a node by its words, an ID or its title, and only changed files are read again. **Merged** (#17). |
 | 7b | `feat/7b-site` | `oxispec site`: a static site with a page per node, links by ID, a version picker and changes since the last release. Raw HTML in specs is not run | `oxispec site` builds pages. Links resolve to the same revision. **In review.** |
-| 8 | `feat/8-scanners-and-trace` | tree-sitter query based scanners for Go, Rust and Node, anchors, test result import, coverage, suspect links | A changed function marks its link suspect. Coverage report lists uncovered scenarios |
+| 8a | `feat/8a-trace-and-coverage` | Comment annotations (`spec:`, `verifies:`, `[ID.S1]`) in any language, `oxispec trace` and `oxispec coverage`, check codes E014 and E015, `trace.exclude` in the config. No parsers yet | `coverage` lists requirements nothing implements and scenarios no test checks, and fails on a reference to nothing. **In review.** |
+| 8b | `feat/8b-suspect-links` | tree-sitter symbol binding for Go, Rust and Node, suspect links and `confirm`, test result import, coverage in `ci` and release gates | A changed function marks its link suspect |
 | 9 | `feat/9-agent-skills` | `SKILL.md` generation, native writers for Claude Code, Cursor, Copilot and Gemini CLI, `agents export`, published `skills/` folder with a parity test | `oxispec init` writes skills for the four clients. The parity test fails on drift |
 | 10 | `feat/10-mcp` | MCP server (read, search, trace, propose), scopes, digest, context packs | An agent can fetch a context pack within a token budget |
 | 11 | `feat/11-claims-and-solver` | Claims block, vocabulary, built-in solver, conflict reports with minimal cores | The admin timeout example reports a conflict and names both requirements |
@@ -50,4 +51,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 5b** (#15): `release prepare`, `check`, `publish` and `list`, generated notes, a suggested version and gates. See [format.md](format.md#releases).
 - **Iteration 6** (#16): `oxispec ci`, with SARIF, JUnit and a pull request comment. See [ci.md](ci.md).
 - **Iteration 7a** (#17): `oxispec search`. See [search.md](search.md).
-- **Iteration 7b** (in review): `oxispec site`. See [site.md](site.md).
+- **Iteration 7b** (#18): `oxispec site`. See [site.md](site.md).
+- **Iteration 8a** (in review): `oxispec trace` and `oxispec coverage`. See [trace.md](trace.md).

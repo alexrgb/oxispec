@@ -232,6 +232,8 @@ Codes are stable. A code is never reused.
 | E011 | error | A scenario anchor is not letters and digits |
 | E012 | error | A change set has no status, or one that is not in the lifecycle |
 | E013 | error | A change set is approved or merged but has no `approved_by` |
+| E014 | error | A `spec:` or `verifies:` comment in code refers to a node that does not exist (reported by `oxispec coverage`) |
+| E015 | error | A `spec:` or `verifies:` comment in code refers to a scenario that does not exist (reported by `oxispec coverage`) |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |

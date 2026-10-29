@@ -25,7 +25,7 @@ pub const MODULES: &[ModuleInfo] = &[
         name: "tests",
         description: "Test cases, scanners, coverage, suspect links",
         needs: &["specs"],
-        implemented: false,
+        implemented: true,
     },
     ModuleInfo {
         name: "adrs",

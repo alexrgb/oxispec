@@ -30,6 +30,21 @@ pub enum IdScheme {
     Random,
 }
 
+/// Where trace annotations are looked for. By default, every text file that
+/// git does not ignore, except markdown.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TraceConfig {
+    /// Globs of files to leave out, for example `vendor/**`.
+    #[serde(default)]
+    pub exclude: Vec<String>,
+}
+
+impl TraceConfig {
+    fn is_default(&self) -> bool {
+        self.exclude.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default = "default_format")]
@@ -39,6 +54,8 @@ pub struct Config {
     pub topology: String,
     #[serde(default)]
     pub id_scheme: IdScheme,
+    #[serde(default, skip_serializing_if = "TraceConfig::is_default")]
+    pub trace: TraceConfig,
 }
 
 fn default_format() -> u32 {
@@ -56,6 +73,7 @@ impl Config {
             modules,
             topology: default_topology(),
             id_scheme,
+            trace: TraceConfig::default(),
         }
     }
 
