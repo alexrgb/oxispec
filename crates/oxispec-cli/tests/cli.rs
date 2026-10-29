@@ -2040,3 +2040,164 @@ fn site_releases_builds_every_version_with_a_picker_and_changes() {
     // The two ways of choosing a version do not mix.
     assert_eq!(run(p, &["site", "--releases", "--at", "v1"]).code, 2);
 }
+
+fn trace_project(p: &Path) {
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    run(p, &["new", "requirement", "auth", "Admin session timeout"]);
+    let file = auth_path(p, "admin-session-timeout");
+    let mut text = fs::read_to_string(&file).unwrap();
+    text.push_str("\n#### Scenario: Active admin {#S2}\n- **WHEN** active\n- **THEN** open\n");
+    fs::write(&file, text).unwrap();
+    fs::create_dir_all(p.join("src")).unwrap();
+    fs::create_dir_all(p.join("tests")).unwrap();
+    fs::write(
+        p.join("src/auth.rs"),
+        "fn other() {}\n\n/// spec: REQ-AUTH-0001\nfn expire_admin_session() {}\n",
+    )
+    .unwrap();
+    fs::write(
+        p.join("tests/auth.rs"),
+        "// verifies: REQ-AUTH-0001.S1\n#[test]\nfn idle() {}\n",
+    )
+    .unwrap();
+}
+
+#[test]
+fn coverage_and_trace_follow_spec_and_verifies_comments() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    trace_project(p);
+
+    let out = run(p, &["coverage"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout
+            .contains("requirements: 1 implemented of 1 (100%)"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("scenarios:    1 verified of 2 (50%)"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("REQ-AUTH-0001.S2"), "{}", out.stdout);
+
+    let v = json(&run(p, &["coverage", "--json"]));
+    assert_eq!(v["unverified"][0], "REQ-AUTH-0001.S2");
+    assert_eq!(v["verified_percent"], 50.0);
+    assert_eq!(v["annotations"], 2);
+
+    // A threshold turns the report into a gate.
+    assert_eq!(run(p, &["coverage", "--fail-under", "50"]).code, 0);
+    let out = run(p, &["coverage", "--fail-under", "100"]);
+    assert_eq!(out.code, 1);
+    assert!(
+        out.stdout.contains("below the --fail-under"),
+        "{}",
+        out.stdout
+    );
+
+    let out = run(p, &["trace", "REQ-AUTH-0001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("src/auth.rs:3"), "{}", out.stdout);
+    assert!(out.stdout.contains("S1"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("verified by tests/auth.rs:1"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("Active admin: NOT VERIFIED"),
+        "{}",
+        out.stdout
+    );
+    let v = json(&run(p, &["trace", "REQ-AUTH-0001", "--json"]));
+    assert_eq!(v["implemented_by"][0]["path"], "src/auth.rs");
+    assert_eq!(
+        v["scenarios"][1]["verified_by"].as_array().unwrap().len(),
+        0
+    );
+
+    let out = run(p, &["trace"]);
+    assert!(
+        out.stdout.contains("2 annotations in 2 files"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(run(p, &["trace", "REQ-NOPE-0001"]).code, 2);
+
+    // A test-case node's link counts as well.
+    run(p, &["new", "requirement", "auth", "Other"]);
+    let out = run(p, &["coverage", "--status", "accepted"]);
+    assert!(
+        out.stdout
+            .contains("requirements: 0 implemented of 0 (100%)"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn coverage_reports_annotations_that_point_at_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    trace_project(p);
+    fs::write(
+        p.join("src/more.rs"),
+        "// spec: REQ-NOPE-0001\n// verifies: REQ-AUTH-0001.S9\n",
+    )
+    .unwrap();
+    let out = run(p, &["coverage", "--json"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    let v = json(&out);
+    let findings = v["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), 2, "{v}");
+    assert_eq!(findings[0]["code"], "E014");
+    assert_eq!(findings[0]["path"], "src/more.rs");
+    assert_eq!(findings[0]["line"], 1);
+    assert_eq!(findings[1]["code"], "E015");
+    let out = run(p, &["coverage"]);
+    assert!(out.stdout.contains("error[E014]"), "{}", out.stdout);
+    assert!(out.stdout.contains("--> src/more.rs:1"), "{}", out.stdout);
+}
+
+#[test]
+fn trace_leaves_out_excluded_paths_markdown_and_ignored_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    trace_project(p);
+    fs::create_dir_all(p.join("vendor")).unwrap();
+    fs::create_dir_all(p.join("build")).unwrap();
+    fs::write(p.join("vendor/lib.rs"), "// spec: REQ-NOPE-0001\n").unwrap();
+    fs::write(p.join("build/gen.rs"), "// spec: REQ-NOPE-0002\n").unwrap();
+    fs::write(p.join("NOTES.md"), "// spec: REQ-NOPE-0003\n").unwrap();
+    fs::write(p.join(".gitignore"), "build/\n").unwrap();
+    assert_eq!(
+        run(p, &["coverage"]).code,
+        1,
+        "vendor is scanned until excluded"
+    );
+
+    let config = fs::read_to_string(p.join(".oxispec/config.yaml")).unwrap();
+    fs::write(
+        p.join(".oxispec/config.yaml"),
+        format!("{config}trace:\n  exclude: [\"vendor/**\"]\n"),
+    )
+    .unwrap();
+    let out = run(p, &["coverage"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("2 annotations in"), "{}", out.stdout);
+}
+
+#[test]
+fn trace_needs_the_tests_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "minimal"]).code, 0);
+    for command in ["trace", "coverage"] {
+        let out = run(p, &[command]);
+        assert_eq!(out.code, 2);
+        assert!(out.stderr.contains("modules add tests"), "{}", out.stderr);
+    }
+}

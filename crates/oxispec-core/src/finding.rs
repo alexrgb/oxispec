@@ -80,6 +80,14 @@ pub const CODES: &[(&str, &str)] = &[
         "E013",
         "A change set is approved or merged but has no `approved_by`",
     ),
+    (
+        "E014",
+        "A code annotation refers to a node that does not exist",
+    ),
+    (
+        "E015",
+        "A code annotation refers to a scenario that does not exist",
+    ),
     ("W001", "Unknown node type"),
     (
         "W002",
@@ -118,6 +126,7 @@ mod tests {
             include_str!("parse.rs"),
             include_str!("graph.rs"),
             include_str!("index.rs"),
+            include_str!("trace.rs"),
         ];
         let docs = include_str!("../../../docs/format.md");
         let known: Vec<&str> = CODES.iter().map(|(c, _)| *c).collect();

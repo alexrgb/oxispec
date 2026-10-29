@@ -21,6 +21,7 @@ mod releases;
 mod rollback;
 mod search;
 mod site;
+mod trace;
 
 #[derive(Parser)]
 #[command(
@@ -161,6 +162,27 @@ enum Command {
         /// Build the working tree as `latest` and a folder for every spec tag, with a version picker
         #[arg(long, conflicts_with = "at")]
         releases: bool,
+    },
+    /// Show where a node is implemented and tested, from `spec:` and `verifies:` comments
+    Trace {
+        /// A node (default: list every annotation found)
+        id: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Report requirements nothing implements and scenarios no test verifies
+    Coverage {
+        /// Only requirements in this status, since a draft is not built yet
+        #[arg(long)]
+        status: Option<String>,
+        /// Exit with 1 when either percentage is below this
+        #[arg(long, value_name = "PERCENT")]
+        fail_under: Option<f64>,
+        /// List everything, not the first 20
+        #[arg(long)]
+        all: bool,
+        #[arg(long)]
+        json: bool,
     },
     /// Search the text of all nodes, for example: search "session timeout" --type requirement
     Search {
@@ -451,6 +473,27 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 },
             )?;
             Ok(ExitCode::SUCCESS)
+        }
+        Command::Trace { id, json } => {
+            let root = project_root(cli.root.as_deref())?;
+            trace::trace_command(&root, id.as_deref(), json, cache)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Coverage {
+            status,
+            fail_under,
+            all,
+            json,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            let options = trace::CoverageOptions {
+                status,
+                fail_under,
+                all,
+                json,
+                cache,
+            };
+            trace::coverage_command(&root, &options)
         }
         Command::Release { action } => {
             let root = project_root(cli.root.as_deref())?;
