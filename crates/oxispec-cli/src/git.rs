@@ -94,7 +94,7 @@ pub fn require_repository(root: &Path, what: &str) -> Result<()> {
 
 /// The path from the top of the repository to the project root, with a
 /// trailing slash, or an empty string when they are the same folder.
-fn prefix(root: &Path) -> Result<String> {
+pub fn prefix(root: &Path) -> Result<String> {
     git_text(root, &["rev-parse", "--show-prefix"])
 }
 
@@ -149,6 +149,14 @@ pub fn resolve_rev(root: &Path, spec: &str) -> Result<Revision> {
         subject: subject.to_string(),
         oid,
     })
+}
+
+/// How many commits lead up to a revision, itself included. On one line of
+/// history a later commit always has the larger number.
+pub fn commit_count(root: &Path, rev: &str) -> Result<u64> {
+    let text = git_text(root, &["rev-list", "--count", rev])?;
+    text.parse()
+        .with_context(|| format!("git gave `{text}` for the commit count of {rev}"))
 }
 
 /// The commit where the current branch left `base`, so that a pull request

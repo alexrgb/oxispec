@@ -1,0 +1,36 @@
+:root{--bg:#fff;--fg:#1b1f24;--muted:#5b6570;--line:#d8dee4;--accent:#0b57d0;--soft:#f4f6f8;--bad:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#14171a;--fg:#e6e9ec;--muted:#98a2ad;--line:#2d343b;--accent:#8ab4f8;--soft:#1d2226;--bad:#f2928b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;flex-wrap:wrap;gap:.5rem 1.25rem;align-items:center;padding:.75rem 1rem;border-bottom:1px solid var(--line);background:var(--soft)}
+header .home{font-weight:650;color:var(--fg);text-decoration:none}
+header .revision{color:var(--muted);font-size:.9rem}
+.picker{margin-left:auto;font-size:.9rem;color:var(--muted)}
+select,input{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:.3rem .5rem}
+main{max-width:52rem;margin:0 auto;padding:1.25rem 1rem 3rem}
+a{color:var(--accent)}
+h1{font-size:1.6rem;line-height:1.25;margin:.5rem 0 .75rem}
+h1 .id{display:block;font:500 .85rem ui-monospace,Menlo,Consolas,monospace;color:var(--muted)}
+h2{font-size:1.15rem;margin:2rem 0 .5rem}
+.lead,.meta{color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:.4rem .75rem;align-items:center;font-size:.9rem}
+.badge{display:inline-block;padding:.05rem .5rem;border:1px solid var(--line);border-radius:999px;font-size:.8rem;background:var(--soft);color:var(--fg)}
+.badge.type{font-family:ui-monospace,Menlo,Consolas,monospace}
+.kind{font:.8rem ui-monospace,Menlo,Consolas,monospace;color:var(--muted)}
+.missing{color:var(--bad);text-decoration:line-through}
+.external{color:var(--muted)}
+.count{color:var(--muted);font-weight:400;font-size:.9rem}
+table{border-collapse:collapse;width:100%}
+td{padding:.35rem .5rem;border-top:1px solid var(--line);vertical-align:top}
+td:first-child{white-space:nowrap;font:.9rem ui-monospace,Menlo,Consolas,monospace}
+#filter{width:100%;margin:.5rem 0 1rem}
+article{margin:1rem 0}
+article pre,article code{font:.9rem ui-monospace,Menlo,Consolas,monospace;background:var(--soft)}
+article pre{padding:.75rem;overflow:auto;border-radius:6px}
+article code{padding:.05rem .25rem;border-radius:4px}
+article pre code{padding:0}
+article h3,article h4{margin:1.5rem 0 .4rem}
+article h4:target{background:var(--soft);outline:2px solid var(--accent);outline-offset:2px}
+section.changes{border-left:3px solid var(--accent);padding:.1rem .9rem;background:var(--soft);border-radius:0 6px 6px 0}
+section.links ul,section.changes ul{padding-left:1.1rem}
+@media (max-width:600px){td:first-child{white-space:normal}}

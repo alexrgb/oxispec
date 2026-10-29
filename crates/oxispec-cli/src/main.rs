@@ -20,6 +20,7 @@ mod history;
 mod releases;
 mod rollback;
 mod search;
+mod site;
 
 #[derive(Parser)]
 #[command(
@@ -145,6 +146,21 @@ enum Command {
         /// Write the pull request comment (markdown) to this file
         #[arg(long, value_name = "FILE")]
         markdown: Option<PathBuf>,
+    },
+    /// Build a static site: a page per node, linked by ID
+    Site {
+        /// The folder to write to
+        #[arg(long, default_value = "site")]
+        out: PathBuf,
+        /// Build the specs as they were at a git revision (a branch, tag, hash or date:YYYY-MM-DD)
+        #[arg(long)]
+        at: Option<String>,
+        /// The site's name (default: the project folder's name)
+        #[arg(long)]
+        title: Option<String>,
+        /// Build the working tree as `latest` and a folder for every spec tag, with a version picker
+        #[arg(long, conflicts_with = "at")]
+        releases: bool,
     },
     /// Search the text of all nodes, for example: search "session timeout" --type requirement
     Search {
@@ -415,6 +431,25 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 cache,
             };
             search::search_command(&root, &options)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Site {
+            out,
+            at,
+            title,
+            releases,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            site::site_command(
+                &root,
+                &site::SiteArgs {
+                    out,
+                    at,
+                    title,
+                    releases,
+                    cache,
+                },
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Release { action } => {

@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 blake3 = { workspace = true }
 ignore = { workspace = true }
+pulldown-cmark = { version = "0.13.5", default-features = false, features = ["html"] }
 serde = { workspace = true }
 serde-saphyr = { workspace = true }
 serde_json = { workspace = true }

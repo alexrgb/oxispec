@@ -22,11 +22,12 @@ oxispec new change "Tighten timeouts"   # a proposal, with a lifecycle and an ap
 oxispec rollback v1 REQ-AUTH-0001 --dry-run   # put a node back, after checking
 oxispec ci --base origin/main            # only the findings this branch introduces
 oxispec search session timeout          # full-text search, with a derived index
+oxispec site --out public --releases    # a static site, with a page per node and per version
 oxispec release prepare                 # notes and a suggested version since the last release
 oxispec release publish 0.2.0           # gates, then the tag specs-v0.2.0 (needs the releases module)
 ```
 
-Use `oxispec init --id-scheme random` when several branches add specs at the same time. The file format, link kinds, check codes and the local index are in [docs/format.md](docs/format.md). History, diffs, rollback and tags are in [docs/history.md](docs/history.md). Change sets and releases are described in [docs/format.md](docs/format.md#change-sets). Running it in CI is in [docs/ci.md](docs/ci.md), and search is in [docs/search.md](docs/search.md).
+Use `oxispec init --id-scheme random` when several branches add specs at the same time. The file format, link kinds, check codes and the local index are in [docs/format.md](docs/format.md). History, diffs, rollback and tags are in [docs/history.md](docs/history.md). Change sets and releases are described in [docs/format.md](docs/format.md#change-sets). Running it in CI is in [docs/ci.md](docs/ci.md), search is in [docs/search.md](docs/search.md), and the static site is in [docs/site.md](docs/site.md).
 
 `oxispec check` reports dangling links (including links to scenarios that do not exist), duplicate IDs, supersede cycles, and requirements without a scenario or a SHALL/MUST. It exits with code 1 when there are errors.
 
