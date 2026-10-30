@@ -2891,3 +2891,416 @@ fn every_command_a_skill_names_exists() {
         "only {checked} commands found; is the scanner broken?"
     );
 }
+
+/// Runs `oxispec mcp` with these requests on stdin, and returns what it printed, one value per line.
+fn mcp(dir: &Path, flags: &[&str], requests: &[serde_json::Value]) -> Vec<serde_json::Value> {
+    use std::io::Write;
+    use std::process::Stdio;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_oxispec"))
+        .arg("mcp")
+        .args(flags)
+        .current_dir(dir)
+        .env("GIT_COMMITTER_NAME", "test")
+        .env("GIT_COMMITTER_EMAIL", "test@example.com")
+        .env("GIT_AUTHOR_NAME", "test")
+        .env("GIT_AUTHOR_EMAIL", "test@example.com")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("binary runs");
+    {
+        let mut stdin = child.stdin.take().unwrap();
+        for r in requests {
+            writeln!(stdin, "{r}").unwrap();
+        }
+        // Dropping stdin ends the input, and the server stops.
+    }
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap_or_else(|e| panic!("not JSON: {l}: {e}")))
+        .collect()
+}
+
+fn rpc(id: u32, method: &str, params: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+}
+
+/// Calls one tool, and returns whether it failed and its text.
+fn call_tool(dir: &Path, name: &str, args: serde_json::Value) -> (bool, String) {
+    let replies = mcp(
+        dir,
+        &[],
+        &[rpc(
+            1,
+            "tools/call",
+            serde_json::json!({"name": name, "arguments": args}),
+        )],
+    );
+    let r = &replies[0];
+    assert!(r.get("error").is_none(), "{r}");
+    (
+        r["result"]["isError"].as_bool().unwrap(),
+        r["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string(),
+    )
+}
+
+fn tool_names(replies: &[serde_json::Value]) -> Vec<String> {
+    replies.iter().find(|r| r["id"] == 2).unwrap()["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[test]
+fn mcp_speaks_the_protocol_and_lists_tools_by_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+
+    let replies = mcp(
+        p,
+        &[],
+        &[
+            rpc(
+                1,
+                "initialize",
+                serde_json::json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}),
+            ),
+            serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+            rpc(2, "tools/list", serde_json::json!({})),
+            rpc(3, "ping", serde_json::json!({})),
+        ],
+    );
+    // The notification gets no answer.
+    assert_eq!(replies.len(), 3, "{replies:?}");
+    assert_eq!(replies[0]["result"]["protocolVersion"], "2025-03-26");
+    assert_eq!(replies[0]["result"]["serverInfo"]["name"], "oxispec");
+    assert!(
+        replies[0]["result"]["instructions"]
+            .as_str()
+            .unwrap()
+            .contains("person approves")
+    );
+    let names = tool_names(&replies);
+    for want in [
+        "spec_search",
+        "spec_get",
+        "spec_neighbors",
+        "spec_context",
+        "spec_check",
+        "spec_history",
+        "spec_diff",
+        "spec_trace",
+        "spec_propose_change",
+    ] {
+        assert!(names.contains(&want.to_string()), "{want} in {names:?}");
+    }
+    // A version the server does not know gets its newest one.
+    let replies = mcp(
+        p,
+        &[],
+        &[rpc(
+            1,
+            "initialize",
+            serde_json::json!({"protocolVersion": "1999-01-01"}),
+        )],
+    );
+    assert_eq!(replies[0]["result"]["protocolVersion"], "2025-06-18");
+
+    // Read-only leaves out the tool that writes.
+    let replies = mcp(
+        p,
+        &["--read-only"],
+        &[rpc(2, "tools/list", serde_json::json!({}))],
+    );
+    let names = tool_names(&replies);
+    assert!(!names.contains(&"spec_propose_change".to_string()));
+    assert!(names.contains(&"spec_get".to_string()));
+
+    // No tests module, no trace tool.
+    let other = tempfile::tempdir().unwrap();
+    assert_eq!(run(other.path(), &["init", "--with", "mcp"]).code, 0);
+    let replies = mcp(
+        other.path(),
+        &[],
+        &[rpc(2, "tools/list", serde_json::json!({}))],
+    );
+    assert!(!tool_names(&replies).contains(&"spec_trace".to_string()));
+}
+
+#[test]
+fn mcp_needs_its_module_and_answers_bad_messages_with_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init"]).code, 0);
+    let out = run(p, &["mcp"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("modules add mcp"), "{}", out.stderr);
+
+    assert_eq!(run(p, &["modules", "add", "mcp"]).code, 0);
+    use std::io::Write;
+    use std::process::Stdio;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_oxispec"))
+        .arg("mcp")
+        .current_dir(p)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    {
+        let mut stdin = child.stdin.take().unwrap();
+        writeln!(stdin, "this is not json").unwrap();
+        writeln!(
+            stdin,
+            "{}",
+            rpc(7, "resources/subscribe", serde_json::json!({}))
+        )
+        .unwrap();
+        writeln!(
+            stdin,
+            "{}",
+            rpc(8, "tools/call", serde_json::json!({"name": "spec_nope"}))
+        )
+        .unwrap();
+    }
+    let out = child.wait_with_output().unwrap();
+    let replies: Vec<serde_json::Value> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(replies[0]["error"]["code"], -32700);
+    assert_eq!(replies[1]["id"], 7);
+    assert_eq!(replies[1]["error"]["code"], -32601);
+    assert_eq!(replies[2]["error"]["code"], -32602);
+}
+
+#[test]
+fn mcp_read_tools_return_the_same_answers_as_the_commands() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+
+    let (failed, text) = call_tool(p, "spec_get", serde_json::json!({"id": "REQ-AUTH-0001"}));
+    assert!(!failed, "{text}");
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["node"]["id"], "REQ-AUTH-0001");
+    assert!(
+        v["text"].as_str().unwrap().contains("### Requirement:"),
+        "the file text is included"
+    );
+    // A scenario ID reads its node.
+    let (failed, _) = call_tool(p, "spec_get", serde_json::json!({"id": "REQ-AUTH-0001.S1"}));
+    assert!(!failed);
+    let (failed, text) = call_tool(p, "spec_get", serde_json::json!({"id": "REQ-NOPE-0001"}));
+    assert!(failed);
+    assert!(text.contains("no node with id"), "{text}");
+    // At an older revision.
+    let (failed, text) = call_tool(
+        p,
+        "spec_get",
+        serde_json::json!({"id": "REQ-AUTH-0001", "at": "HEAD~3"}),
+    );
+    assert!(!failed, "{text}");
+    assert!(text.contains("\"status\": \"draft\""), "{text}");
+
+    let (failed, text) = call_tool(
+        p,
+        "spec_search",
+        serde_json::json!({"query": "Postgres", "type": "adr"}),
+    );
+    assert!(!failed, "{text}");
+    assert!(text.contains("ADR-0001"), "{text}");
+
+    let (failed, text) = call_tool(p, "spec_neighbors", serde_json::json!({"id": "ADR-0001"}));
+    assert!(!failed, "{text}");
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["neighbors"][0]["id"], "REQ-AUTH-0001");
+    assert_eq!(v["neighbors"][0]["link"], "decided-by");
+    assert_eq!(v["neighbors"][0]["incoming"], true);
+
+    let (failed, text) = call_tool(p, "spec_check", serde_json::json!({}));
+    assert!(!failed, "{text}");
+    assert!(text.contains("\"errors\": 0"), "{text}");
+
+    let (failed, text) = call_tool(
+        p,
+        "spec_history",
+        serde_json::json!({"id": "REQ-AUTH-0001", "limit": 2}),
+    );
+    assert!(!failed, "{text}");
+    assert!(
+        text.contains("commits") || text.contains("subject"),
+        "{text}"
+    );
+
+    let (failed, text) = call_tool(p, "spec_diff", serde_json::json!({"from": "HEAD~2"}));
+    assert!(!failed, "{text}");
+    assert!(text.contains("REQ-AUTH-0002"), "{text}");
+
+    let (failed, text) = call_tool(p, "spec_trace", serde_json::json!({}));
+    assert!(!failed, "{text}");
+}
+
+#[test]
+fn mcp_refuses_arguments_that_could_be_read_as_options() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+    for (tool, args) in [
+        ("spec_diff", serde_json::json!({"from": "--output=x"})),
+        ("spec_check", serde_json::json!({"at": "-x"})),
+        ("spec_get", serde_json::json!({"id": "--help"})),
+        (
+            "spec_history",
+            serde_json::json!({"id": "REQ-AUTH-0001 --all"}),
+        ),
+        (
+            "spec_search",
+            serde_json::json!({"query": "x", "type": "--json"}),
+        ),
+        ("spec_context", serde_json::json!({"ids": []})),
+        ("spec_search", serde_json::json!({"limit": 5})),
+        (
+            "spec_neighbors",
+            serde_json::json!({"id": "REQ-AUTH-0001", "depth": 99}),
+        ),
+    ] {
+        let (failed, text) = call_tool(p, tool, args.clone());
+        assert!(failed, "{tool} {args}: {text}");
+    }
+    // A search for words that look like an option is a search, not an option.
+    let (failed, text) = call_tool(p, "spec_search", serde_json::json!({"query": "--help"}));
+    assert!(!failed, "{text}");
+}
+
+#[test]
+fn mcp_proposes_a_draft_change_set_and_never_approves() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+
+    let (failed, text) = call_tool(
+        p,
+        "spec_propose_change",
+        serde_json::json!({"title": "Tighten timeouts", "why": "Admins stay signed in too long.", "changes": ["REQ-AUTH-0001"]}),
+    );
+    assert!(!failed, "{text}");
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["status"], "draft");
+    let id = v["id"].as_str().unwrap();
+    let file = fs::read_to_string(p.join(v["path"].as_str().unwrap())).unwrap();
+    assert!(file.contains("status: draft"), "{file}");
+    assert!(
+        file.contains("## Why\n\nAdmins stay signed in too long."),
+        "{file}"
+    );
+    assert!(
+        file.contains("changes:") && file.contains("REQ-AUTH-0001"),
+        "{file}"
+    );
+    assert!(!file.contains("approved_by"));
+    assert_eq!(run(p, &["check"]).code, 0);
+    let out = run(p, &["change", "list", "--json"]);
+    assert!(out.stdout.contains(id), "{}", out.stdout);
+
+    // An unknown target writes nothing at all.
+    let before = git_status(p);
+    let (failed, text) = call_tool(
+        p,
+        "spec_propose_change",
+        serde_json::json!({"title": "Other", "changes": ["REQ-AUTH-0001", "REQ-NOPE-0009"]}),
+    );
+    assert!(failed);
+    assert!(text.contains("nothing was written"), "{text}");
+    assert_eq!(git_status(p), before);
+
+    for bad in ["", "-flag", "two\nlines"] {
+        let (failed, _) = call_tool(p, "spec_propose_change", serde_json::json!({"title": bad}));
+        assert!(failed, "{bad:?}");
+    }
+
+    // Read-only refuses the call itself.
+    let replies = mcp(
+        p,
+        &["--read-only"],
+        &[rpc(
+            1,
+            "tools/call",
+            serde_json::json!({"name": "spec_propose_change", "arguments": {"title": "X"}}),
+        )],
+    );
+    assert_eq!(replies[0]["error"]["code"], -32602);
+}
+
+#[test]
+fn context_fills_a_budget_nearest_first_and_lists_what_did_not_fit() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_history(p);
+
+    let out = run(p, &["context", "REQ-AUTH-0001"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.starts_with("# Context pack:"), "{}", out.stdout);
+    let first = out
+        .stdout
+        .find("## REQ-AUTH-0001")
+        .expect("the node asked for");
+    let adr = out
+        .stdout
+        .find("## ADR-0001")
+        .expect("the decision behind it");
+    assert!(first < adr);
+    assert!(out.stdout.contains("asked for"));
+    assert!(
+        out.stdout.contains("REQ-AUTH-0001 decided-by ADR-0001"),
+        "{}",
+        out.stdout
+    );
+
+    let out = run(p, &["context", "REQ-AUTH-0001", "--json", "--budget", "60"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let v = json(&out);
+    assert_eq!(v["schema_version"], 1);
+    assert!(v["used"].as_u64().unwrap() <= 60, "{v}");
+    assert_eq!(v["items"][0]["id"], "REQ-AUTH-0001");
+    assert!(
+        !v["pointers"].as_array().unwrap().is_empty(),
+        "what does not fit is listed: {v}"
+    );
+
+    // At an older revision, and with a depth of 0 only what was asked for.
+    let out = run(
+        p,
+        &[
+            "context",
+            "REQ-AUTH-0001",
+            "--depth",
+            "0",
+            "--at",
+            "HEAD~3",
+            "--json",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(json(&out)["items"].as_array().unwrap().len(), 1);
+
+    let out = run(p, &["context", "REQ-NOPE-0001"]);
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("no node with id REQ-NOPE-0001"),
+        "{}",
+        out.stderr
+    );
+}

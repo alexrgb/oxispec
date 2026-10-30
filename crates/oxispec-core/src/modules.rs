@@ -97,7 +97,7 @@ pub const MODULES: &[ModuleInfo] = &[
         name: "mcp",
         description: "MCP server",
         needs: &["core"],
-        implemented: false,
+        implemented: true,
     },
     ModuleInfo {
         name: "server",

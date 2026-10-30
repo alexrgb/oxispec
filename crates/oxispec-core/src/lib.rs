@@ -4,6 +4,7 @@ pub mod agents;
 pub mod change;
 pub mod check;
 pub mod config;
+pub mod context;
 pub mod diff;
 pub mod edit;
 pub mod finding;
