@@ -93,6 +93,9 @@ pub struct Node {
     /// `vocabulary` blocks, which declare the variables claims talk about.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub vocabulary: Vec<TextBlock>,
+    /// `statemachine` blocks, read by [`crate::machines`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub machines: Vec<TextBlock>,
     /// BLAKE3 hash of everything after the frontmatter, to see that the text changed.
     #[serde(default)]
     pub body_hash: String,

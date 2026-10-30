@@ -33,11 +33,13 @@ oxispec context REQ-AUTH-0001 --budget 4000   # the node and what is near it, si
 oxispec mcp                             # the specs as an MCP server, for AI clients (needs the mcp module)
 oxispec new vocabulary "Auth words"     # typed variables for claims (needs the consistency module)
 oxispec claims                          # the vocabulary and the claims; `check` reports conflicts
+oxispec new machine "Order"             # a state machine (needs the statemachines module)
+oxispec machine SM-0001 --diagram       # properties with counterexamples, a diagram, or generated tests
 ```
 
-Use `oxispec init --id-scheme random` when several branches add specs at the same time. The file format, link kinds, check codes and the local index are in [docs/format.md](docs/format.md). History, diffs, rollback and tags are in [docs/history.md](docs/history.md). Change sets and releases are described in [docs/format.md](docs/format.md#change-sets). Running it in CI is in [docs/ci.md](docs/ci.md), search is in [docs/search.md](docs/search.md), the static site is in [docs/site.md](docs/site.md), trace and coverage are in [docs/trace.md](docs/trace.md), agent skills are in [docs/agents.md](docs/agents.md), the MCP server and context packs are in [docs/mcp.md](docs/mcp.md), and claims and conflict checking are in [docs/claims.md](docs/claims.md).
+Use `oxispec init --id-scheme random` when several branches add specs at the same time. The file format, link kinds, check codes and the local index are in [docs/format.md](docs/format.md). History, diffs, rollback and tags are in [docs/history.md](docs/history.md). Change sets and releases are described in [docs/format.md](docs/format.md#change-sets). Running it in CI is in [docs/ci.md](docs/ci.md), search is in [docs/search.md](docs/search.md), the static site is in [docs/site.md](docs/site.md), trace and coverage are in [docs/trace.md](docs/trace.md), agent skills are in [docs/agents.md](docs/agents.md), the MCP server and context packs are in [docs/mcp.md](docs/mcp.md), claims and conflict checking are in [docs/claims.md](docs/claims.md), and state machines are in [docs/machines.md](docs/machines.md).
 
-`oxispec check` reports dangling links (including links to scenarios that do not exist), duplicate IDs, supersede cycles, requirements without a scenario or a SHALL/MUST, and requirements whose claims contradict each other. It exits with code 1 when there are errors.
+`oxispec check` reports dangling links (including links to scenarios that do not exist), duplicate IDs, supersede cycles, requirements without a scenario or a SHALL/MUST, requirements whose claims contradict each other, and state machines that break a property. It exits with code 1 when there are errors.
 
 ## Contributing
 

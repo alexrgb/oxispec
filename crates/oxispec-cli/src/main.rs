@@ -20,6 +20,7 @@ mod claims;
 mod context;
 mod git;
 mod history;
+mod machines;
 mod mcp;
 mod releases;
 mod rollback;
@@ -133,6 +134,22 @@ enum Command {
         /// Only this variable
         #[arg(long = "var", value_name = "NAME")]
         variable: Option<String>,
+        /// Read the specs as they were at a git revision
+        #[arg(long)]
+        at: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// List state machines, or show one with its properties, a diagram or generated tests
+    Machine {
+        /// A state machine ID, such as SM-ORDER. Without it, every machine is listed
+        id: Option<String>,
+        /// Print a Mermaid state diagram
+        #[arg(long, conflicts_with = "tests")]
+        diagram: bool,
+        /// Print one test for each transition: the path from the initial state to it
+        #[arg(long)]
+        tests: bool,
         /// Read the specs as they were at a git revision
         #[arg(long)]
         at: Option<String>,
@@ -371,6 +388,8 @@ enum NewKind {
     Change { title: String },
     /// A vocabulary: the typed variables that claims in requirements talk about
     Vocabulary { title: String },
+    /// A state machine: states, events and transitions, with properties that are checked
+    Machine { title: String },
 }
 
 #[derive(Subcommand)]
@@ -517,6 +536,24 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let root = project_root(cli.root.as_deref())?;
             claims::claims_command(&root, variable.as_deref(), at.as_deref(), json, cache)
         }
+        Command::Machine {
+            id,
+            diagram,
+            tests,
+            at,
+            json,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            machines::machine_command(
+                &root,
+                id.as_deref(),
+                diagram,
+                tests,
+                at.as_deref(),
+                json,
+                cache,
+            )
+        }
         Command::Context {
             ids,
             depth,
@@ -583,6 +620,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 NewKind::Vocabulary { title } => {
                     require_module(&cfg, "consistency")?;
                     new_vocabulary(&root, &title, scheme, cache)?
+                }
+                NewKind::Machine { title } => {
+                    require_module(&cfg, "statemachines")?;
+                    new_machine(&root, &title, scheme, cache)?
                 }
             };
             println!("created {} ({})", created.0, created.1.display());
@@ -866,6 +907,9 @@ fn ensure_module_dirs(root: &Path, cfg: &Config) -> Result<()> {
     }
     if cfg.has("consistency") {
         fs::create_dir_all(root.join("specs/vocabulary"))?;
+    }
+    if cfg.has("statemachines") {
+        fs::create_dir_all(root.join("specs/machines"))?;
     }
     Ok(())
 }
@@ -1391,6 +1435,26 @@ a requirement, for example `for role = admin: session.idle_timeout <= 15m`.
 ```
 ";
 
+const MACHINE_TEMPLATE: &str = "---
+id: @ID@
+type: state-machine
+status: draft
+---
+# @ID@: @TITLE@
+
+What this machine describes, and the requirements it implements.
+
+```statemachine
+initial: start
+states: [start, done]
+final: [done]
+transitions:
+  - {from: start, event: finish, to: done}
+properties:
+  - start leads to done
+```
+";
+
 fn new_requirement(
     root: &Path,
     domain: &str,
@@ -1432,6 +1496,22 @@ fn new_vocabulary(
     let suffix = id.strip_prefix("VOC-").unwrap_or(&id);
     let rel = PathBuf::from("specs/vocabulary").join(format!("{suffix}-{}.md", slug(title)?));
     let body = VOCABULARY_TEMPLATE
+        .replace("@ID@", &id)
+        .replace("@TITLE@", title);
+    write_new(root, &rel, &body)?;
+    Ok((id, rel))
+}
+
+fn new_machine(
+    root: &Path,
+    title: &str,
+    scheme: IdScheme,
+    cache: bool,
+) -> Result<(String, PathBuf)> {
+    let id = allocate_id(&load_graph(root, cache), "SM-", scheme)?;
+    let suffix = id.strip_prefix("SM-").unwrap_or(&id);
+    let rel = PathBuf::from("specs/machines").join(format!("{suffix}-{}.md", slug(title)?));
+    let body = MACHINE_TEMPLATE
         .replace("@ID@", &id)
         .replace("@TITLE@", title);
     write_new(root, &rel, &body)?;

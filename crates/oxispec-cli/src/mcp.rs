@@ -212,6 +212,18 @@ impl Server<'_> {
                 false,
             ));
         }
+        if self.cfg.has("statemachines") {
+            tools.push(tool(
+                "spec_machine",
+                "State machines. Without an ID, every machine. With an ID, its transitions and each property with a counterexample path if it is violated, or a Mermaid diagram or one test per transition. Problems come from spec_check.",
+                json!({
+                    "id": {"type": "string", "description": "A state machine ID such as SM-ORDER"},
+                    "view": {"type": "string", "enum": ["summary", "diagram", "tests"], "description": "What to return for an ID. Default: summary."},
+                }),
+                &[],
+                false,
+            ));
+        }
         if self.cfg.has("specs") && !self.read_only {
             tools.push(tool(
                 "spec_propose_change",
@@ -291,6 +303,23 @@ impl Server<'_> {
                 let variable = optional_variable(args, "variable")?;
                 if let Some(variable) = &variable {
                     cmd.extend(["--var", variable]);
+                }
+                self.cli(&cmd)
+            }
+            "spec_machine" => {
+                let mut cmd = vec!["machine"];
+                let node = optional_id(args, "id")?;
+                if let Some(node) = &node {
+                    cmd.push(node);
+                }
+                match optional_word(args, "view")?.as_deref() {
+                    None | Some("summary") => cmd.push("--json"),
+                    Some("diagram") if node.is_some() => cmd.push("--diagram"),
+                    Some("tests") if node.is_some() => cmd.extend(["--tests", "--json"]),
+                    Some("diagram" | "tests") => anyhow::bail!("`view` needs an `id`"),
+                    Some(other) => {
+                        anyhow::bail!("`view` is summary, diagram or tests, not `{other}`")
+                    }
                 }
                 self.cli(&cmd)
             }

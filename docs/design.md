@@ -824,6 +824,13 @@ Static checks: unreachable states, non-final states with no way out, two transit
 
 Property checks (section 20, layer 2) and generated tests: one test case per transition, plus an optional path cover. Export to XState and SCXML for runtime use.
 
+**As built (iteration 12).** See [machines.md](machines.md). Where it differs from the text above:
+
+- The machine is a fenced `statemachine` block in a node, not a node whose whole body is YAML, so it can sit next to the prose that explains it and is read at any revision like the vocabulary.
+- Guards are free text and are not evaluated. Two transitions on one event overlap unless both have guards and the guards differ.
+- Properties are written in the machine, in four forms (`never reach S`, `never E after S`, `S leads to T`, `E requires S`), with an optional `from` naming the requirement. They are not yet written in requirements.
+- Findings are E020 to E024, W007 and W008.
+
 ## 20. Spec consistency: the algorithm
 
 Natural language contradictions cannot be decided in general. So we do not try one clever check. We use **four layers**, from exact to heuristic, and each layer says how much to trust its answer.

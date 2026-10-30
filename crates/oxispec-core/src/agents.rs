@@ -88,6 +88,12 @@ pub const SKILLS: &[Skill] = &[
         body: include_str!("../skills/extract-claims.md"),
     },
     Skill {
+        name: "oxispec-model-state-machines",
+        description: "Model a lifecycle as a state machine: states, events and transitions, plus properties such as never cancel after shipped, checked with a counterexample path when they fail. Use when a requirement describes states or an order of events, or when oxispec check reports a state machine problem.",
+        requires: &["statemachines"],
+        body: include_str!("../skills/model-state-machines.md"),
+    },
+    Skill {
         name: "oxispec-apply",
         description: "Implement an approved change set in code and tests, and tie them to the specs with spec: and verifies: comments. Use when asked to build what a change set or requirement describes.",
         requires: &["specs"],
@@ -294,7 +300,20 @@ mod tests {
         assert!(!minimal.iter().any(|s| s.name == "oxispec-write-adr"));
         assert!(!minimal.iter().any(|s| s.name == "oxispec-release"));
         assert!(!minimal.iter().any(|s| s.name == "oxispec-sync-code"));
-        let all = skills_for(&["core", "specs", "tests", "adrs", "releases", "consistency"]);
+        assert!(
+            !minimal
+                .iter()
+                .any(|s| s.name == "oxispec-model-state-machines")
+        );
+        let all = skills_for(&[
+            "core",
+            "specs",
+            "tests",
+            "adrs",
+            "releases",
+            "consistency",
+            "statemachines",
+        ]);
         assert_eq!(all.len(), SKILLS.len());
     }
 
