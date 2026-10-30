@@ -19,7 +19,7 @@ use crate::{context, git};
 const VERSIONS: &[&str] = &["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const INSTRUCTIONS: &str = "Specs, decisions and tests for this project, as a graph of linked nodes. \
-Start with spec_search or spec_context, read nodes with spec_get, and run spec_check before you finish. \
+Start with spec_search or spec_context, read nodes with spec_get, and run spec_check before you finish. spec_check also reports requirements whose claims contradict each other. \
 spec_propose_change writes a draft change set. Only a person approves it. Quote node IDs exactly as returned.";
 
 struct Server<'a> {
@@ -203,6 +203,15 @@ impl Server<'_> {
                 false,
             ));
         }
+        if self.cfg.has("consistency") {
+            tools.push(tool(
+                "spec_claims",
+                "The vocabulary and the claims on each variable, with the share of requirements that have claims. Conflicts between claims come from spec_check.",
+                json!({"variable": {"type": "string", "description": "Only this variable, for example session.idle_timeout"}}),
+                &[],
+                false,
+            ));
+        }
         if self.cfg.has("specs") && !self.read_only {
             tools.push(tool(
                 "spec_propose_change",
@@ -274,6 +283,14 @@ impl Server<'_> {
                 let node = optional_id(args, "id")?;
                 if let Some(node) = &node {
                     cmd.push(node);
+                }
+                self.cli(&cmd)
+            }
+            "spec_claims" => {
+                let mut cmd = vec!["claims", "--json"];
+                let variable = optional_variable(args, "variable")?;
+                if let Some(variable) = &variable {
+                    cmd.extend(["--var", variable]);
                 }
                 self.cli(&cmd)
             }
@@ -468,6 +485,28 @@ fn optional_word(args: &Value, name: &str) -> Result<Option<String>> {
                 anyhow::bail!("`{name}` is lowercase letters and dashes");
             }
             Ok(Some(word.to_string()))
+        }
+    }
+}
+
+/// A vocabulary variable such as `session.idle_timeout`. It cannot start with a dash.
+fn optional_variable(args: &Value, name: &str) -> Result<Option<String>> {
+    match args.get(name) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => {
+            let text = v.as_str().with_context(|| format!("`{name}` is text"))?;
+            let ok = text
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                && text.len() <= 100
+                && text
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.'));
+            if !ok {
+                anyhow::bail!("`{name}` is a variable name such as session.idle_timeout");
+            }
+            Ok(Some(text.to_string()))
         }
     }
 }

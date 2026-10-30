@@ -118,6 +118,10 @@ oxispec change list --status approved                    # also --json
 - `oxispec check` reports a change set with a missing or unknown status (E012) and an approved or merged one with no approver (E013).
 - **The approval is recorded, not enforced.** Anyone who can edit the file can write a name into it. Until access control exists, what stops someone approving their own change is your repository's review rules. An agent should propose a change set and leave approval to a person.
 
+## Claims and the vocabulary
+
+A `claims` block in any node, and `vocabulary` blocks in nodes of type `vocabulary`, feed the consistency checks (E017 to E019). The syntax and the checks are in [claims.md](claims.md).
+
 ## Releases
 
 A release of the specs is a **manifest** node of type `release`, written by `oxispec release prepare` as `specs/releases/<version>.md`, and an annotated git tag `specs-v<version>` on the commit that holds it. Enable the `releases` module (`oxispec modules add releases`) to use it.
@@ -239,10 +243,16 @@ Codes are stable. A code is never reused.
 | E014 | error | A `spec:` or `verifies:` comment in code refers to a node that does not exist (reported by `oxispec coverage`) |
 | E015 | error | A `spec:` or `verifies:` comment in code refers to a scenario that does not exist (reported by `oxispec coverage`) |
 | E016 | error | A link between a spec and code is suspect: either one changed since it was confirmed (reported by `oxispec suspect` and `oxispec ci`) |
+| E017 | error | A line of a `claims` block cannot be read: bad syntax, an unknown variable or value, or a unit that does not fit the variable (see [claims.md](claims.md)) |
+| E018 | error | A `vocabulary` block cannot be read, or declares a variable twice |
+| E019 | error | Claims conflict: in some context where their scopes hold, no value satisfies them all |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |
 | W004 | warning | Unknown link kind |
+| W005 | warning | A `should` claim cannot hold in a context where other claims apply |
+| W006 | warning | A claim never applies, because its scope can never hold |
 | I001 | info | A link to another project is not checked. Shown with `--verbose`. |
+| I002 | info | A claim says nothing that another claim does not already say. Shown with `--verbose`. |
 
 `oxispec check` exits with 1 when there are errors, and also on warnings with `--strict`. Other failures, such as a missing project, exit with 2.

@@ -890,6 +890,15 @@ Cell `role = admin`: both apply, `== 30m` and `<= 15m` are UNSAT together. Repor
 
 **Incremental.** An index maps variable to claims. A change only rechecks the variables it touches.
 
+**As built (iteration 11).** See [claims.md](claims.md). Where it differs from the text above:
+
+- The vocabulary is a node (type `vocabulary`, a fenced `vocabulary` block), not a `vocab.yaml`, so it has an ID and history and is read at any revision by `--at`, `diff` and `ci` without special cases.
+- A constraint is about one variable. That is what makes the built-in solver exact with sets of values, and Z3 is not needed. Scopes may use any other variable.
+- Draft and proposed nodes count, and rejected, superseded, deprecated and withdrawn ones do not. The text above says accepted, but the useful moment to learn of a conflict is when the change is reviewed.
+- Contexts are regions of each scope variable, not truth vectors of predicates, so `role != admin` and `role = guest` are known to overlap. Beyond 4096 contexts for one variable the check falls back to pairs of claims.
+- An `overrides` link drops the loser's claims where both apply, so a conflict with a third claim still shows. The core is found by removing claims one at a time, as described.
+- Findings are E017 to E019, W005, W006 and I002. Messages carry no line numbers so `ci` can tell a new conflict from an old one.
+
 ### L2: behavior
 
 State machines and API specs are formal enough to check directly.

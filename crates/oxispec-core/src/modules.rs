@@ -71,9 +71,9 @@ pub const MODULES: &[ModuleInfo] = &[
     },
     ModuleInfo {
         name: "consistency",
-        description: "Claims, solver, natural language checks",
+        description: "Claims, vocabulary, solver",
         needs: &["specs"],
-        implemented: false,
+        implemented: true,
     },
     ModuleInfo {
         name: "releases",
@@ -133,6 +133,7 @@ pub fn preset(name: &str) -> Option<Vec<&'static str>> {
             "decisions",
             "standards",
             "architecture",
+            "consistency",
             "ci",
             "agents",
             "mcp",
