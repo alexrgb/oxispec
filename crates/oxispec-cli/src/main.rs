@@ -16,8 +16,10 @@ use oxispec_core::{Finding, Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, m
 mod agents;
 mod changes;
 mod ci;
+mod context;
 mod git;
 mod history;
+mod mcp;
 mod releases;
 mod rollback;
 mod search;
@@ -107,6 +109,29 @@ enum Command {
     Agents {
         #[command(subcommand)]
         action: AgentsAction,
+    },
+    /// The text of some nodes and what is near them, sized to a token budget, for an agent
+    Context {
+        /// The nodes to start from
+        #[arg(required = true)]
+        ids: Vec<String>,
+        /// How many link hops from them to look
+        #[arg(long, default_value_t = 2)]
+        depth: u32,
+        /// Tokens to fill, counted as one per four characters
+        #[arg(long, default_value_t = 8000)]
+        budget: usize,
+        /// Read the specs as they were at a git revision
+        #[arg(long)]
+        at: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Serve the specs to AI clients over the Model Context Protocol, on stdin and stdout
+    Mcp {
+        /// Do not offer the tool that writes a draft change set
+        #[arg(long)]
+        read_only: bool,
     },
     /// Add a typed link from one node to another, for example: link REQ-AUTH-0001 decided-by ADR-0001
     Link {
@@ -472,6 +497,24 @@ fn run(cli: Cli) -> Result<ExitCode> {
         } => {
             let dir = cli.root.unwrap_or_else(|| PathBuf::from("."));
             init(&dir, &preset, &with, &without, id_scheme.into(), &agents)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Context {
+            ids,
+            depth,
+            budget,
+            at,
+            json,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            context::context_command(&root, &ids, depth, budget, at.as_deref(), json, cache)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Mcp { read_only } => {
+            let root = project_root(cli.root.as_deref())?;
+            let cfg = config::load(&root)?;
+            require_module(&cfg, "mcp")?;
+            mcp::serve(&root, read_only)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Agents { action } => match action {

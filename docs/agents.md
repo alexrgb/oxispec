@@ -78,4 +78,4 @@ oxispec agents export --to skills-repo --all      # every skill, no project note
 
 Export overwrites what is there. `--all` is how the `skills/` folder in the OxiSpec repository is made, so that `npx skills add <owner>/oxispec` works. A test fails when that folder differs from what the generator writes, and another test runs every `oxispec` command and flag named in the skills against the real CLI, so the skills cannot drift from the commands.
 
-Not done yet: a layout for Rulesync (its skills folder is not in its README, so it is not guessed here), and writing into `.ruler/` automatically when the folder exists. Slash commands with tool permissions, and the MCP entry for each client, come with the MCP server.
+Not done yet: a layout for Rulesync (its skills folder is not in its README, so it is not guessed here), and writing into `.ruler/` automatically when the folder exists. Slash commands with tool permissions are not written. The MCP server exists now ([mcp.md](mcp.md)), but its entry in each client's config is not written for you yet.
