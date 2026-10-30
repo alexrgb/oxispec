@@ -13,6 +13,7 @@ use oxispec_core::index;
 use oxispec_core::node::KNOWN_LINK_KINDS;
 use oxispec_core::{Finding, Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, modules};
 
+mod agents;
 mod changes;
 mod ci;
 mod git;
@@ -74,6 +75,10 @@ enum Command {
         /// How new IDs are numbered. Use random when several branches add specs at once.
         #[arg(long, value_enum, default_value_t = IdSchemeArg::Sequential)]
         id_scheme: IdSchemeArg,
+        /// AI clients that get skills when the agents module is on, comma separated: claude,
+        /// cursor, copilot, gemini, agents, or none (default: claude,cursor,copilot,gemini)
+        #[arg(long, value_delimiter = ',')]
+        agents: Vec<String>,
     },
     /// List, add or remove modules
     Modules {
@@ -97,6 +102,11 @@ enum Command {
     Release {
         #[command(subcommand)]
         action: ReleaseAction,
+    },
+    /// Skills for AI clients: write them, check them for drift, or export them for other tools
+    Agents {
+        #[command(subcommand)]
+        action: AgentsAction,
     },
     /// Add a typed link from one node to another, for example: link REQ-AUTH-0001 decided-by ADR-0001
     Link {
@@ -367,6 +377,46 @@ enum ResultsAction {
 }
 
 #[derive(Subcommand)]
+enum AgentsAction {
+    /// List the clients and the skills, and which ones this project gets
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Write the skills into each client's folder. A file edited by hand is left alone
+    Update {
+        /// Only these clients (default: the project's, set by `init --agents`)
+        #[arg(long = "client", value_delimiter = ',')]
+        clients: Vec<String>,
+        /// Replace files that were edited by hand
+        #[arg(long)]
+        force: bool,
+        /// Show what would be written and write nothing
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Fail when a skill file is missing, out of date or edited by hand
+    Check {
+        #[arg(long = "client", value_delimiter = ',')]
+        clients: Vec<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Write the skills in the layout another tool reads
+    Export {
+        /// skills-repo (`npx skills add`) or ruler
+        #[arg(long, value_enum)]
+        to: agents::ExportTarget,
+        /// The folder to write into
+        #[arg(long, default_value = ".")]
+        out: PathBuf,
+        /// Every skill and no project notes, without needing a project
+        #[arg(long)]
+        all: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum ReleaseAction {
     /// Work out the version and notes since the last release, and write the manifest
     Prepare {
@@ -418,11 +468,36 @@ fn run(cli: Cli) -> Result<ExitCode> {
             with,
             without,
             id_scheme,
+            agents,
         } => {
             let dir = cli.root.unwrap_or_else(|| PathBuf::from("."));
-            init(&dir, &preset, &with, &without, id_scheme.into())?;
+            init(&dir, &preset, &with, &without, id_scheme.into(), &agents)?;
             Ok(ExitCode::SUCCESS)
         }
+        Command::Agents { action } => match action {
+            AgentsAction::Export { to, out, all } => {
+                let root = project_root(cli.root.as_deref()).ok();
+                agents::export(root.as_deref(), to, &out, all)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            AgentsAction::List { json } => {
+                let root = project_root(cli.root.as_deref())?;
+                agents::list(&root, json)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            AgentsAction::Update {
+                clients,
+                force,
+                dry_run,
+            } => {
+                let root = project_root(cli.root.as_deref())?;
+                agents::update(&root, &clients, force, dry_run)
+            }
+            AgentsAction::Check { clients, json } => {
+                let root = project_root(cli.root.as_deref())?;
+                agents::check(&root, &clients, json)
+            }
+        },
         Command::Modules { action } => {
             modules_command(cli.root.as_deref(), action.unwrap_or(ModulesAction::List))?;
             Ok(ExitCode::SUCCESS)
@@ -733,6 +808,7 @@ fn init(
     with: &[String],
     without: &[String],
     id_scheme: IdScheme,
+    agent_clients: &[String],
 ) -> Result<()> {
     if dir.join(config::CONFIG_PATH).exists() {
         bail!("{} is already initialized", dir.display());
@@ -760,7 +836,19 @@ fn init(
             bail!("cannot leave out `{name}`: module `{needed_by}` needs it");
         }
     }
-    let cfg = Config::new(resolved, id_scheme);
+    let mut cfg = Config::new(resolved, id_scheme);
+    if cfg.has("agents") {
+        cfg.agents = if agent_clients.is_empty() {
+            oxispec_core::agents::DEFAULT_CLIENTS
+                .iter()
+                .map(|s| s.to_string())
+                .collect()
+        } else {
+            agents::parse_clients(agent_clients)?
+        };
+    } else if !agent_clients.is_empty() {
+        bail!("--agents needs the `agents` module; add it with `--with agents`");
+    }
     fs::create_dir_all(dir)?;
     config::save(dir, &cfg)?;
     fs::write(dir.join(".oxispec/.gitignore"), "cache/\n")?;
@@ -775,6 +863,7 @@ fn init(
         cfg.modules.join(", ")
     );
     warn_planned(&cfg.modules);
+    agents::write_after_init(dir, &cfg)?;
     Ok(())
 }
 
@@ -830,6 +919,9 @@ fn modules_command(explicit: Option<&Path>, action: ModulesAction) -> Result<()>
             } else {
                 println!("enabled: {}", added.join(", "));
                 warn_planned(&added);
+                if added.iter().any(|m| m == "agents") {
+                    println!("run `oxispec agents update` to write the skills");
+                }
             }
             Ok(())
         }

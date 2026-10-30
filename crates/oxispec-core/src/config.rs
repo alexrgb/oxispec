@@ -56,6 +56,9 @@ pub struct Config {
     pub id_scheme: IdScheme,
     #[serde(default, skip_serializing_if = "TraceConfig::is_default")]
     pub trace: TraceConfig,
+    /// The AI clients that get skills, by id. See `agents::CLIENTS`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub agents: Vec<String>,
 }
 
 fn default_format() -> u32 {
@@ -74,6 +77,7 @@ impl Config {
             topology: default_topology(),
             id_scheme,
             trace: TraceConfig::default(),
+            agents: Vec::new(),
         }
     }
 
