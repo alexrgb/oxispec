@@ -174,18 +174,38 @@ pub enum Error {
     Pattern(String, String),
 }
 
-/// Walks the project and reads annotations from every text file that is not
-/// ignored by git, not markdown (those are the specs), and not excluded.
-pub fn scan_tree(root: &Path, exclude: &[String]) -> Result<Scan, Error> {
+/// The `trace.exclude` globs, ready to test paths against.
+pub fn exclusions(root: &Path, exclude: &[String]) -> Result<ignore::overrides::Override, Error> {
     let mut overrides = ignore::overrides::OverrideBuilder::new(root);
     for pattern in exclude {
         overrides
             .add(&format!("!{pattern}"))
             .map_err(|e| Error::Pattern(pattern.clone(), e.to_string()))?;
     }
-    let overrides = overrides
+    overrides
         .build()
-        .map_err(|e| Error::Pattern(exclude.join(", "), e.to_string()))?;
+        .map_err(|e| Error::Pattern(exclude.join(", "), e.to_string()))
+}
+
+/// Whether a file, given relative to the project root, would be scanned:
+/// it is not markdown, not hidden, and not excluded. Used to scan a git
+/// revision the way [`scan_tree`] scans the working tree.
+pub fn is_scanned(exclusions: &ignore::overrides::Override, relative: &Path) -> bool {
+    let hidden = relative
+        .components()
+        .any(|c| c.as_os_str().to_string_lossy().starts_with('.'));
+    !hidden
+        && relative.extension().is_none_or(|e| e != "md")
+        && !exclusions.matched(relative, false).is_ignore()
+}
+
+/// The largest file that is read.
+pub const MAX_SCANNED_BYTES: usize = MAX_FILE_BYTES as usize;
+
+/// Walks the project and reads annotations from every text file that is not
+/// ignored by git, not markdown (those are the specs), and not excluded.
+pub fn scan_tree(root: &Path, exclude: &[String]) -> Result<Scan, Error> {
+    let overrides = exclusions(root, exclude)?;
     let walker = ignore::WalkBuilder::new(root)
         .require_git(false)
         .overrides(overrides)

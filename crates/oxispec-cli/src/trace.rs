@@ -4,10 +4,14 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
+use oxispec_core::results;
 use oxispec_core::suspect::{self, State};
 use oxispec_core::trace::{Annotation, Coverage, Kind, Scan, coverage, scan_tree};
 use oxispec_core::{OUTPUT_SCHEMA_VERSION, config, id, index};
 use serde_json::json;
+use std::path::PathBuf;
+
+use crate::git;
 
 fn scan(root: &Path) -> Result<Scan> {
     let cfg = config::load(root)?;
@@ -131,6 +135,8 @@ pub fn trace_command(
 pub struct CoverageOptions {
     pub status: Option<String>,
     pub fail_under: Option<f64>,
+    /// Only scenarios whose tests passed count as covered.
+    pub require_pass: bool,
     pub all: bool,
     pub json: bool,
     pub cache: bool,
@@ -161,10 +167,63 @@ pub fn coverage_command(root: &Path, options: &CoverageOptions) -> Result<ExitCo
     let scan = scan(root)?;
     let graph = index::load(root, options.cache).0;
     let result: Coverage = coverage(&graph, &scan.annotations, options.status.as_deref());
+
+    // What the imported test results say, for the scenarios that are in scope.
+    let imported = results::load(root)?;
+    if options.require_pass && imported.is_none() {
+        bail!("no test results were imported; run `oxispec results import FILE` first");
+    }
+    let in_scope: std::collections::BTreeSet<String> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.ty == "requirement")
+        .filter(|n| {
+            options
+                .status
+                .as_deref()
+                .is_none_or(|s| n.status.as_deref() == Some(s))
+        })
+        .flat_map(|n| {
+            n.requirements
+                .iter()
+                .flat_map(|r| &r.scenarios)
+                .filter_map(|s| s.anchor.as_ref())
+                .map(|a| format!("{}.{a}", n.id))
+        })
+        .collect();
+    let by_status = |wanted: results::Status| -> Vec<String> {
+        imported.as_ref().map_or_else(Vec::new, |found| {
+            results::scenario_status(&graph, &scan.annotations, found)
+                .into_iter()
+                .filter(|(s, st)| *st == wanted && in_scope.contains(s))
+                .map(|(s, _)| s)
+                .collect()
+        })
+    };
+    let passing = by_status(results::Status::Passing);
+    let failing = by_status(results::Status::Failing);
+    let skipped = by_status(results::Status::Skipped);
+    let no_result = by_status(results::Status::NoResult);
+    let passing_percent = if result.scenarios == 0 {
+        100.0
+    } else {
+        passing.len() as f64 * 100.0 / result.scenarios as f64
+    };
+    let head = git::resolve_rev(root, "HEAD").ok().map(|r| r.oid);
+    let stale = imported
+        .as_ref()
+        .is_some_and(|found| found.commit.is_some() && found.commit != head);
+
+    let scenario_percent = if options.require_pass {
+        passing_percent
+    } else {
+        result.verified_percent()
+    };
     let below = options
         .fail_under
-        .is_some_and(|min| result.implemented_percent() < min || result.verified_percent() < min);
-    let failed = below || !result.findings.is_empty();
+        .is_some_and(|min| result.implemented_percent() < min || scenario_percent < min);
+    let failed =
+        below || !result.findings.is_empty() || (options.require_pass && !failing.is_empty());
 
     if options.json {
         let out = json!({
@@ -181,6 +240,16 @@ pub fn coverage_command(root: &Path, options: &CoverageOptions) -> Result<ExitCo
             "unverified": result.unverified,
             "unanchored_scenarios": result.unanchored_scenarios,
             "findings": result.findings,
+            "results": imported.as_ref().map(|found| json!({
+                "tests": found.tests.len(),
+                "commit": found.commit,
+                "stale": stale,
+                "passing": passing.len(),
+                "passing_percent": passing_percent,
+                "failing": failing,
+                "skipped": skipped,
+                "no_result": no_result,
+            })),
             "failed": failed,
         });
         println!("{}", serde_json::to_string_pretty(&out)?);
@@ -205,6 +274,24 @@ pub fn coverage_command(root: &Path, options: &CoverageOptions) -> Result<ExitCo
             result.scenarios,
             result.verified_percent()
         );
+        if imported.is_some() {
+            list("failing", &failing, options.all);
+            list("no matching result", &no_result, options.all);
+            println!(
+                "passing:      {} of {} ({:.0}%){}",
+                passing.len(),
+                result.scenarios,
+                passing_percent,
+                if skipped.is_empty() {
+                    String::new()
+                } else {
+                    format!(", {} skipped", skipped.len())
+                }
+            );
+            if stale {
+                println!("note: the test results are from another commit than HEAD");
+            }
+        }
         if result.unanchored_scenarios > 0 {
             println!(
                 "{} scenarios have no {{#anchor}}, so no test can name them",
@@ -350,6 +437,78 @@ pub fn confirm_command(
     );
     if done.confirmed + done.pruned > 0 {
         println!("commit {} to share it", suspect::LOCK_PATH);
+    }
+    Ok(())
+}
+
+/// `oxispec results import`: read test results from files and keep them.
+pub fn results_import(root: &Path, files: &[PathBuf], replace: bool) -> Result<()> {
+    scan_module(root)?;
+    let mut stored = if replace {
+        results::Results::default()
+    } else {
+        results::load(root)?.unwrap_or_default()
+    };
+    let mut read = 0;
+    for file in files {
+        let text = std::fs::read_to_string(file)
+            .with_context(|| format!("cannot read {}", file.display()))?;
+        let found = results::parse(&file.display().to_string(), &text)?;
+        read += found.len();
+        stored.merge(found);
+    }
+    stored.commit = git::resolve_rev(root, "HEAD").ok().map(|r| r.oid);
+    results::save(root, &stored)?;
+    println!(
+        "imported {read} results from {} file(s); now {} tests: {} passed, {} failed, {} skipped",
+        files.len(),
+        stored.tests.len(),
+        stored.count(results::Outcome::Pass),
+        stored.count(results::Outcome::Fail),
+        stored.count(results::Outcome::Skip)
+    );
+    Ok(())
+}
+
+pub fn results_show(root: &Path, json_output: bool) -> Result<()> {
+    scan_module(root)?;
+    let Some(stored) = results::load(root)? else {
+        bail!("no test results were imported; run `oxispec results import FILE`");
+    };
+    if json_output {
+        let out = json!({"schema_version": OUTPUT_SCHEMA_VERSION, "commit": stored.commit, "tests": stored.tests});
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+    for t in &stored.tests {
+        let outcome = match t.outcome {
+            results::Outcome::Pass => "pass",
+            results::Outcome::Fail => "FAIL",
+            results::Outcome::Skip => "skip",
+        };
+        println!("{outcome:<5}{}", t.name);
+    }
+    println!(
+        "{} tests: {} passed, {} failed, {} skipped",
+        stored.tests.len(),
+        stored.count(results::Outcome::Pass),
+        stored.count(results::Outcome::Fail),
+        stored.count(results::Outcome::Skip)
+    );
+    Ok(())
+}
+
+pub fn results_clear(root: &Path) -> Result<()> {
+    scan_module(root)?;
+    results::clear(root)?;
+    println!("removed the imported test results");
+    Ok(())
+}
+
+fn scan_module(root: &Path) -> Result<()> {
+    let cfg = config::load(root)?;
+    if !cfg.has("tests") {
+        bail!("module `tests` is not enabled; run `oxispec modules add tests`");
     }
     Ok(())
 }

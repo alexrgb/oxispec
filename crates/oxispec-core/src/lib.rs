@@ -15,6 +15,7 @@ pub mod node;
 pub mod parse;
 pub mod release;
 pub mod report;
+pub mod results;
 pub mod rollback;
 pub mod search;
 pub mod site;

@@ -9,6 +9,7 @@ use std::process::{Command, Output, Stdio};
 use anyhow::{Context, Result, bail};
 use oxispec_core::Graph;
 use oxispec_core::parse::parse_file_text;
+use oxispec_core::trace::{self, Scan};
 
 /// A commit that a name such as `main`, `v1.0` or `date:2026-01-31` points at.
 #[derive(Debug, Clone)]
@@ -307,6 +308,40 @@ pub fn file_at(root: &Path, oid: &str, path: &Path) -> Result<Option<Vec<u8>>> {
         path.to_string_lossy().replace('\\', "/")
     );
     Ok(read_objects(root, &[spec])?.remove(0))
+}
+
+/// The trace annotations in the files of a revision, read the way
+/// `scan_tree` reads the working tree: no markdown, hidden or excluded files,
+/// nothing over the size limit or not UTF-8.
+pub fn scan_at(root: &Path, revision: &Revision, exclude: &[String]) -> Result<Scan> {
+    let exclusions = trace::exclusions(root, exclude)?;
+    let prefix = prefix(root)?;
+    let listing = git_stdout(root, &["ls-tree", "-r", "-z", "--name-only", &revision.oid])?;
+    let files: Vec<String> = names(&listing)
+        .filter(|n| !n.contains('\n') && trace::is_scanned(&exclusions, Path::new(n)))
+        .collect();
+    let mut scan = Scan::default();
+    // Read in batches, so a large repository is never held in memory whole.
+    for batch in files.chunks(2000) {
+        let specs: Vec<String> = batch
+            .iter()
+            .map(|n| format!("{}:{prefix}{n}", revision.oid))
+            .collect();
+        for (name, content) in batch.iter().zip(read_objects(root, &specs)?) {
+            let Some(bytes) = content.filter(|b| b.len() <= trace::MAX_SCANNED_BYTES) else {
+                continue;
+            };
+            let Ok(text) = String::from_utf8(bytes) else {
+                continue;
+            };
+            scan.files += 1;
+            scan.annotations
+                .extend(trace::scan_text(Path::new(name), &text));
+        }
+    }
+    scan.annotations
+        .sort_by(|a, b| (&a.path, a.line, &a.target).cmp(&(&b.path, b.line, &b.target)));
+    Ok(scan)
 }
 
 /// Markdown files that differ from `base` in the working tree (staged,

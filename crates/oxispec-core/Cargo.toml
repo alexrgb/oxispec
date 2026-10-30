@@ -12,6 +12,7 @@ publish.workspace = true
 blake3 = { workspace = true }
 ignore = { workspace = true }
 pulldown-cmark = { version = "0.13.5", default-features = false, features = ["html"] }
+quick-xml = "0.42.0"
 serde = { workspace = true }
 serde-saphyr = { workspace = true }
 serde_json = { workspace = true }
