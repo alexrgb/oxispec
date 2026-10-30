@@ -85,13 +85,13 @@ pub const MODULES: &[ModuleInfo] = &[
         name: "ci",
         description: "`oxispec ci`: graph diff, impact analysis, reports",
         needs: &["core"],
-        implemented: false,
+        implemented: true,
     },
     ModuleInfo {
         name: "agents",
         description: "Skills and rules for AI clients",
         needs: &["core"],
-        implemented: false,
+        implemented: true,
     },
     ModuleInfo {
         name: "mcp",

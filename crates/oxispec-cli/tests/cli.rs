@@ -2505,3 +2505,389 @@ fn a_project_without_trace_annotations_has_no_trace_gates() {
     assert_eq!(out.code, 0, "{}", out.stdout);
     assert!(!out.stdout.contains("no-suspect-links"), "{}", out.stdout);
 }
+
+fn skill_files(root: &Path) -> Vec<std::path::PathBuf> {
+    let mut found = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.file_name().is_some_and(|n| n == "SKILL.md") {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+#[test]
+fn init_writes_skills_for_the_four_clients() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    let out = run(p, &["init", "--preset", "standard"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    for client in [".claude", ".cursor", ".github", ".gemini"] {
+        let skill = p.join(client).join("skills/oxispec-explore/SKILL.md");
+        let text = fs::read_to_string(&skill).unwrap_or_else(|_| panic!("{}", skill.display()));
+        assert!(text.starts_with("---\nname: oxispec-explore\n"), "{text}");
+    }
+    assert!(!p.join(".agents").exists(), "not part of the default");
+    // The standard preset has no releases module, so no release skill.
+    assert!(!p.join(".claude/skills/oxispec-release").exists());
+    assert!(
+        p.join(".claude/skills/oxispec-sync-code/SKILL.md")
+            .is_file()
+    );
+    let config = fs::read_to_string(p.join(".oxispec/config.yaml")).unwrap();
+    assert!(
+        config.contains("agents:\n- claude\n- cursor\n- copilot\n- gemini"),
+        "{config}"
+    );
+    let out = run(p, &["agents", "check"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+}
+
+#[test]
+fn init_can_choose_the_clients_or_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    let out = run(
+        p,
+        &["init", "--preset", "standard", "--agents", "claude,agents"],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(p.join(".claude/skills/oxispec-explore/SKILL.md").is_file());
+    assert!(p.join(".agents/skills/oxispec-explore/SKILL.md").is_file());
+    assert!(!p.join(".cursor").exists());
+
+    let dir = tempfile::tempdir().unwrap();
+    let out = run(
+        dir.path(),
+        &["init", "--preset", "standard", "--agents", "none"],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(!dir.path().join(".claude").exists());
+    // Choosing none still leaves the commands to use later.
+    let out = run(dir.path(), &["agents", "update", "--client", "cursor"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(
+        dir.path()
+            .join(".cursor/skills/oxispec-explore/SKILL.md")
+            .is_file()
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let out = run(dir.path(), &["init", "--agents", "vim", "--with", "agents"]);
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("unknown client `vim`"),
+        "{}",
+        out.stderr
+    );
+    let out = run(dir.path(), &["init", "--agents", "claude"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("`agents` module"), "{}", out.stderr);
+}
+
+#[test]
+fn a_project_without_the_agents_module_writes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init"]).code, 0);
+    assert!(!p.join(".claude").exists());
+    let out = run(p, &["agents", "update"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("modules add agents"), "{}", out.stderr);
+    let out = run(p, &["modules", "add", "agents"]);
+    assert!(out.stdout.contains("agents update"), "{}", out.stdout);
+    assert_eq!(run(p, &["agents", "update"]).code, 0);
+    // Only the skills for enabled modules: specs and core.
+    assert!(p.join(".claude/skills/oxispec-propose/SKILL.md").is_file());
+    assert!(!p.join(".claude/skills/oxispec-write-adr").exists());
+}
+
+#[test]
+fn update_keeps_hand_edits_and_check_reports_drift() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(
+        run(p, &["init", "--preset", "standard", "--agents", "claude"]).code,
+        0
+    );
+    let skill = p.join(".claude/skills/oxispec-verify/SKILL.md");
+
+    // Nothing changed: nothing is written.
+    let out = run(p, &["agents", "update"]);
+    assert_eq!(out.code, 0);
+    assert!(out.stdout.contains("0 written"), "{}", out.stdout);
+
+    // A missing file is drift, and update restores it.
+    fs::remove_file(&skill).unwrap();
+    let out = run(p, &["agents", "check"]);
+    assert_eq!(out.code, 1);
+    assert!(
+        out.stdout.contains("oxispec-verify/SKILL.md: missing"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(run(p, &["agents", "update"]).code, 0);
+    assert!(skill.is_file());
+
+    // A hand edit is kept, reported, and replaced only with --force.
+    let mine = format!(
+        "{}\nOur team rule: ask before importing results.\n",
+        fs::read_to_string(&skill).unwrap()
+    );
+    fs::write(&skill, &mine).unwrap();
+    let out = run(p, &["agents", "check", "--json"]);
+    assert_eq!(out.code, 1);
+    let v = json(&out);
+    assert_eq!(v["ok"], false);
+    assert!(
+        v["files"].as_array().unwrap().iter().any(
+            |f| f["state"] == "edited" && f["path"] == ".claude/skills/oxispec-verify/SKILL.md"
+        ),
+        "{v}"
+    );
+    let out = run(p, &["agents", "update"]);
+    assert_eq!(out.code, 1, "a skipped file is not a success");
+    assert!(out.stdout.contains("edited by hand"), "{}", out.stdout);
+    assert_eq!(fs::read_to_string(&skill).unwrap(), mine);
+    let out = run(p, &["agents", "update", "--dry-run", "--force"]);
+    assert!(
+        out.stdout
+            .contains("would write .claude/skills/oxispec-verify/SKILL.md"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(
+        fs::read_to_string(&skill).unwrap(),
+        mine,
+        "dry run writes nothing"
+    );
+    assert_eq!(run(p, &["agents", "update", "--force"]).code, 0);
+    assert_ne!(fs::read_to_string(&skill).unwrap(), mine);
+    assert_eq!(run(p, &["agents", "check"]).code, 0);
+}
+
+#[test]
+fn project_notes_are_added_and_refresh_unedited_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(
+        run(
+            p,
+            &["init", "--preset", "standard", "--agents", "claude,cursor"]
+        )
+        .code,
+        0
+    );
+    fs::create_dir_all(p.join(".oxispec/agents")).unwrap();
+    fs::write(
+        p.join(".oxispec/agents/_all.md"),
+        "Domains are auth, billing and audit.\n",
+    )
+    .unwrap();
+    fs::write(
+        p.join(".oxispec/agents/cursor.md"),
+        "Run checks with the project task runner.\n",
+    )
+    .unwrap();
+
+    // The files are untouched, so a new note is a safe refresh, but it is drift.
+    assert_eq!(run(p, &["agents", "check"]).code, 1);
+    assert_eq!(run(p, &["agents", "update"]).code, 0);
+    let claude = fs::read_to_string(p.join(".claude/skills/oxispec-explore/SKILL.md")).unwrap();
+    let cursor = fs::read_to_string(p.join(".cursor/skills/oxispec-explore/SKILL.md")).unwrap();
+    assert!(
+        claude.contains("## Project notes\n\nDomains are auth, billing and audit.\n"),
+        "{claude}"
+    );
+    assert!(!claude.contains("task runner"));
+    assert!(
+        cursor.contains(
+            "Domains are auth, billing and audit.\n\nRun checks with the project task runner."
+        ),
+        "{cursor}"
+    );
+    assert_eq!(run(p, &["agents", "check"]).code, 0);
+}
+
+#[test]
+fn export_writes_the_layouts_other_tools_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let out_dir = tempfile::tempdir().unwrap();
+    let o = out_dir.path().to_str().unwrap();
+
+    // Without --all it needs a project.
+    let out = run(
+        dir.path(),
+        &["agents", "export", "--to", "ruler", "--out", o],
+    );
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("--all"), "{}", out.stderr);
+
+    let out = run(
+        dir.path(),
+        &["agents", "export", "--to", "ruler", "--all", "--out", o],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(
+        out_dir
+            .path()
+            .join(".ruler/skills/oxispec-release/SKILL.md")
+            .is_file()
+    );
+
+    // In a project, only the enabled modules' skills.
+    let p = dir.path();
+    assert_eq!(run(p, &["init"]).code, 0);
+    let other = tempfile::tempdir().unwrap();
+    let out = run(
+        p,
+        &[
+            "agents",
+            "export",
+            "--to",
+            "skills-repo",
+            "--out",
+            other.path().to_str().unwrap(),
+        ],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(
+        other
+            .path()
+            .join("skills/oxispec-explore/SKILL.md")
+            .is_file()
+    );
+    assert!(!other.path().join("skills/oxispec-release").exists());
+}
+
+#[test]
+fn the_published_skills_folder_matches_the_generator() {
+    let generated = tempfile::tempdir().unwrap();
+    let out = run(
+        generated.path(),
+        &[
+            "agents",
+            "export",
+            "--to",
+            "skills-repo",
+            "--all",
+            "--out",
+            generated.path().to_str().unwrap(),
+        ],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let committed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+    let relative = |root: &Path| -> Vec<(String, String)> {
+        skill_files(root)
+            .into_iter()
+            .map(|f| {
+                let rel = f
+                    .strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let text = fs::read_to_string(&f).unwrap().replace("\r\n", "\n");
+                (rel, text)
+            })
+            .collect()
+    };
+    let want = relative(&generated.path().join("skills"));
+    let have = relative(&committed);
+    assert_eq!(
+        have.iter().map(|(p, _)| p).collect::<Vec<_>>(),
+        want.iter().map(|(p, _)| p).collect::<Vec<_>>(),
+        "skills/ lists other skills than the generator. Run: cargo run -- agents export --to skills-repo --all"
+    );
+    for ((path, have), (_, want)) in have.iter().zip(&want) {
+        assert_eq!(
+            have, want,
+            "skills/{path} is out of date. Run: cargo run -- agents export --to skills-repo --all"
+        );
+    }
+}
+
+/// The commands that skills tell an agent to run, as written in code spans and fences.
+fn invocations(text: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    for line in text.lines() {
+        if line.trim_start().starts_with("oxispec ") {
+            found.push(line.trim().to_string());
+        }
+        for (i, span) in line.split('`').enumerate() {
+            if i % 2 == 1 && span.starts_with("oxispec ") {
+                found.push(span.to_string());
+            }
+        }
+    }
+    found
+}
+
+#[test]
+fn every_command_a_skill_names_exists() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = run(
+        dir.path(),
+        &[
+            "agents",
+            "export",
+            "--to",
+            "skills-repo",
+            "--all",
+            "--out",
+            dir.path().to_str().unwrap(),
+        ],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let mut checked = 0;
+    for file in skill_files(dir.path()) {
+        let text = fs::read_to_string(&file).unwrap();
+        for command in invocations(&text) {
+            let words: Vec<&str> = command.split_whitespace().skip(1).collect();
+            let path: Vec<&str> = words
+                .iter()
+                .copied()
+                .take_while(|w| {
+                    w.starts_with(|c: char| c.is_ascii_lowercase())
+                        && w.chars().all(|c| c.is_ascii_lowercase() || c == '-')
+                })
+                .take(2)
+                .collect();
+            assert!(
+                !path.is_empty(),
+                "{}: `{command}` names no command",
+                file.display()
+            );
+            let mut args = path.clone();
+            args.push("--help");
+            let help = run(dir.path(), &args);
+            assert_eq!(
+                help.code,
+                0,
+                "{}: `{command}` is not a command\n{}",
+                file.display(),
+                help.stderr
+            );
+            for flag in words.iter().filter(|w| w.starts_with("--")) {
+                let flag = flag.split('=').next().unwrap();
+                assert!(
+                    help.stdout.contains(flag),
+                    "{}: `{command}` uses {flag}, which `{}` does not have",
+                    file.display(),
+                    path.join(" ")
+                );
+            }
+            checked += 1;
+        }
+    }
+    assert!(
+        checked >= 40,
+        "only {checked} commands found; is the scanner broken?"
+    );
+}
