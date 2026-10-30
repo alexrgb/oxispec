@@ -16,6 +16,7 @@ use oxispec_core::{Finding, Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, m
 mod agents;
 mod changes;
 mod ci;
+mod claims;
 mod context;
 mod git;
 mod history;
@@ -121,6 +122,17 @@ enum Command {
         /// Tokens to fill, counted as one per four characters
         #[arg(long, default_value_t = 8000)]
         budget: usize,
+        /// Read the specs as they were at a git revision
+        #[arg(long)]
+        at: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// List the vocabulary and the claims written against it. `check` reports conflicts
+    Claims {
+        /// Only this variable
+        #[arg(long = "var", value_name = "NAME")]
+        variable: Option<String>,
         /// Read the specs as they were at a git revision
         #[arg(long)]
         at: Option<String>,
@@ -357,6 +369,8 @@ enum NewKind {
     Adr { title: String },
     /// A change set: a proposed change to the specs, with a lifecycle
     Change { title: String },
+    /// A vocabulary: the typed variables that claims in requirements talk about
+    Vocabulary { title: String },
 }
 
 #[derive(Subcommand)]
@@ -499,6 +513,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
             init(&dir, &preset, &with, &without, id_scheme.into(), &agents)?;
             Ok(ExitCode::SUCCESS)
         }
+        Command::Claims { variable, at, json } => {
+            let root = project_root(cli.root.as_deref())?;
+            claims::claims_command(&root, variable.as_deref(), at.as_deref(), json, cache)
+        }
         Command::Context {
             ids,
             depth,
@@ -561,6 +579,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 NewKind::Change { title } => {
                     require_module(&cfg, "specs")?;
                     new_change(&root, &title, scheme, cache)?
+                }
+                NewKind::Vocabulary { title } => {
+                    require_module(&cfg, "consistency")?;
+                    new_vocabulary(&root, &title, scheme, cache)?
                 }
             };
             println!("created {} ({})", created.0, created.1.display());
@@ -841,6 +863,9 @@ fn ensure_module_dirs(root: &Path, cfg: &Config) -> Result<()> {
     }
     if cfg.has("releases") {
         fs::create_dir_all(root.join("specs/releases"))?;
+    }
+    if cfg.has("consistency") {
+        fs::create_dir_all(root.join("specs/vocabulary"))?;
     }
     Ok(())
 }
@@ -1348,6 +1373,24 @@ status: draft
 ## Impact
 ";
 
+const VOCABULARY_TEMPLATE: &str = "---
+id: @ID@
+type: vocabulary
+status: accepted
+---
+# @ID@: @TITLE@
+
+The variables that claims talk about. A claim is a line in a `claims` block of
+a requirement, for example `for role = admin: session.idle_timeout <= 15m`.
+
+```vocabulary
+# session.idle_timeout: {type: duration}
+# password.min_length: {type: int}
+# role: {type: enum, values: [admin, user, guest]}
+# mfa: {type: bool}
+```
+";
+
 fn new_requirement(
     root: &Path,
     domain: &str,
@@ -1375,6 +1418,22 @@ fn new_adr(root: &Path, title: &str, scheme: IdScheme, cache: bool) -> Result<(S
     let suffix = id.strip_prefix("ADR-").unwrap_or(&id);
     let rel = PathBuf::from("specs/adr").join(format!("{suffix}-{}.md", slug(title)?));
     let body = ADR_TEMPLATE.replace("@ID@", &id).replace("@TITLE@", title);
+    write_new(root, &rel, &body)?;
+    Ok((id, rel))
+}
+
+fn new_vocabulary(
+    root: &Path,
+    title: &str,
+    scheme: IdScheme,
+    cache: bool,
+) -> Result<(String, PathBuf)> {
+    let id = allocate_id(&load_graph(root, cache), "VOC-", scheme)?;
+    let suffix = id.strip_prefix("VOC-").unwrap_or(&id);
+    let rel = PathBuf::from("specs/vocabulary").join(format!("{suffix}-{}.md", slug(title)?));
+    let body = VOCABULARY_TEMPLATE
+        .replace("@ID@", &id)
+        .replace("@TITLE@", title);
     write_new(root, &rel, &body)?;
     Ok((id, rel))
 }

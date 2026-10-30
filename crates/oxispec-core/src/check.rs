@@ -7,6 +7,7 @@
 //! E011 invalid scenario anchor
 //! E012 change set with a missing or unknown status
 //! E013 approved or merged change set without `approved_by`
+//! E017 to E019, W005, W006, I002: claims and the vocabulary, see `claims`
 //! W001 unknown node type  W004 unknown link kind    I001 external reference, not checked
 
 use std::collections::{HashMap, HashSet};
@@ -31,6 +32,7 @@ pub fn check(graph: &Graph) -> Vec<Finding> {
         }
     }
     supersede_cycles(graph, &mut findings);
+    findings.extend(crate::claims::check(graph));
     findings
         .sort_by(|a, b| (a.path.as_ref(), a.line, a.code).cmp(&(b.path.as_ref(), b.line, b.code)));
     findings

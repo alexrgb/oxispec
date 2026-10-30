@@ -4,7 +4,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use crate::finding::Finding;
-use crate::node::{Frontmatter, Node, RequirementBlock, Scenario};
+use crate::node::{ClaimLine, Frontmatter, Node, RequirementBlock, Scenario, TextBlock};
 
 /// Where the frontmatter sits in a file.
 pub struct FrontmatterSpan {
@@ -129,6 +129,58 @@ pub fn parse_requirements(body: &str, line_offset: usize) -> Vec<RequirementBloc
     blocks
 }
 
+/// Reads the lines of fenced `claims` blocks and the text of `vocabulary`
+/// blocks. Blocks inside other fences are not read.
+pub fn parse_blocks(body: &str, line_offset: usize) -> (Vec<ClaimLine>, Vec<TextBlock>) {
+    enum In {
+        Nothing,
+        Other,
+        Claims,
+        Vocabulary,
+    }
+    let mut state = In::Nothing;
+    let mut claims = Vec::new();
+    let mut vocabulary: Vec<TextBlock> = Vec::new();
+    for (i, line) in body.lines().enumerate() {
+        let n = line_offset + i + 1;
+        let t = line.trim();
+        let fence = t.starts_with("```") || t.starts_with("~~~");
+        state = match (state, fence) {
+            (In::Nothing, true) => match t.strip_prefix("```").map(str::trim) {
+                Some("claims") => In::Claims,
+                Some("vocabulary") => {
+                    vocabulary.push(TextBlock {
+                        line: n + 1,
+                        text: String::new(),
+                    });
+                    In::Vocabulary
+                }
+                _ => In::Other,
+            },
+            (In::Nothing, false) => In::Nothing,
+            (_, true) => In::Nothing,
+            (In::Claims, false) => {
+                if !t.is_empty() && !t.starts_with('#') {
+                    claims.push(ClaimLine {
+                        line: n,
+                        text: line.to_string(),
+                    });
+                }
+                In::Claims
+            }
+            (In::Vocabulary, false) => {
+                if let Some(block) = vocabulary.last_mut() {
+                    block.text.push_str(line);
+                    block.text.push('\n');
+                }
+                In::Vocabulary
+            }
+            (In::Other, false) => In::Other,
+        };
+    }
+    (claims, vocabulary)
+}
+
 /// Parses one file. Files without frontmatter, or with frontmatter that has
 /// neither `id` nor `type`, are not nodes and produce nothing.
 pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) {
@@ -158,6 +210,7 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
     } else {
         Vec::new()
     };
+    let (claims, vocabulary) = parse_blocks(body, consumed);
     let title = first_heading(body).map(|h| {
         h.strip_prefix(&format!("{id}: "))
             .map_or(h.clone(), str::to_string)
@@ -178,6 +231,8 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
             .map(|(k, v)| (k, v.into_vec()))
             .collect(),
         requirements,
+        claims,
+        vocabulary,
         body_hash: blake3::hash(body.as_bytes()).to_hex().to_string(),
     };
     (Some(node), Vec::new())
@@ -251,6 +306,22 @@ mod tests {
         assert!(!blocks[0].has_normative);
         let blocks = parse_requirements("### Requirement: A\nIt MUST NOT fail.\n", 0);
         assert!(blocks[0].has_normative);
+    }
+
+    #[test]
+    fn claims_and_vocabulary_blocks_are_read() {
+        let text = "---\nid: REQ-A-1\ntype: requirement\n---\ntext\n\n```claims\n# note\nfor role = admin: x <= 1\n\nmust y\n```\n\n```vocabulary\nx: {type: int}\n```\n\n```rust\n```claims\nnot: read\n```\n";
+        let (node, _) = parse_file_text(Path::new("a.md"), text);
+        let node = node.unwrap();
+        let lines: Vec<(usize, &str)> = node
+            .claims
+            .iter()
+            .map(|c| (c.line, c.text.as_str()))
+            .collect();
+        assert_eq!(lines, [(9, "for role = admin: x <= 1"), (11, "must y")]);
+        assert_eq!(node.vocabulary.len(), 1);
+        assert_eq!(node.vocabulary[0].line, 15);
+        assert_eq!(node.vocabulary[0].text, "x: {type: int}\n");
     }
 
     #[test]

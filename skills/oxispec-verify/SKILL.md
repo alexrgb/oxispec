@@ -3,7 +3,7 @@ name: oxispec-verify
 description: "Check that the specs are consistent and that code and tests cover them: check, coverage, test results, suspect links. Use before finishing work that touches specs or traced code."
 metadata:
   generated-by: oxispec
-  content-hash: "5de3bdb8c0d3f32a"
+  content-hash: "4a9a01b70ef12d05"
 ---
 
 # Verify that the specs and the project agree
@@ -12,7 +12,7 @@ Run the checks in the order below. Each one answers a different question.
 
 ## Steps
 
-1. `oxispec check`: are the specs consistent (links, IDs, statuses)? Exit code 1 means errors. Add `--strict` to treat warnings as errors.
+1. `oxispec check`: are the specs consistent (links, IDs, statuses, and claims that contradict each other)? Exit code 1 means errors. Add `--strict` to treat warnings as errors.
 2. `oxispec coverage`: which requirements has no code named, and which scenarios has no test named? Add `--status accepted` to ignore drafts.
 3. `oxispec coverage --require-pass`: the same, counting only scenarios whose tests passed in the imported results. Import them first with `oxispec results import FILE...` (JUnit XML or `go test -json`).
 4. `oxispec suspect`: which links between specs and code changed since they were confirmed?

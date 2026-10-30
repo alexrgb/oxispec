@@ -3304,3 +3304,228 @@ fn context_fills_a_budget_nearest_first_and_lists_what_did_not_fit() {
         out.stderr
     );
 }
+
+/// A repository with a vocabulary and one accepted claim on `main`, and a branch.
+fn claims_project(p: &Path) {
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let out = run(p, &["new", "vocabulary", "Auth words"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("VOC-0001"), "{}", out.stdout);
+    let vocab = p.join("specs/vocabulary/0001-auth-words.md");
+    let text = fs::read_to_string(&vocab).unwrap();
+    fs::write(
+        &vocab,
+        text.replace("# session.idle_timeout", "session.idle_timeout")
+            .replace("# role", "role"),
+    )
+    .unwrap();
+    run(p, &["new", "requirement", "auth", "Default timeout"]);
+    add_claims(p, "default-timeout", "for *: session.idle_timeout == 30m\n");
+    commit_all(p, "a vocabulary and one claim");
+    git(p, &["checkout", "-q", "-b", "feature"]);
+}
+
+/// Accepts the requirement in `slug.md` and puts a `claims` block at its end.
+fn add_claims(p: &Path, slug: &str, claims: &str) {
+    let file = auth_path(p, slug);
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        format!(
+            "{}\n```claims\n{claims}```\n",
+            text.replace("status: draft", "status: accepted")
+        ),
+    )
+    .unwrap();
+}
+
+#[test]
+fn check_finds_a_conflict_between_claims_and_an_overrides_link_settles_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    claims_project(p);
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+
+    run(p, &["new", "requirement", "auth", "Admin timeout"]);
+    add_claims(
+        p,
+        "admin-timeout",
+        "for role = admin: session.idle_timeout <= 15m\n",
+    );
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(out.stdout.contains("E019"), "{}", out.stdout);
+    assert!(out.stdout.contains("when role = admin"), "{}", out.stdout);
+    assert!(out.stdout.contains("REQ-AUTH-0001"), "{}", out.stdout);
+    assert!(out.stdout.contains("REQ-AUTH-0002"), "{}", out.stdout);
+
+    let out = run(p, &["check", "--json"]);
+    let v = json(&out);
+    let conflict = v["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["code"] == "E019")
+        .expect("a conflict");
+    assert_eq!(conflict["severity"], "error");
+    assert_eq!(conflict["id"], "REQ-AUTH-0001");
+
+    // The narrow requirement wins where it applies, so the conflict is intended.
+    let out = run(p, &["link", "REQ-AUTH-0002", "overrides", "REQ-AUTH-0001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+}
+
+#[test]
+fn a_claim_that_cannot_be_read_is_an_error_with_the_reason() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    claims_project(p);
+    run(p, &["new", "requirement", "auth", "Loose"]);
+    add_claims(p, "loose", "for role = admin: session.idle_timeout <= 15\n");
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(out.stdout.contains("E017"), "{}", out.stdout);
+    assert!(out.stdout.contains("write a unit"), "{}", out.stdout);
+    assert!(out.stdout.contains("auth/loose.md:14"), "{}", out.stdout);
+}
+
+#[test]
+fn claims_lists_the_vocabulary_with_its_claims_and_the_share_of_requirements() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    claims_project(p);
+    run(p, &["new", "requirement", "auth", "No claims yet"]);
+
+    let out = run(p, &["claims"]);
+    assert_eq!(out.code, 0, "{}{}", out.stderr, out.stdout);
+    let text = out.stdout;
+    assert!(
+        text.contains("session.idle_timeout (duration), declared in VOC-0001"),
+        "{text}"
+    );
+    assert!(text.contains("role (enum: admin, user, guest)"), "{text}");
+    assert!(
+        text.contains("for *: session.idle_timeout == 30m"),
+        "{text}"
+    );
+    assert!(text.contains("no claims"), "{text}");
+    assert!(
+        text.contains("1 of 2 requirements have claims (50%)"),
+        "{text}"
+    );
+
+    let v = json(&run(p, &["claims", "--json"]));
+    assert_eq!(v["variables"].as_array().unwrap().len(), 2);
+    assert_eq!(v["claims_percent"], 50.0);
+    let timeout = &v["variables"][1];
+    assert_eq!(timeout["name"], "session.idle_timeout");
+    assert_eq!(timeout["type"], "duration");
+    assert_eq!(timeout["claims"][0]["node"], "REQ-AUTH-0001");
+    assert_eq!(timeout["claims"][0]["modality"], "must");
+    assert_eq!(timeout["claims"][0]["active"], true);
+
+    let v = json(&run(p, &["claims", "--json", "--var", "role"]));
+    assert_eq!(v["variables"].as_array().unwrap().len(), 1);
+    let out = run(p, &["claims", "--var", "nope"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("no variable `nope`"), "{}", out.stderr);
+}
+
+#[test]
+fn ci_reports_a_new_conflict_once_and_not_again_after_it_is_merged() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    claims_project(p);
+    run(p, &["new", "requirement", "auth", "Admin timeout"]);
+    add_claims(
+        p,
+        "admin-timeout",
+        "for role = admin: session.idle_timeout <= 15m\n",
+    );
+    let out = run(p, &["ci", "--base", "main", "--json"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    let v = json(&out);
+    assert_eq!(v["errors"], 1);
+    assert_eq!(v["new_findings"][0]["code"], "E019");
+
+    // Merged, the conflict is there but it is not new.
+    commit_all(p, "the admin timeout");
+    git(p, &["checkout", "-q", "-b", "next"]);
+    run(p, &["new", "requirement", "auth", "Something else"]);
+    let out = run(p, &["ci", "--base", "feature", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let v = json(&out);
+    assert_eq!(v["errors"], 0);
+    assert_eq!(v["existing_findings"], 1);
+
+    // Moving the claim down the file does not make it new either.
+    let file = auth_path(p, "admin-timeout");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        text.replace("### Requirement", "A paragraph above.\n\n### Requirement"),
+    )
+    .unwrap();
+    let out = run(p, &["ci", "--base", "feature", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+}
+
+#[test]
+fn claims_need_their_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "minimal"]).code, 0);
+    for args in [&["new", "vocabulary", "Words"][..], &["claims"][..]] {
+        let out = run(p, args);
+        assert_eq!(out.code, 2, "{args:?}");
+        assert!(out.stderr.contains("consistency"), "{}", out.stderr);
+    }
+    assert_eq!(run(p, &["modules", "add", "consistency"]).code, 0);
+    assert_eq!(run(p, &["new", "vocabulary", "Words"]).code, 0);
+    assert!(p.join("specs/vocabulary").is_dir());
+}
+
+#[test]
+fn mcp_offers_the_claims_tool_with_its_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    claims_project(p);
+    let listed = |p: &Path| {
+        tool_names(&mcp(
+            p,
+            &[],
+            &[
+                rpc(
+                    1,
+                    "initialize",
+                    serde_json::json!({"protocolVersion": "2025-06-18"}),
+                ),
+                rpc(2, "tools/list", serde_json::json!({})),
+            ],
+        ))
+    };
+    assert!(listed(p).contains(&"spec_claims".to_string()));
+
+    let (is_error, text) = call_tool(
+        p,
+        "spec_claims",
+        serde_json::json!({"variable": "session.idle_timeout"}),
+    );
+    assert!(!is_error, "{text}");
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["variables"][0]["name"], "session.idle_timeout");
+    assert_eq!(v["variables"][0]["claims"][0]["node"], "REQ-AUTH-0001");
+
+    // An argument that could be read as an option is refused.
+    let (is_error, text) = call_tool(p, "spec_claims", serde_json::json!({"variable": "--json"}));
+    assert!(is_error, "{text}");
+
+    let other = tempfile::tempdir().unwrap();
+    assert_eq!(run(other.path(), &["init", "--preset", "minimal"]).code, 0);
+    assert_eq!(run(other.path(), &["modules", "add", "mcp"]).code, 0);
+    assert!(!listed(other.path()).contains(&"spec_claims".to_string()));
+}

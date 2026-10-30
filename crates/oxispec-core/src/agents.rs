@@ -82,6 +82,12 @@ pub const SKILLS: &[Skill] = &[
         body: include_str!("../skills/propose.md"),
     },
     Skill {
+        name: "oxispec-extract-claims",
+        description: "Write claims for a requirement: the lines a machine can check, such as for role = admin: session.idle_timeout <= 15m, plus the vocabulary they use. Use after writing a requirement with limits, or when oxispec check reports a conflict between claims.",
+        requires: &["consistency"],
+        body: include_str!("../skills/extract-claims.md"),
+    },
+    Skill {
         name: "oxispec-apply",
         description: "Implement an approved change set in code and tests, and tie them to the specs with spec: and verifies: comments. Use when asked to build what a change set or requirement describes.",
         requires: &["specs"],
@@ -288,7 +294,7 @@ mod tests {
         assert!(!minimal.iter().any(|s| s.name == "oxispec-write-adr"));
         assert!(!minimal.iter().any(|s| s.name == "oxispec-release"));
         assert!(!minimal.iter().any(|s| s.name == "oxispec-sync-code"));
-        let all = skills_for(&["core", "specs", "tests", "adrs", "releases"]);
+        let all = skills_for(&["core", "specs", "tests", "adrs", "releases", "consistency"]);
         assert_eq!(all.len(), SKILLS.len());
     }
 

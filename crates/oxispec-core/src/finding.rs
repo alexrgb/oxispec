@@ -92,6 +92,12 @@ pub const CODES: &[(&str, &str)] = &[
         "E016",
         "A link between a spec and code is suspect: either one changed since it was confirmed",
     ),
+    ("E017", "A claim cannot be read"),
+    ("E018", "A vocabulary block cannot be read"),
+    (
+        "E019",
+        "Claims conflict: in some context, no value satisfies them all",
+    ),
     ("W001", "Unknown node type"),
     (
         "W002",
@@ -99,7 +105,19 @@ pub const CODES: &[(&str, &str)] = &[
     ),
     ("W003", "A file could not be read"),
     ("W004", "Unknown link kind"),
+    (
+        "W005",
+        "A SHOULD claim cannot hold in a context where other claims apply",
+    ),
+    (
+        "W006",
+        "A claim never applies, because its scope can never hold",
+    ),
     ("I001", "A link to another project is not checked"),
+    (
+        "I002",
+        "A claim says nothing that another claim does not already say",
+    ),
 ];
 
 #[cfg(test)]

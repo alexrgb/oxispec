@@ -8,6 +8,7 @@ Skills tell an AI coding agent how to work with the specs: how to look things up
 |---|---|---|
 | `oxispec-explore` | core | Finding and reading nodes, history and links before writing |
 | `oxispec-propose` | specs | A change set with new or edited requirements, left for a person to approve |
+| `oxispec-extract-claims` | consistency | Writing claims and the vocabulary for a requirement, and what to do with a conflict |
 | `oxispec-apply` | specs | Implementing an approved change, with `spec:` and `verifies:` comments |
 | `oxispec-verify` | specs | `check`, `coverage`, test results and suspect links, in order |
 | `oxispec-sync-code` | tests | Deciding which side is right for a suspect link, then confirming |
@@ -18,7 +19,7 @@ Skills tell an AI coding agent how to work with the specs: how to look things up
 
 Nothing is written for a module that is off, so an agent only sees the skills that apply. The skills never approve, merge or publish on their own. They tell the agent to leave that to a person.
 
-The skills for claims, consistency checks and decision logs come with the modules that support them.
+The skill for decision logs comes with the module that supports it.
 
 ## Where the files go
 

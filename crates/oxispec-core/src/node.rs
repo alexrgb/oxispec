@@ -54,6 +54,20 @@ pub struct RequirementBlock {
     pub scenarios: Vec<Scenario>,
 }
 
+/// One line of a fenced `claims` block, as written. [`crate::claims`] reads it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaimLine {
+    pub line: usize,
+    pub text: String,
+}
+
+/// The text of a fenced `vocabulary` block and the line it starts on.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextBlock {
+    pub line: usize,
+    pub text: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
     pub id: String,
@@ -73,6 +87,12 @@ pub struct Node {
     /// Link kind to target IDs, for example `decided-by` to `[ADR-0007]`.
     pub links: BTreeMap<String, Vec<String>>,
     pub requirements: Vec<RequirementBlock>,
+    /// Lines of `claims` blocks, for the consistency checks.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub claims: Vec<ClaimLine>,
+    /// `vocabulary` blocks, which declare the variables claims talk about.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vocabulary: Vec<TextBlock>,
     /// BLAKE3 hash of everything after the frontmatter, to see that the text changed.
     #[serde(default)]
     pub body_hash: String,
@@ -107,6 +127,7 @@ pub const KNOWN_TYPES: &[&str] = &[
     "person",
     "deployment-environment",
     "release",
+    "vocabulary",
 ];
 
 /// Link kinds known to this version (design section 4). Others get a
