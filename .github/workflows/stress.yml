@@ -1,0 +1,58 @@
+name: stress
+
+# Performance and load checks on big generated projects. They take minutes, so they run
+# every week and on request, not on every pull request. See docs/stress.md.
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: Size of the generated project
+        type: choice
+        options: [small, medium, large]
+        default: large
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PRESET: ${{ inputs.preset || 'large' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked -p oxispec -p oxispec-stress
+      - name: Time every command, against its budget
+        run: |
+          ./target/release/oxispec-stress run --preset "$PRESET" --repeat 3 --json run.json
+      - name: Many MCP clients at once
+        run: |
+          ./target/release/oxispec-stress load --preset "$PRESET" --mode mcp \
+            --clients 16 --requests 100 --max-p95-ms 5000 --json mcp.json
+      - name: Many processes sharing one project, with writers
+        run: |
+          ./target/release/oxispec-stress load --preset small --mode cli \
+            --clients 8 --requests 20 --writers 4 --json cli.json
+      - name: Pathological shapes
+        run: |
+          for shape in "--hot-claims 3000" "--machine-states 10000 --machines 2" \
+                       "--fat-kb 200 --requirements 300" "--chain 3000 --requirements 3000" \
+                       "--conflicts 50"; do
+            echo "::group::$shape"
+            ./target/release/oxispec-stress run --preset small $shape --repeat 1 --no-budget
+            echo "::endgroup::"
+          done
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: stress-${{ env.PRESET }}
+          path: "*.json"

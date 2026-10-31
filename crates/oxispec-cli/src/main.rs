@@ -543,6 +543,19 @@ enum ReleaseAction {
 }
 
 fn main() -> ExitCode {
+    // `oxispec ... | head` closes our output early. `println!` panics on that, and the
+    // panic message is noise: stop quietly, as other command line tools do.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let text = info.to_string();
+        // Unix says "Broken pipe" (32). Windows says "The pipe is being closed" (232)
+        // or "The pipe has been ended" (109).
+        let closed = ["Broken pipe", "os error 32", "os error 232", "os error 109"];
+        if closed.iter().any(|c| text.contains(c)) {
+            std::process::exit(0);
+        }
+        default_hook(info);
+    }));
     match run(Cli::parse()) {
         Ok(code) => code,
         Err(e) => {
@@ -647,6 +660,9 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let root = project_root(cli.root.as_deref())?;
             let cfg = config::load(&root)?;
             let scheme = id_scheme.map_or(cfg.id_scheme, IdScheme::from);
+            // Allocating an ID and writing its file must not interleave with another
+            // `oxispec new` in the same project, or both would pick the same number.
+            let _lock = lock_for_new(&root)?;
             let created = match kind {
                 NewKind::Requirement { domain, title } => {
                     require_module(&cfg, "specs")?;
@@ -1608,6 +1624,21 @@ fn new_element(
         .replace("@FIELDS@", element_fields(kind));
     write_new(root, &rel, &body)?;
     Ok((id, rel))
+}
+
+/// An exclusive lock, held until the returned file is dropped.
+fn lock_for_new(root: &Path) -> Result<fs::File> {
+    let dir = root.join(oxispec_core::index::CACHE_DIR);
+    fs::create_dir_all(&dir)?;
+    let file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(dir.join("new.lock"))
+        .context("cannot create the lock for `oxispec new`")?;
+    file.lock()
+        .context("cannot lock the project for `oxispec new`")?;
+    Ok(file)
 }
 
 fn new_machine(

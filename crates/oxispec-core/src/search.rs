@@ -297,6 +297,20 @@ pub fn search(
 ) -> Result<(Vec<Hit>, SyncStats), Error> {
     let (schema, fields) = schema();
     let dir = root.join(SEARCH_DIR);
+    // Two processes must not build or update the stored index at once: one would
+    // delete the files the other is writing. The lock is released when `_lock` is dropped.
+    let _lock = if persist {
+        fs::create_dir_all(root.join(crate::index::CACHE_DIR))?;
+        let file = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(false)
+            .open(root.join(crate::index::CACHE_DIR).join("search.lock"))?;
+        file.lock()?;
+        Some(file)
+    } else {
+        None
+    };
     let (index, previous) = if persist {
         open(&dir, &schema, rebuild)?
     } else {
@@ -438,6 +452,23 @@ mod tests {
             "---\nid: ADR-0001\ntype: adr\n---\n# ADR-0001: Use Postgres\n\nThe system stores sessions in Postgres.\n",
         );
         dir
+    }
+
+    #[test]
+    fn searches_at_the_same_time_share_one_index_without_errors() {
+        let dir = project();
+        let root = dir.path().to_path_buf();
+        let graph = std::sync::Arc::new(crate::graph::Graph::load(&root));
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let (root, graph) = (root.clone(), graph.clone());
+                std::thread::spawn(move || search(&root, &graph, true, false, &query("session")))
+            })
+            .collect();
+        for h in handles {
+            let (hits, _) = h.join().unwrap().expect("a search that does not fail");
+            assert!(!hits.is_empty());
+        }
     }
 
     #[test]

@@ -19,7 +19,8 @@ pub struct FrontmatterSpan {
 pub fn frontmatter_span(text: &str) -> Option<FrontmatterSpan> {
     let mut lines = text.split_inclusive('\n');
     let first = lines.next()?;
-    if first.trim_end() != "---" {
+    // Editors on Windows can put a byte order mark before the first line.
+    if first.trim_start_matches('\u{feff}').trim_end() != "---" {
         return None;
     }
     let yaml_start = first.len();
@@ -295,6 +296,14 @@ mod tests {
     use super::*;
 
     const GOOD: &str = "---\nid: REQ-AUTH-0001\ntype: requirement\nlinks:\n  decided-by: [ADR-0001]\n  governed-by: STD-GO-001\n---\n### Requirement: Login\nThe system SHALL issue a token.\n\n#### Scenario: Valid\n- **WHEN** a user logs in\n- **THEN** a token is returned\n";
+
+    #[test]
+    fn a_byte_order_mark_before_the_frontmatter_is_ignored() {
+        let text = format!("\u{feff}{GOOD}");
+        let (node, findings) = parse_file_text(Path::new("a.md"), &text);
+        assert!(findings.is_empty());
+        assert_eq!(node.expect("a node").id, "REQ-AUTH-0001");
+    }
 
     #[test]
     fn parses_node_and_requirements() {
