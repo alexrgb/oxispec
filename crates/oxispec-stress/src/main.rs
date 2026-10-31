@@ -224,7 +224,11 @@ fn main() -> Result<ExitCode> {
                     let big = r.rss_mb.is_some_and(|m| m > mb);
                     note = format!(
                         "{secs:.1}s, {mb:.0} MB{}",
-                        if slow || big { "  OVER" } else { "" }
+                        match (slow || big, no_budget) {
+                            (false, _) => "",
+                            (true, false) => "  OVER",
+                            (true, true) => "  over (not enforced)",
+                        }
                     );
                     over += usize::from((slow || big) && !no_budget);
                 }
