@@ -1995,4 +1995,149 @@ mod tests {
         )]);
         assert!(check(&g).is_empty());
     }
+
+    // ------------------------------------------------------- against brute force
+
+    /// A claim on `x`, as written and as a test of the values it allows.
+    struct Random {
+        text: String,
+        scope: Box<dyn Fn(usize, i64) -> bool>,
+        allows: Box<dyn Fn(i64) -> bool>,
+    }
+
+    struct Xorshift(u64);
+
+    impl Xorshift {
+        fn below(&mut self, n: usize) -> usize {
+            self.0 ^= self.0 >> 12;
+            self.0 ^= self.0 << 25;
+            self.0 ^= self.0 >> 27;
+            (self.0.wrapping_mul(0x2545F4914F6CDD1D) % n as u64) as usize
+        }
+    }
+
+    const ROLES: [&str; 3] = ["a", "b", "c"];
+
+    /// A random claim: a scope over `role` and `lvl`, and a constraint on `x`.
+    fn random_claim(rng: &mut Xorshift) -> Random {
+        // The scope: a test of role, a test of lvl, both, or neither.
+        let role_test: Option<(String, Vec<usize>)> = match rng.below(4) {
+            0 => {
+                let r = rng.below(3);
+                Some((format!("role = {}", ROLES[r]), vec![r]))
+            }
+            1 => {
+                let r = rng.below(3);
+                Some((
+                    format!("role != {}", ROLES[r]),
+                    (0..3).filter(|&i| i != r).collect(),
+                ))
+            }
+            2 => {
+                let (p, q) = (rng.below(3), rng.below(3));
+                let mut set = vec![p, q];
+                set.sort_unstable();
+                set.dedup();
+                let names: Vec<_> = set.iter().map(|&i| ROLES[i]).collect();
+                Some((format!("role in [{}]", names.join(", ")), set))
+            }
+            _ => None,
+        };
+        let level = rng.below(5) as i64 - 1;
+        let lvl_test: Option<(String, i64, bool)> = match rng.below(3) {
+            0 => Some((format!("lvl >= {level}"), level, true)),
+            1 => Some((format!("lvl < {level}"), level, false)),
+            _ => None,
+        };
+        let mut parts = Vec::new();
+        parts.extend(role_test.as_ref().map(|(t, _)| t.clone()));
+        parts.extend(lvl_test.as_ref().map(|(t, _, _)| t.clone()));
+        let scope_text = if parts.is_empty() {
+            "*".to_string()
+        } else {
+            parts.join(" and ")
+        };
+        // The constraint on x.
+        let bound = rng.below(7) as i64 - 3;
+        let (constraint, op): (String, u8) = match rng.below(5) {
+            0 => (format!("x <= {bound}"), 0),
+            1 => (format!("x >= {bound}"), 1),
+            2 => (format!("x == {bound}"), 2),
+            3 => (format!("x != {bound}"), 3),
+            _ => (format!("x < {bound}"), 4),
+        };
+        let role_set = role_test.map(|(_, set)| set);
+        Random {
+            text: format!("for {scope_text}: {constraint}"),
+            scope: Box::new(move |role, lvl| {
+                role_set.as_ref().is_none_or(|set| set.contains(&role))
+                    && lvl_test
+                        .as_ref()
+                        .is_none_or(|&(_, at, ge)| if ge { lvl >= at } else { lvl < at })
+            }),
+            allows: Box::new(move |x| match op {
+                0 => x <= bound,
+                1 => x >= bound,
+                2 => x == bound,
+                3 => x != bound,
+                _ => x < bound,
+            }),
+        }
+    }
+
+    /// True when some role and level make the claims that apply impossible to satisfy together.
+    fn brute_force_conflict(claims: &[Random]) -> bool {
+        for role in 0..3 {
+            for lvl in -6..=6 {
+                let applying: Vec<_> = claims.iter().filter(|c| (c.scope)(role, lvl)).collect();
+                if applying.len() > 1 && !(-10..=10).any(|x| applying.iter().all(|c| (c.allows)(x)))
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    #[test]
+    fn the_solver_agrees_with_brute_force_on_random_claims() {
+        let vocab = "---\nid: VOC-0001\ntype: vocabulary\n---\n# Words\n\n```vocabulary\nx: {type: int}\nlvl: {type: int}\nrole: {type: enum, values: [a, b, c]}\n```\n";
+        let mut rng = Xorshift(0x9E3779B97F4A7C15);
+        let (mut conflicts, mut clean) = (0, 0);
+        for case in 0..600 {
+            let count = 2 + rng.below(3);
+            let claims: Vec<Random> = (0..count).map(|_| random_claim(&mut rng)).collect();
+            let mut nodes = vec![node("vocab.md", vocab)];
+            for (i, c) in claims.iter().enumerate() {
+                nodes.push(node(
+                    &format!("r{i}.md"),
+                    &requirement(
+                        &format!("REQ-A-{:04}", i + 1),
+                        "accepted",
+                        "",
+                        &format!("{}\n", c.text),
+                    ),
+                ));
+            }
+            let found = check(&Graph::from_nodes(nodes))
+                .iter()
+                .any(|f| f.code == "E019");
+            let expected = brute_force_conflict(&claims);
+            let texts: Vec<_> = claims.iter().map(|c| c.text.as_str()).collect();
+            assert_eq!(
+                found, expected,
+                "case {case}: solver says {found}, brute force says {expected} for {texts:?}"
+            );
+            if expected {
+                conflicts += 1;
+            } else {
+                clean += 1;
+            }
+        }
+        // The random claims have to cover both answers, or the test proves little.
+        assert!(
+            conflicts > 40 && clean > 40,
+            "{conflicts} conflicts, {clean} clean"
+        );
+    }
 }

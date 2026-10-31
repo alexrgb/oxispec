@@ -10,13 +10,13 @@ Line coverage from `cargo llvm-cov` is **95.6%** overall (13,225 lines, 583 miss
 
 | File | Line coverage | What is not covered |
 |---|---|---|
-| `oxispec-cli/src/agents.rs` | 70.7% | the paths that write and replace skill files |
-| `oxispec-cli/src/context.rs` | 84.0% | error paths of `oxispec context` |
+| `oxispec-cli/src/agents.rs` | 70.7% at review time | `agents list`, bad client names and drift reports, now tested |
+| `oxispec-cli/src/context.rs` | 84.0% at review time | pointers when the budget is small, now tested |
 | `oxispec-cli/src/machines.rs` | 90.0% | `--at` and some error paths |
 | `oxispec-cli/src/rollback.rs` | 91.0% | refusal paths |
 | `oxispec-core/src/report.rs` | 90.6% | some SARIF and comment branches |
 
-Coverage says what ran, not that the answers are right. What gives confidence in the answers: the claims solver is tested on many conflict shapes, the generated projects have an oracle (`check` must find exactly the planted conflicts), and the CLI tests check real output, not only exit codes.
+Coverage says what ran, not that the answers are right. A property test compares the claims solver with a brute force over every role and level for random claims (600 cases in the suite, and 20,000 in one run with no disagreement). What else gives confidence in the answers: the claims solver is tested on many conflict shapes, the generated projects have an oracle (`check` must find exactly the planted conflicts), and the CLI tests check real output, not only exit codes.
 
 ## Findings
 
@@ -56,6 +56,4 @@ MCP load, 8 clients on 2,000 requirements: about 100 requests per second, p95 ar
 ## What to do next
 
 1. Tighten the budgets further. The first run on a CI machine (large preset, Linux) was well inside them. The budgets for cold `check`, `index` and `site` on `large` are now 3 s, 3 s and 5 s, and the others are still about four times a laptop measurement.
-2. Add a property test that compares the claims solver with a brute force over small domains. It is the piece where a wrong answer would be silent.
-3. Cover the weak files above, starting with `oxispec-cli/src/agents.rs`.
-4. Before server mode, hold the graph in memory so a request does not start a process.
+2. Before server mode, hold the graph in memory so a request does not start a process.

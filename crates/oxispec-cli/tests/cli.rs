@@ -4169,3 +4169,115 @@ fn links_added_at_the_same_time_to_one_file_are_all_kept() {
     let links = v["node"]["links"]["refines"].as_array().unwrap();
     assert_eq!(links.len(), 8, "{v}");
 }
+
+#[test]
+fn agents_list_names_clients_and_skills_and_bad_client_names_are_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(
+        run(p, &["init", "--preset", "standard", "--agents", "claude"]).code,
+        0
+    );
+
+    let out = run(p, &["agents", "list"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("* claude"), "{}", out.stdout);
+    assert!(out.stdout.contains("  cursor"), "{}", out.stdout);
+    assert!(out.stdout.contains("oxispec-explore"), "{}", out.stdout);
+
+    let v = json(&run(p, &["agents", "list", "--json"]));
+    assert_eq!(v["module_enabled"], true);
+    assert_eq!(v["clients"][0]["selected"], true);
+    assert!(
+        v["skills"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["name"] == "oxispec-model-architecture" && s["enabled"] == true)
+    );
+
+    let out = run(p, &["agents", "update", "--client", "nope"]);
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("unknown client `nope`"),
+        "{}",
+        out.stderr
+    );
+    let out = run(p, &["agents", "check", "--client", "nope"]);
+    assert_eq!(out.code, 2);
+
+    // A skill edited by hand is reported, and a dry run writes nothing.
+    let skill = p.join(".claude/skills/oxispec-explore/SKILL.md");
+    fs::write(&skill, "my own text\n").unwrap();
+    let out = run(p, &["agents", "check", "--json"]);
+    assert_eq!(out.code, 1);
+    let v = json(&out);
+    assert_eq!(v["ok"], false);
+    assert!(
+        v["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["state"] == "edited")
+    );
+    let out = run(p, &["agents", "update", "--dry-run", "--force"]);
+    assert!(out.stdout.contains("would write"), "{}", out.stdout);
+    assert_eq!(fs::read_to_string(&skill).unwrap(), "my own text\n");
+}
+
+#[test]
+fn init_refuses_unknown_clients_and_none_combined_with_others() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q", "-b", "main"]);
+    let out = run(p, &["init", "--preset", "standard", "--agents", "bogus"]);
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("unknown client `bogus`"),
+        "{}",
+        out.stderr
+    );
+    let out = run(
+        p,
+        &["init", "--preset", "standard", "--agents", "none,claude"],
+    );
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("none"), "{}", out.stderr);
+    assert!(!p.join(".oxispec").exists());
+    let out = run(p, &["init", "--preset", "standard", "--agents", "none"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(!p.join(".claude").exists());
+}
+
+#[test]
+fn a_small_budget_leaves_related_nodes_as_pointers() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(
+        run(p, &["init", "--preset", "standard", "--agents", "none"]).code,
+        0
+    );
+    for n in 1..=4 {
+        run(p, &["new", "requirement", "a", &format!("R{n}")]);
+    }
+    for n in 2..=4 {
+        let to = format!("REQ-A-000{n}");
+        assert_eq!(run(p, &["link", "REQ-A-0001", "refines", &to]).code, 0);
+    }
+    let out = run(p, &["context", "REQ-A-0001", "--budget", "120"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(
+        out.stdout.contains("## Related, not included"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("- REQ-A-0004 (requirement)"),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["context", "REQ-A-9999"]);
+    assert_eq!(out.code, 2);
+}
