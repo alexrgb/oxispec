@@ -177,6 +177,13 @@ impl Server<'_> {
                 false,
             ),
             tool(
+                "spec_status",
+                "A summary of the project: nodes by type and status, error and warning counts by code, change sets in flight, the share of requirements with claims and the latest release. Start here to see what needs attention.",
+                json!({"at": rev}),
+                &[],
+                false,
+            ),
+            tool(
                 "spec_history",
                 "How a node changed over time: commits, authors and dates.",
                 json!({"id": id_property, "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}}),
@@ -282,6 +289,14 @@ impl Server<'_> {
             }
             "spec_check" => {
                 let mut cmd = vec!["check", "--json"];
+                let at = optional_rev(args, "at")?;
+                if let Some(at) = &at {
+                    cmd.extend(["--at", at]);
+                }
+                self.cli(&cmd)
+            }
+            "spec_status" => {
+                let mut cmd = vec!["status", "--json"];
                 let at = optional_rev(args, "at")?;
                 if let Some(at) = &at {
                     cmd.extend(["--at", at]);

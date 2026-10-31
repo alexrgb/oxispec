@@ -25,6 +25,7 @@ pub mod results;
 pub mod rollback;
 pub mod search;
 pub mod site;
+pub mod status;
 pub mod suspect;
 pub mod symbol;
 pub mod trace;
