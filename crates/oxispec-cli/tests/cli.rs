@@ -3650,7 +3650,19 @@ fn machine_lists_shows_draws_and_writes_tests() {
 
     let v = json(&run(p, &["machine", "SM-0001", "--tests", "--json"]));
     assert_eq!(v["tests"].as_array().unwrap().len(), 5);
+    assert_eq!(v["total"], 5);
+    assert_eq!(v["truncated"], false);
     assert_eq!(v["tests"][0]["implements"][0], "REQ-AUTH-0001");
+
+    let v = json(&run(
+        p,
+        &["machine", "SM-0001", "--tests", "--limit", "2", "--json"],
+    ));
+    assert_eq!(v["tests"].as_array().unwrap().len(), 2);
+    assert_eq!(v["total"], 5);
+    assert_eq!(v["truncated"], true);
+    let out = run(p, &["machine", "SM-0001", "--tests", "--limit", "2"]);
+    assert!(out.stdout.contains("2 of 5 tests shown"), "{}", out.stdout);
 
     let out = run(p, &["machine", "SM-9999"]);
     assert_eq!(out.code, 2);

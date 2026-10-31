@@ -20,13 +20,15 @@ Coverage says what ran, not that the answers are right. What gives confidence in
 
 ## Findings
 
-Fixed in the pull request that added this review:
+Fixed in the pull requests that added this review and the stress tool:
 
 1. **Concurrent searches broke the search index.** Several `oxispec search` processes starting together on a cold cache deleted each other's files, and 132 of 133 MCP search calls failed in the load test. A file lock now serializes it, and a test covers it.
 2. **Concurrent `oxispec new` gave two requirements the same ID.** 26 of 48 requirements collided with four writers. Choosing an ID and writing its file are now under a lock, and a test covers it.
 3. **A byte order mark hid a file.** A node file saved with a BOM (Windows editors do this) was silently not a node. It is read now.
 4. **A closed pipe printed a panic.** `oxispec init | head` ended with a Rust panic message. It now stops quietly.
 5. **The deployment view was quadratic.** Building edges compared every pair of hosted elements and allocated for each, about half a second at 1,500 containers. It uses a lookup now.
+
+6. **`machine --tests` ran out of memory on a big machine.** It built every test's whole path before printing, so memory grew with transitions times depth, and the CI runner killed it on a 10,000-state machine. The tests are made one at a time now, there is a `--limit`, and the MCP tool returns at most 200. The stress workflow on `main` found this one, on its first run.
 
 Not fixed, and worth knowing:
 
@@ -49,11 +51,11 @@ Release build, on a laptop that was busy, so read these as orders of magnitude (
 
 Peak memory stayed under 130 MB on the large project. 3,000 claims on one variable, a chain of 3,000 refining requirements, 400 KB requirements and 20 planted conflicts all stayed fast and correct.
 
-MCP load, 8 clients on 2,000 requirements: about 100 requests per second, p95 around 120 ms, no errors once the search lock was in.
+MCP load, 8 clients on 2,000 requirements: about 100 requests per second, p95 around 120 ms, no errors once the search lock was in. On the large project, 16 clients on a CI runner: 6.4 requests per second and p95 4.3 s, because every call starts a process that loads 12,000 nodes. This is the cost of one process per call, in numbers.
 
 ## What to do next
 
-1. Run the `stress` workflow once on `main` and keep its numbers as the baseline. The budgets were set from laptop runs and have not yet run on a CI machine.
+1. Tighten the budgets. The first run on a CI machine (large preset, Linux) was well inside them: cold `check` 0.7 s against a budget of 13.6 s, `site` 1.0 s against 35 s. Cold start is the part that was slow on the laptop and is fast on the runner.
 2. Add a property test that compares the claims solver with a brute force over small domains. It is the piece where a wrong answer would be silent.
 3. Cover the weak files above, starting with `oxispec-cli/src/agents.rs`.
 4. Read files in parallel on a cold start, and decide whether the other editing commands need the same lock as `new`.

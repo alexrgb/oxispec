@@ -343,7 +343,9 @@ impl Server<'_> {
                 match optional_word(args, "view")?.as_deref() {
                     None | Some("summary") => cmd.push("--json"),
                     Some("diagram") if node.is_some() => cmd.push("--diagram"),
-                    Some("tests") if node.is_some() => cmd.extend(["--tests", "--json"]),
+                    Some("tests") if node.is_some() => {
+                        cmd.extend(["--tests", "--limit", "200", "--json"])
+                    }
                     Some("diagram" | "tests") => anyhow::bail!("`view` needs an `id`"),
                     Some(other) => {
                         anyhow::bail!("`view` is summary, diagram or tests, not `{other}`")

@@ -72,7 +72,7 @@ Different guards on one event are taken to exclude each other. Messages carry no
 oxispec machine                      # every machine, with the number of violated properties
 oxispec machine SM-ORDER             # transitions, and each property with its counterexample
 oxispec machine SM-ORDER --diagram   # a Mermaid stateDiagram-v2
-oxispec machine SM-ORDER --tests     # one test for each transition
+oxispec machine SM-ORDER --tests     # one test for each transition (--limit N prints the first N)
 oxispec machine SM-ORDER --json
 ```
 
@@ -87,6 +87,8 @@ SM-ORDER: shipped on deliver to delivered
   created -pay-> paid -ship-> shipped -deliver-> delivered
   covers REQ-ORD-0005
 ```
+
+The tests are made and printed one at a time, so memory stays small, but the output is as long as the paths: a machine of 10,000 states in a chain prints tens of millions of steps. Use `--limit`. The MCP tool returns at most 200.
 
 This is a list for people and agents to turn into tests in your own framework. A longer path cover and export to XState or SCXML are not done yet.
 

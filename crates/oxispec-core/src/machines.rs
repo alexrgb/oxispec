@@ -718,28 +718,78 @@ pub fn diagram(machine: &Machine) -> String {
 
 /// One test per transition: the shortest path from the initial state, then the
 /// transition itself. Transitions that cannot be reached have no test.
-pub fn tests(machine: &Machine) -> Vec<TestCase> {
-    let Some(net) = Net::new(machine) else {
-        return Vec::new();
-    };
-    let reached = net.reachable();
-    let mut cases = Vec::new();
-    for (position, t) in machine.transitions.iter().enumerate() {
-        let (Some(from), Some(_)) = (net.state(&t.from), net.state(&t.to)) else {
-            continue;
-        };
-        if reached[from].is_none() {
-            continue;
-        }
-        let mut steps = net.path(&reached, from);
-        steps.push(net.step(position));
-        cases.push(TestCase {
-            name: format!("{}: {} on {} to {}", machine.node, t.from, t.event, t.to),
-            steps,
-            implements: t.implements.clone(),
-        });
+///
+/// The tests are made one at a time. A path can be thousands of steps long, so all of
+/// them together grow with transitions times depth, and a big machine would not fit in memory.
+pub struct TestCases<'a> {
+    machine: &'a Machine,
+    net: Option<Net<'a>>,
+    reached: Vec<Option<Option<usize>>>,
+    next: usize,
+}
+
+pub fn test_cases(machine: &Machine) -> TestCases<'_> {
+    let net = Net::new(machine);
+    let reached = net.as_ref().map(Net::reachable).unwrap_or_default();
+    TestCases {
+        machine,
+        net,
+        reached,
+        next: 0,
     }
-    cases
+}
+
+impl TestCases<'_> {
+    /// The positions of the transitions that have a test.
+    fn testable(&self, position: usize) -> bool {
+        let Some(net) = &self.net else {
+            return false;
+        };
+        let t = &self.machine.transitions[position];
+        match (net.state(&t.from), net.state(&t.to)) {
+            (Some(from), Some(_)) => self.reached[from].is_some(),
+            _ => false,
+        }
+    }
+
+    /// How many tests there are, without making them.
+    pub fn total(&self) -> usize {
+        (0..self.machine.transitions.len())
+            .filter(|&p| self.testable(p))
+            .count()
+    }
+}
+
+impl Iterator for TestCases<'_> {
+    type Item = TestCase;
+
+    fn next(&mut self) -> Option<TestCase> {
+        while self.next < self.machine.transitions.len() {
+            let position = self.next;
+            self.next += 1;
+            if !self.testable(position) {
+                continue;
+            }
+            let net = self.net.as_ref()?;
+            let t = &self.machine.transitions[position];
+            let from = net.state(&t.from)?;
+            let mut steps = net.path(&self.reached, from);
+            steps.push(net.step(position));
+            return Some(TestCase {
+                name: format!(
+                    "{}: {} on {} to {}",
+                    self.machine.node, t.from, t.event, t.to
+                ),
+                steps,
+                implements: t.implements.clone(),
+            });
+        }
+        None
+    }
+}
+
+pub fn tests(machine: &Machine) -> Vec<TestCase> {
+    test_cases(machine).collect()
 }
 
 // ---------------------------------------------------------------- tests
@@ -1009,6 +1059,30 @@ transitions:
             "initial: a\nstates: [a, b, c]\ntransitions:\n  - {from: b, event: x, to: c}\n",
         );
         assert!(tests(&cut).is_empty());
+    }
+
+    #[test]
+    fn tests_are_made_one_at_a_time_and_counted_without_making_them() {
+        let n = 4000;
+        let states: Vec<String> = (0..n).map(|i| format!("s{i}")).collect();
+        let mut block = format!(
+            "initial: s0\nstates: [{}]\nfinal: [s{}]\ntransitions:\n",
+            states.join(", "),
+            n - 1
+        );
+        for i in 0..n - 1 {
+            block.push_str(&format!(
+                "  - {{from: s{i}, event: next, to: s{}}}\n",
+                i + 1
+            ));
+        }
+        let m = machine(&block);
+        let cases = test_cases(&m);
+        assert_eq!(cases.total(), n - 1);
+        // The last test is a path of n - 1 steps. Taking only the first few does not build it.
+        let first: Vec<_> = test_cases(&m).take(2).collect();
+        assert_eq!(first[1].steps.len(), 2);
+        assert_eq!(test_cases(&m).last().unwrap().steps.len(), n - 1);
     }
 
     #[test]

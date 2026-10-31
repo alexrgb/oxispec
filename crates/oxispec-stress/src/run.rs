@@ -40,7 +40,7 @@ pub fn scenarios(site_out: &Path) -> Vec<Scenario> {
         s("machine (all)", &["machine", "--json"], false),
         s(
             "machine tests",
-            &["machine", "SM-0001", "--tests", "--json"],
+            &["machine", "SM-0001", "--tests", "--limit", "200", "--json"],
             false,
         ),
         s(
