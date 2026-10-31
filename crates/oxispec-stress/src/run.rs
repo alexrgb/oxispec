@@ -178,8 +178,9 @@ pub fn run_all(bin: &Path, dir: &Path, repeat: usize, site_out: &Path) -> Result
 }
 
 /// The most seconds a command may take on a project of this size, with the memory it may use.
-/// These are about four times what a laptop measured, so a slow CI runner passes and a
-/// change that makes something ten times slower does not.
+/// These are about four times what was measured (the laptop for small and medium, a CI
+/// runner for large), so a slower runner passes and a change that makes something several
+/// times slower does not.
 pub fn budget(name: &str, preset: &str) -> Option<(f64, f64)> {
     let table: &[(&str, [(f64, f64); 3])] = BUDGETS;
     let at = match preset {
@@ -193,13 +194,13 @@ pub fn budget(name: &str, preset: &str) -> Option<(f64, f64)> {
 
 /// (seconds, megabytes) for small, medium and large, per scenario.
 const BUDGETS: &[(&str, [(f64, f64); 3])] = &[
-    ("check (cold)", [(1.0, 100.0), (1.0, 100.0), (13.6, 230.0)]),
+    ("check (cold)", [(1.0, 100.0), (1.0, 100.0), (3.0, 230.0)]),
     ("check (warm)", [(1.0, 100.0), (1.0, 100.0), (1.1, 270.0)]),
     (
         "check --changed",
         [(1.0, 100.0), (1.0, 100.0), (1.6, 270.0)],
     ),
-    ("index", [(1.0, 100.0), (1.0, 100.0), (9.3, 200.0)]),
+    ("index", [(1.0, 100.0), (1.0, 100.0), (3.0, 200.0)]),
     ("search", [(1.0, 100.0), (1.0, 130.0), (1.4, 290.0)]),
     ("trace", [(1.0, 100.0), (1.0, 100.0), (2.6, 300.0)]),
     ("coverage", [(1.0, 100.0), (1.0, 100.0), (1.3, 290.0)]),
@@ -218,7 +219,7 @@ const BUDGETS: &[(&str, [(f64, f64); 3])] = &[
     ("history", [(1.0, 100.0), (1.0, 100.0), (1.3, 270.0)]),
     ("diff v1", [(1.0, 100.0), (2.8, 100.0), (6.1, 380.0)]),
     ("ci --base v1", [(1.2, 100.0), (4.1, 110.0), (7.5, 380.0)]),
-    ("site", [(1.0, 100.0), (2.0, 100.0), (35.2, 270.0)]),
+    ("site", [(1.0, 100.0), (2.0, 100.0), (5.0, 270.0)]),
 ];
 
 /// What `check` must say about a project made by `generate`: the planted conflicts and nothing
