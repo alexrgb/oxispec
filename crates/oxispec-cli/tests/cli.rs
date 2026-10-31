@@ -4006,3 +4006,123 @@ fn the_library_dependency_version_matches_the_release_version() {
         "`oxispec-core` in [workspace.dependencies] must say {want}; see docs/releasing.md"
     );
 }
+
+#[test]
+fn new_commands_running_at_once_get_different_ids() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(run(p, &["init", "--preset", "minimal"]).code, 0);
+    let handles: Vec<_> = (0..8)
+        .map(|n| {
+            let p = p.to_path_buf();
+            std::thread::spawn(move || {
+                for k in 0..4 {
+                    let out = run(
+                        &p,
+                        &["new", "requirement", "race", &format!("writer {n} {k}")],
+                    );
+                    assert_eq!(out.code, 0, "{}", out.stderr);
+                }
+            })
+        })
+        .collect();
+    for h in handles {
+        h.join().unwrap();
+    }
+    let v = json(&run(p, &["check", "--json"]));
+    let duplicates = v["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["code"] == "E001")
+        .count();
+    assert_eq!(duplicates, 0, "{v}");
+    assert_eq!(v["nodes"], 32, "{v}");
+}
+
+#[test]
+fn a_closed_pipe_ends_the_program_quietly() {
+    use std::process::Stdio;
+    let dir = tempfile::tempdir().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_oxispec"))
+        .args(["init", "--preset", "standard"])
+        .current_dir(dir.path())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Like `oxispec init | true`: nobody reads the output.
+    drop(child.stdout.take());
+    let out = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!stderr.contains("panicked"), "{stderr}");
+}
+
+#[test]
+fn hostile_files_never_make_a_command_panic() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(
+        run(p, &["init", "--preset", "standard", "--agents", "none"]).code,
+        0
+    );
+    let h = p.join("specs/h");
+    fs::create_dir_all(&h).unwrap();
+    let files: &[(&str, &[u8])] = &[
+        ("empty.md", b""),
+        ("dashes.md", b"---\n"),
+        ("nothing.md", b"---\n---\n"),
+        ("binary.md", b"\xff\xfe\x00bad"),
+        ("nul.md", b"---\nid: REQ-H-0006\ntype: requirement\n---\nNUL \x00 here ### Requirement: x\n"),
+        ("bom.md", b"\xef\xbb\xbf---\nid: REQ-H-0002\ntype: requirement\n---\n### Requirement: Bom\nThe system SHALL.\n"),
+        ("nested.md", b"---\nid: REQ-H-0004\ntype: requirement\nlinks:\n  satisfies:\n    - a: {b: [c]}\n---\ntext\n"),
+        ("self.md", b"---\nid: REQ-H-0005\ntype: requirement\nlinks:\n  supersedes: REQ-H-0005\n  refines: REQ-H-0005\n---\n### Requirement: Self\nThe system SHALL.\n\n#### Scenario: S\n- a\n"),
+        ("open.md", b"---\nid: SM-H-0001\ntype: state-machine\n---\n```statemachine\ninitial: a\nstates: [a\n"),
+        ("crlf.md", b"---\r\nid: SM-H-0002\r\ntype: state-machine\r\n---\r\n```statemachine\r\ninitial: a\r\nstates: [a, b]\r\ntransitions:\r\n  - {from: a, event: go, to: b}\r\nproperties:\r\n  - never reach b\r\n```\r\n"),
+        ("arch.md", b"---\r\nid: C4-H-0001\r\ntype: system\r\n---\r\n```architecture\r\nname: X\r\n```\r\n"),
+    ];
+    for (name, bytes) in files {
+        fs::write(h.join(name), bytes).unwrap();
+    }
+    let long = format!(
+        "---\nid: REQ-H-0003\ntype: requirement\n---\n### Requirement: Long\nThe system SHALL {}.\n",
+        "x".repeat(300_000)
+    );
+    fs::write(h.join("long.md"), long).unwrap();
+    commit_all(p, "hostile");
+
+    for args in [
+        &["check", "--json"][..],
+        &["check", "--changed"],
+        &["search", "system"],
+        &["trace", "--json"],
+        &["coverage", "--json"],
+        &["claims", "--json"],
+        &["machine", "--json"],
+        &["machine", "SM-H-0002", "--tests"],
+        &["machine", "SM-H-0002", "--diagram"],
+        &["architecture", "--json"],
+        &["context", "REQ-H-0002"],
+        &["show", "REQ-H-0002"],
+        &["history", "REQ-H-0002"],
+        &["diff", "HEAD"],
+        &["ci", "--base", "HEAD"],
+        &["suspect"],
+        &["index"],
+    ] {
+        let out = run(p, args);
+        assert!(!out.stderr.contains("panicked"), "{args:?}: {}", out.stderr);
+        assert!(
+            matches!(out.code, 0 | 1),
+            "{args:?} exited {}: {}",
+            out.code,
+            out.stderr
+        );
+    }
+    // The byte order mark did not hide the node, and CRLF did not hide the machine's problem.
+    assert_eq!(run(p, &["show", "REQ-H-0002"]).code, 0);
+    let check = run(p, &["check"]);
+    assert!(check.stdout.contains("E023"), "{}", check.stdout);
+}

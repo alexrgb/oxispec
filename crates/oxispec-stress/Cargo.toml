@@ -1,0 +1,26 @@
+[package]
+name = "oxispec-stress"
+description = "Generates large synthetic OxiSpec projects, times every command on them, and load-tests the MCP server. Not published."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+# A second binary in the workspace: keep it out of the release builds.
+[package.metadata.dist]
+dist = false
+
+[[bin]]
+name = "oxispec-stress"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

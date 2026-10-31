@@ -94,6 +94,10 @@ This is a list for people and agents to turn into tests in your own framework. A
 
 The `oxispec-model-state-machines` skill (see [agents.md](agents.md)) teaches an agent to write a machine from the requirements and to show a person any violated property without deleting it. The MCP server has a `spec_machine` tool, see [mcp.md](mcp.md).
 
+## Limits
+
+The block is read with a YAML parser that stops at 250,000 nodes, which is about 30,000 transitions. A larger block is reported as unreadable (E020). Split the machine, or model it at a coarser level.
+
 ## Not done yet
 
 - Guards that are checked, and counters.

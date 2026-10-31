@@ -724,7 +724,6 @@ fn deployment_view(model: &Model, root: &str) -> Result<View, String> {
         parent: None,
     }];
     let mut nodes = Vec::new();
-    let mut hosted: Vec<&str> = Vec::new();
     for node in &env.nodes {
         let gid = format!("{}.{}", env.id, node.name);
         let detail: Vec<&str> = [node.kind.as_deref(), node.region.as_deref()]
@@ -742,7 +741,6 @@ fn deployment_view(model: &Model, root: &str) -> Result<View, String> {
         });
         for host in &node.hosts {
             if let Some(e) = model.element(host) {
-                hosted.push(host);
                 nodes.push(ViewNode {
                     id: format!("{gid}.{host}"),
                     label: label_of(e),
@@ -753,21 +751,23 @@ fn deployment_view(model: &Model, root: &str) -> Result<View, String> {
         }
     }
     let mut edges = Vec::new();
+    // An element can run on several nodes. Edges go between the first instances.
+    let mut instance: HashMap<&str, &str> = HashMap::new();
+    for n in &nodes {
+        if let Some(element) = n.id.rsplit('.').next() {
+            instance.entry(element).or_insert(&n.id);
+        }
+    }
     for rel in model.relationships() {
-        if hosted.contains(&rel.from.as_str()) && hosted.contains(&rel.to.as_str()) {
-            let find = |id: &str| {
-                nodes
-                    .iter()
-                    .find(|n| n.id.ends_with(&format!(".{id}")))
-                    .map(|n| n.id.clone())
-            };
-            if let (Some(from), Some(to)) = (find(&rel.from), find(&rel.to)) {
-                edges.push(ViewEdge {
-                    from,
-                    to,
-                    label: edge_label(rel),
-                });
-            }
+        if let (Some(from), Some(to)) = (
+            instance.get(rel.from.as_str()),
+            instance.get(rel.to.as_str()),
+        ) {
+            edges.push(ViewEdge {
+                from: from.to_string(),
+                to: to.to_string(),
+                label: edge_label(rel),
+            });
         }
     }
     Ok(View {

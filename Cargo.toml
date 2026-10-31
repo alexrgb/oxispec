@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/oxispec-core", "crates/oxispec-cli"]
+members = ["crates/oxispec-core", "crates/oxispec-cli", "crates/oxispec-stress"]
 
 [workspace.package]
 version = "0.0.1"
