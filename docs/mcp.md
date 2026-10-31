@@ -15,7 +15,16 @@ Clients start the server from the project folder, so `oxispec mcp` finds the pro
 | Gemini CLI | `.gemini/settings.json` | the same, under `mcpServers` next to your other settings |
 | VS Code with Copilot | `.vscode/mcp.json` | `{"servers": {"oxispec": {"type": "stdio", "command": "oxispec", "args": ["mcp"]}}}` |
 
-The file names and shapes are from each client's documentation. They are not written for you yet, since the files often hold other settings, and I have not run each client against the server.
+`oxispec connect` writes these entries for you:
+
+```bash
+oxispec connect                      # all four clients, or the ones in `agents` in the config
+oxispec connect claude cursor        # only these
+oxispec connect --read-only          # start the server with --read-only
+oxispec connect --dry-run            # say what would change, write nothing
+```
+
+It adds or replaces only the `oxispec` entry. Other settings and servers stay, and running it twice changes nothing. Keys come back in alphabetical order. A file that is not plain JSON (VS Code allows comments in its file) is never rewritten: the command stops before writing anything and tells you to add the entry by hand. The file names and shapes are from each client's documentation; I have not run each client against the server.
 
 Add `"--read-only"` to `args` to leave out the one tool that writes.
 
