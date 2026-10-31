@@ -62,5 +62,5 @@ Tests of the tool itself run with `cargo test`: a `tiny` run with the oracle, a 
 ## Limits to know
 
 - A state machine block is read with a YAML parser budget of about 250,000 nodes, which is roughly 30,000 transitions in one block. Beyond that the block is reported as unreadable (E020).
-- Cold start reads files one at a time. On the `large` preset a cold `check` takes seconds, mostly waiting for the disk, and a warm one well under a second.
+- A cold start reads files on up to 8 threads. On the `large` preset a cold `check` takes under a second on a CI runner and a few seconds on a slow disk, and a warm one well under a second.
 - Each MCP read tool starts the `oxispec` program once per call, so a call costs tens of milliseconds even for a small project. That is fine for an agent and would not be for a service. Server mode will need the graph held in memory.

@@ -126,6 +126,110 @@ pub fn clear(root: &Path) -> io::Result<()> {
     }
 }
 
+/// What loading one file came to.
+#[derive(Default)]
+struct Processed {
+    node: Option<Node>,
+    entry: Option<Entry>,
+    findings: Vec<Finding>,
+    read: bool,
+    parsed: bool,
+    reused: bool,
+    /// The cache has to be written again because of this file.
+    dirty: bool,
+}
+
+/// Loads one file: from the cache when its size and time match, else by reading it.
+fn process(path: &Path, key: &str, old: Option<&CacheFile>, written_at: u128) -> Processed {
+    let rel_buf = PathBuf::from(key);
+    let rel = rel_buf.as_path();
+    let cached = old.and_then(|c| c.files.get(key));
+    let meta = fs::metadata(path).ok();
+    let mut out = Processed::default();
+
+    // Same size and time as when it was cached, and not too recent to trust.
+    if let (Some(entry), Some(meta)) = (cached, &meta) {
+        let mtime = mtime_ns(meta);
+        if mtime != 0
+            && entry.size == meta.len()
+            && entry.mtime_ns == mtime
+            && mtime + RACY_WINDOW_NS < written_at
+        {
+            out.reused = true;
+            out.node = entry.node.clone().map(|n| Node {
+                path: rel.to_path_buf(),
+                ..n
+            });
+            out.entry = Some(entry.clone());
+            return out;
+        }
+    }
+
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            out.findings.push(
+                Finding::new("W003", Severity::Warning, format!("cannot read file: {e}"))
+                    .at(rel, None),
+            );
+            out.dirty = true;
+            return out;
+        }
+    };
+    out.read = true;
+    let hash = hash_of(&bytes);
+    let size = bytes.len() as u64;
+    let mtime = meta.as_ref().map_or(0, mtime_ns);
+
+    if let Some(entry) = cached
+        && entry.hash == hash
+    {
+        out.reused = true;
+        out.node = entry.node.clone().map(|n| Node {
+            path: rel.to_path_buf(),
+            ..n
+        });
+        out.entry = Some(Entry {
+            size,
+            mtime_ns: mtime,
+            hash,
+            node: entry.node.clone(),
+        });
+        // Rewriting moves the cache's write time forward, so this file is
+        // trusted by size and time the next time.
+        out.dirty = true;
+        return out;
+    }
+
+    let Ok(text) = String::from_utf8(bytes) else {
+        out.findings.push(
+            Finding::new(
+                "W003",
+                Severity::Warning,
+                "cannot read file: not valid UTF-8",
+            )
+            .at(rel, None),
+        );
+        out.dirty = true;
+        return out;
+    };
+    let (node, parse_findings) = parse_file_text(rel, &text);
+    out.parsed = true;
+    out.dirty = true;
+    // Files with findings are parsed every time, so their findings never go stale.
+    if parse_findings.is_empty() {
+        out.entry = Some(Entry {
+            size,
+            mtime_ns: mtime,
+            hash,
+            node: node.clone(),
+        });
+    }
+    out.findings = parse_findings;
+    out.node = node;
+    out
+}
+
 /// Loads every node under `root`. Hidden folders and anything ignored by
 /// `.gitignore` are skipped, so `.oxispec/` and `target/` are not read.
 ///
@@ -141,109 +245,55 @@ pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
     let mut seen: HashSet<String> = HashSet::new();
     let mut dirty = false;
 
+    // Walking is cheap. Reading, hashing and parsing wait on the disk and the CPU, so they
+    // are spread over a few threads. A cold start on a big project is mostly that waiting.
     let walker = ignore::WalkBuilder::new(root).require_git(false).build();
+    let mut found: Vec<(PathBuf, String)> = Vec::new();
     for dirent in walker.flatten() {
         let path = dirent.path();
         let is_markdown = path.extension().is_some_and(|e| e == "md");
         if !is_markdown || !dirent.file_type().is_some_and(|t| t.is_file()) {
             continue;
         }
-        stats.files += 1;
         // Paths are kept with `/` separators on every platform, so output and
         // JSON look the same everywhere and match what git reports.
         let key = key_of(path.strip_prefix(root).unwrap_or(path));
-        let rel_buf = PathBuf::from(&key);
-        let rel = rel_buf.as_path();
+        found.push((path.to_path_buf(), key));
+    }
+    stats.files = found.len();
+
+    let workers = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .clamp(1, 8);
+    let chunk = found.len().div_ceil(workers).max(1);
+    let processed: Vec<Processed> = std::thread::scope(|scope| {
+        let handles: Vec<_> = found
+            .chunks(chunk)
+            .map(|part| {
+                let old = old.as_ref();
+                scope.spawn(move || {
+                    part.iter()
+                        .map(|(path, key)| process(path, key, old, written_at))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap_or_default())
+            .collect()
+    });
+    for (done, (_, key)) in processed.into_iter().zip(&found) {
         seen.insert(key.clone());
-        let cached = old.as_ref().and_then(|c| c.files.get(&key));
-        let meta = fs::metadata(path).ok();
-
-        // Same size and time as when it was cached, and not too recent to trust.
-        if let (Some(entry), Some(meta)) = (cached, &meta) {
-            let mtime = mtime_ns(meta);
-            if mtime != 0
-                && entry.size == meta.len()
-                && entry.mtime_ns == mtime
-                && mtime + RACY_WINDOW_NS < written_at
-            {
-                stats.reused += 1;
-                nodes.extend(entry.node.clone().map(|n| Node {
-                    path: rel.to_path_buf(),
-                    ..n
-                }));
-                entries.insert(key, entry.clone());
-                continue;
-            }
+        stats.read += usize::from(done.read);
+        stats.parsed += usize::from(done.parsed);
+        stats.reused += usize::from(done.reused);
+        dirty |= done.dirty;
+        if let Some(entry) = done.entry {
+            entries.insert(key.clone(), entry);
         }
-
-        let bytes = match fs::read(path) {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                findings.push(
-                    Finding::new("W003", Severity::Warning, format!("cannot read file: {e}"))
-                        .at(rel, None),
-                );
-                dirty = true;
-                continue;
-            }
-        };
-        stats.read += 1;
-        let hash = hash_of(&bytes);
-        let size = bytes.len() as u64;
-        let mtime = meta.as_ref().map_or(0, mtime_ns);
-
-        if let Some(entry) = cached
-            && entry.hash == hash
-        {
-            stats.reused += 1;
-            nodes.extend(entry.node.clone().map(|n| Node {
-                path: rel.to_path_buf(),
-                ..n
-            }));
-            entries.insert(
-                key,
-                Entry {
-                    size,
-                    mtime_ns: mtime,
-                    hash,
-                    node: entry.node.clone(),
-                },
-            );
-            // Rewriting moves the cache's write time forward, so this file is
-            // trusted by size and time the next time.
-            dirty = true;
-            continue;
-        }
-
-        let Ok(text) = String::from_utf8(bytes) else {
-            findings.push(
-                Finding::new(
-                    "W003",
-                    Severity::Warning,
-                    "cannot read file: not valid UTF-8",
-                )
-                .at(rel, None),
-            );
-            dirty = true;
-            continue;
-        };
-        let (node, parse_findings) = parse_file_text(rel, &text);
-        stats.parsed += 1;
-        dirty = true;
-        // Files with findings are parsed every time, so their findings never go stale.
-        if parse_findings.is_empty() {
-            entries.insert(
-                key,
-                Entry {
-                    size,
-                    mtime_ns: mtime,
-                    hash,
-                    node: node.clone(),
-                },
-            );
-        }
-        findings.extend(parse_findings);
-        nodes.extend(node);
+        findings.extend(done.findings);
+        nodes.extend(done.node);
     }
 
     if let Some(old) = &old {
@@ -419,6 +469,34 @@ mod tests {
         write(root, ".oxispec/cache/stray.md", &node_text("REQ-A-0666"));
         let (graph, _) = load(root, true);
         assert_eq!(ids(&graph), vec!["REQ-A-0001"]);
+    }
+
+    #[test]
+    fn many_files_load_the_same_cold_and_warm_whatever_the_thread_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for i in 0..300 {
+            write(
+                root,
+                &format!("specs/r{i}.md"),
+                &format!(
+                    "---\nid: REQ-A-{i:04}\ntype: requirement\n---\n### Requirement: R{i}\nIt SHALL.\n\n#### Scenario: S\n- a\n"
+                ),
+            );
+        }
+        write(root, "notes/plain.md", "no frontmatter\n");
+        write(root, "specs/bad.md", "---\nid: [\n---\n");
+        let (cold, cold_stats) = load(root, true);
+        let (warm, warm_stats) = load(root, true);
+        let ids = |g: &Graph| g.nodes.iter().map(|n| n.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&cold).len(), 300);
+        assert_eq!(ids(&cold), ids(&warm));
+        assert_eq!(cold_stats.files, 302);
+        assert_eq!(cold_stats.parsed, 302);
+        assert_eq!(warm_stats.files, 302);
+        // The broken file is parsed again every time, so its finding stays fresh.
+        assert_eq!(warm.findings.len(), 1);
+        assert_eq!(cold.findings.len(), 1);
     }
 
     #[test]
