@@ -25,15 +25,27 @@ fn example_text(machine: &Machine, example: &Counterexample) -> String {
     }
 }
 
+/// What `oxispec machine` was asked to print.
+pub struct Output {
+    pub diagram: bool,
+    pub tests: bool,
+    pub limit: Option<usize>,
+    pub json: bool,
+}
+
 pub fn machine_command(
     root: &Path,
     id: Option<&str>,
-    diagram: bool,
-    tests: bool,
+    out: Output,
     at: Option<&str>,
-    json: bool,
     cache: bool,
 ) -> Result<ExitCode> {
+    let Output {
+        diagram,
+        tests,
+        limit,
+        json,
+    } = out;
     let cfg = config::load(root)?;
     if !cfg.has("statemachines") {
         bail!("module `statemachines` is not enabled; run `oxispec modules add statemachines`");
@@ -63,36 +75,38 @@ pub fn machine_command(
         return Ok(ExitCode::SUCCESS);
     }
     if tests && let [machine] = shown.as_slice() {
-        let cases = machines::tests(machine);
+        // Made and printed one at a time: the paths of a big machine are too long to hold.
+        let cases = machines::test_cases(machine);
+        let total = cases.total();
+        let shown_count = limit.map_or(total, |l| l.min(total));
         if json {
-            let list: Vec<_> = cases
-                .iter()
-                .map(|c| {
-                    serde_json::json!({
-                        "name": c.name,
-                        "steps": steps_json(&c.steps),
-                        "implements": c.implements,
-                    })
-                })
-                .collect();
-            let out = serde_json::json!({
-                "schema_version": OUTPUT_SCHEMA_VERSION,
-                "machine": machine.node,
-                "tests": list,
-            });
-            println!("{}", serde_json::to_string_pretty(&out)?);
+            println!(
+                "{{\"schema_version\": {OUTPUT_SCHEMA_VERSION}, \"machine\": {}, \"total\": {total}, \"truncated\": {}, \"tests\": [",
+                serde_json::to_string(&machine.node)?,
+                shown_count < total
+            );
+            for (n, c) in cases.take(shown_count).enumerate() {
+                let item = serde_json::json!({
+                    "name": c.name,
+                    "steps": steps_json(&c.steps),
+                    "implements": c.implements,
+                });
+                println!("{}{item}", if n == 0 { "  " } else { ", " });
+            }
+            println!("]}}");
         } else {
-            for case in &cases {
+            for case in cases.take(shown_count) {
                 println!("{}", case.name);
                 println!("  {}", machines::render_path(&machine.initial, &case.steps));
                 if !case.implements.is_empty() {
                     println!("  covers {}", case.implements.join(", "));
                 }
             }
-            println!(
-                "{} tests, one for each transition that can be reached",
-                cases.len()
-            );
+            if shown_count < total {
+                println!("{shown_count} of {total} tests shown; `--limit` sets how many",);
+            } else {
+                println!("{total} tests, one for each transition that can be reached");
+            }
         }
         return Ok(ExitCode::SUCCESS);
     }

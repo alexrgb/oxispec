@@ -161,6 +161,9 @@ enum Command {
         /// Print one test for each transition: the path from the initial state to it
         #[arg(long)]
         tests: bool,
+        /// With --tests, print only this many
+        #[arg(long, requires = "tests")]
+        limit: Option<usize>,
         /// Read the specs as they were at a git revision
         #[arg(long)]
         at: Option<String>,
@@ -596,19 +599,18 @@ fn run(cli: Cli) -> Result<ExitCode> {
             id,
             diagram,
             tests,
+            limit,
             at,
             json,
         } => {
             let root = project_root(cli.root.as_deref())?;
-            machines::machine_command(
-                &root,
-                id.as_deref(),
+            let output = machines::Output {
                 diagram,
                 tests,
-                at.as_deref(),
+                limit,
                 json,
-                cache,
-            )
+            };
+            machines::machine_command(&root, id.as_deref(), output, at.as_deref(), cache)
         }
         Command::Context {
             ids,

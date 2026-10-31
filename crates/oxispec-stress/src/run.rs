@@ -40,7 +40,7 @@ pub fn scenarios(site_out: &Path) -> Vec<Scenario> {
         s("machine (all)", &["machine", "--json"], false),
         s(
             "machine tests",
-            &["machine", "SM-0001", "--tests", "--json"],
+            &["machine", "SM-0001", "--tests", "--limit", "200", "--json"],
             false,
         ),
         s(
@@ -144,6 +144,8 @@ pub struct Result_ {
 pub fn run_all(bin: &Path, dir: &Path, repeat: usize, site_out: &Path) -> Result<Vec<Result_>> {
     let mut out = Vec::new();
     for sc in scenarios(site_out) {
+        // Printed before the run, so a log shows which command was last when something dies.
+        eprintln!("running {}: oxispec {}", sc.name, sc.args.join(" "));
         let mut walls = Vec::new();
         let mut rss: Option<f64> = None;
         let mut failed = None;
