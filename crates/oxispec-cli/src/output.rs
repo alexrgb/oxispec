@@ -1,6 +1,6 @@
 //! Where command output goes.
 //!
-//! Commands write with [`out!`] and [`outln!`] instead of `println!`. Normally
+//! Commands write with `out!` and `outln!` instead of `println!`. Normally
 //! that is stdout. The MCP server runs commands in its own process and
 //! collects what they write with [`capture`], so a tool call costs no new
 //! process. The buffer belongs to the thread, so two captures never mix.
@@ -12,7 +12,7 @@ thread_local! {
     static SINK: RefCell<Option<Vec<u8>>> = const { RefCell::new(None) };
 }
 
-/// Runs `f` and returns what it wrote with [`out!`], along with its result.
+/// Runs `f` and returns what it wrote with `out!`, along with its result.
 pub fn capture<T>(f: impl FnOnce() -> T) -> (String, T) {
     let before = SINK.with(|s| s.borrow_mut().replace(Vec::new()));
     let value = f();
@@ -34,7 +34,10 @@ pub fn write(args: std::fmt::Arguments) {
     if !buffered {
         // Like `print!`: a closed pipe is a panic that `main` turns into a quiet exit.
         let mut out = std::io::stdout().lock();
-        out.write_fmt(args).expect("failed printing to stdout");
+        if let Err(e) = out.write_fmt(args) {
+            // The text has "(os error N)", which the panic hook in `main` looks for.
+            panic!("failed printing to stdout: {e}");
+        }
     }
 }
 
