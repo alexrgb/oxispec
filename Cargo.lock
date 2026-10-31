@@ -810,7 +810,7 @@ dependencies = [
 
 [[package]]
 name = "oxispec"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -822,7 +822,7 @@ dependencies = [
 
 [[package]]
 name = "oxispec-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "blake3",
  "ignore",
@@ -843,7 +843,7 @@ dependencies = [
 
 [[package]]
 name = "oxispec-stress"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
