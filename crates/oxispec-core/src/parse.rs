@@ -129,18 +129,27 @@ pub fn parse_requirements(body: &str, line_offset: usize) -> Vec<RequirementBloc
     blocks
 }
 
+/// The fenced blocks of a node that other modules read.
+pub struct Blocks {
+    pub claims: Vec<ClaimLine>,
+    pub vocabulary: Vec<TextBlock>,
+    pub machines: Vec<TextBlock>,
+}
+
 /// Reads the lines of fenced `claims` blocks and the text of `vocabulary`
-/// blocks. Blocks inside other fences are not read.
-pub fn parse_blocks(body: &str, line_offset: usize) -> (Vec<ClaimLine>, Vec<TextBlock>) {
+/// and `statemachine` blocks. Blocks inside other fences are not read.
+pub fn parse_blocks(body: &str, line_offset: usize) -> Blocks {
     enum In {
         Nothing,
         Other,
         Claims,
         Vocabulary,
+        Machine,
     }
     let mut state = In::Nothing;
     let mut claims = Vec::new();
     let mut vocabulary: Vec<TextBlock> = Vec::new();
+    let mut machines: Vec<TextBlock> = Vec::new();
     for (i, line) in body.lines().enumerate() {
         let n = line_offset + i + 1;
         let t = line.trim();
@@ -154,6 +163,13 @@ pub fn parse_blocks(body: &str, line_offset: usize) -> (Vec<ClaimLine>, Vec<Text
                         text: String::new(),
                     });
                     In::Vocabulary
+                }
+                Some("statemachine") => {
+                    machines.push(TextBlock {
+                        line: n + 1,
+                        text: String::new(),
+                    });
+                    In::Machine
                 }
                 _ => In::Other,
             },
@@ -175,10 +191,21 @@ pub fn parse_blocks(body: &str, line_offset: usize) -> (Vec<ClaimLine>, Vec<Text
                 }
                 In::Vocabulary
             }
+            (In::Machine, false) => {
+                if let Some(block) = machines.last_mut() {
+                    block.text.push_str(line);
+                    block.text.push('\n');
+                }
+                In::Machine
+            }
             (In::Other, false) => In::Other,
         };
     }
-    (claims, vocabulary)
+    Blocks {
+        claims,
+        vocabulary,
+        machines,
+    }
 }
 
 /// Parses one file. Files without frontmatter, or with frontmatter that has
@@ -210,7 +237,11 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
     } else {
         Vec::new()
     };
-    let (claims, vocabulary) = parse_blocks(body, consumed);
+    let Blocks {
+        claims,
+        vocabulary,
+        machines,
+    } = parse_blocks(body, consumed);
     let title = first_heading(body).map(|h| {
         h.strip_prefix(&format!("{id}: "))
             .map_or(h.clone(), str::to_string)
@@ -233,6 +264,7 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
         requirements,
         claims,
         vocabulary,
+        machines,
         body_hash: blake3::hash(body.as_bytes()).to_hex().to_string(),
     };
     (Some(node), Vec::new())

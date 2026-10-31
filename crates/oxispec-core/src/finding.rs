@@ -98,6 +98,20 @@ pub const CODES: &[(&str, &str)] = &[
         "E019",
         "Claims conflict: in some context, no value satisfies them all",
     ),
+    ("E020", "A state machine cannot be read"),
+    ("E021", "A state machine names a state it does not declare"),
+    (
+        "E022",
+        "A state machine has two transitions on one event that can both apply",
+    ),
+    (
+        "E023",
+        "A state machine breaks a property, with the path that does it",
+    ),
+    (
+        "E024",
+        "A state machine links to a node that does not exist",
+    ),
     ("W001", "Unknown node type"),
     (
         "W002",
@@ -113,6 +127,8 @@ pub const CODES: &[(&str, &str)] = &[
         "W006",
         "A claim never applies, because its scope can never hold",
     ),
+    ("W007", "A state cannot be reached from the initial state"),
+    ("W008", "A state has no way out and is not final"),
     ("I001", "A link to another project is not checked"),
     (
         "I002",

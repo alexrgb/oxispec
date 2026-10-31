@@ -3529,3 +3529,218 @@ fn mcp_offers_the_claims_tool_with_its_module() {
     assert_eq!(run(other.path(), &["modules", "add", "mcp"]).code, 0);
     assert!(!listed(other.path()).contains(&"spec_claims".to_string()));
 }
+
+const ORDER_MACHINE: &str = "initial: created
+states: [created, paid, shipped, delivered, cancelled]
+final: [delivered, cancelled]
+transitions:
+  - {from: created, event: pay, to: paid, implements: [REQ-AUTH-0001]}
+  - {from: paid, event: ship, to: shipped}
+  - {from: shipped, event: deliver, to: delivered}
+  - {from: created, event: cancel, to: cancelled}
+  - {from: paid, event: cancel, to: cancelled}
+";
+
+/// A repository on `main` with a requirement and the machine SM-0001 as a new file,
+/// whose block is `ORDER_MACHINE` followed by `properties`.
+fn machine_project(p: &Path, properties: &str) {
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    run(p, &["new", "requirement", "auth", "Login"]);
+    let out = run(p, &["new", "machine", "Order"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("SM-0001"), "{}", out.stdout);
+    let file = p.join("specs/machines/0001-order.md");
+    fs::write(
+        &file,
+        format!(
+            "---\nid: SM-0001\ntype: state-machine\nstatus: accepted\n---\n# SM-0001: Order\n\n```statemachine\n{ORDER_MACHINE}properties:\n{properties}```\n"
+        ),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_new_machine_passes_check_and_a_broken_property_comes_with_its_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    assert_eq!(run(p, &["new", "machine", "Order"]).code, 0);
+    let out = run(p, &["check"]);
+    assert!(!out.stdout.contains("SM-0001"), "{}", out.stdout);
+
+    let file = p.join("specs/machines/0001-order.md");
+    fs::write(
+        &file,
+        format!(
+            "---\nid: SM-0001\ntype: state-machine\nstatus: accepted\n---\n# SM-0001: Order\n\n```statemachine\n{ORDER_MACHINE}properties:\n  - never cancel after shipped\n  - {{rule: never cancel after paid, from: REQ-AUTH-9999}}\n```\n"
+        ),
+    )
+    .unwrap();
+    let out = run(p, &["check", "--json"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    let v = json(&out);
+    let findings = v["findings"].as_array().unwrap();
+    let codes: Vec<_> = findings
+        .iter()
+        .map(|f| f["code"].as_str().unwrap())
+        .collect();
+    assert!(codes.contains(&"E023"), "{codes:?}");
+    assert!(codes.contains(&"E024"), "{codes:?}");
+    let e023 = findings.iter().find(|f| f["code"] == "E023").unwrap();
+    assert!(
+        e023["message"]
+            .as_str()
+            .unwrap()
+            .contains("created -pay-> paid -cancel-> cancelled"),
+        "{e023}"
+    );
+}
+
+#[test]
+fn machine_lists_shows_draws_and_writes_tests() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    machine_project(
+        p,
+        "  - never cancel after shipped\n  - never cancel after paid\n",
+    );
+
+    let out = run(p, &["machine"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(
+        out.stdout
+            .contains("SM-0001        5 states, 5 transitions, 2 properties (1 violated)"),
+        "{}",
+        out.stdout
+    );
+
+    let out = run(p, &["machine", "SM-0001"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("created -pay-> paid"), "{}", out.stdout);
+    assert!(out.stdout.contains("holds     never cancel after shipped"));
+    assert!(
+        out.stdout
+            .contains("violated  never cancel after paid: created -pay-> paid -cancel-> cancelled"),
+        "{}",
+        out.stdout
+    );
+
+    let v = json(&run(p, &["machine", "SM-0001", "--json"]));
+    let m = &v["machines"][0];
+    assert_eq!(m["id"], "SM-0001");
+    assert_eq!(m["properties"][0]["holds"], true);
+    assert_eq!(m["properties"][1]["holds"], false);
+    assert_eq!(
+        m["properties"][1]["counterexample"]["steps"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+
+    let out = run(p, &["machine", "SM-0001", "--diagram"]);
+    assert!(
+        out.stdout.starts_with("stateDiagram-v2\n"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("paid --> shipped: ship"));
+
+    let v = json(&run(p, &["machine", "SM-0001", "--tests", "--json"]));
+    assert_eq!(v["tests"].as_array().unwrap().len(), 5);
+    assert_eq!(v["tests"][0]["implements"][0], "REQ-AUTH-0001");
+
+    let out = run(p, &["machine", "SM-9999"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("no state machine `SM-9999`"));
+    let out = run(p, &["machine", "--diagram"]);
+    assert_eq!(out.code, 2);
+}
+
+#[test]
+fn ci_reports_a_new_broken_property_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    machine_project(p, "  - never cancel after shipped\n");
+    commit_all(p, "an order machine");
+    git(p, &["checkout", "-q", "-b", "feature"]);
+    let file = p.join("specs/machines/0001-order.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        text.replace("never cancel after shipped", "never cancel after paid"),
+    )
+    .unwrap();
+    let out = run(p, &["ci", "--base", "main", "--json"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    assert_eq!(json(&out)["new_findings"][0]["code"], "E023");
+
+    // Merged, the violation is there but it is not new, even when the block moves down.
+    commit_all(p, "break the property");
+    git(p, &["checkout", "-q", "-b", "next"]);
+    let moved = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        moved.replace("# SM-0001: Order", "# SM-0001: Order\n\nA paragraph above."),
+    )
+    .unwrap();
+    let out = run(p, &["ci", "--base", "feature", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert_eq!(json(&out)["existing_findings"], 1);
+}
+
+#[test]
+fn machines_need_their_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "minimal"]).code, 0);
+    for args in [&["new", "machine", "Order"][..], &["machine"][..]] {
+        let out = run(p, args);
+        assert_eq!(out.code, 2, "{args:?}");
+        assert!(out.stderr.contains("statemachines"), "{}", out.stderr);
+    }
+    assert_eq!(run(p, &["modules", "add", "statemachines"]).code, 0);
+    assert_eq!(run(p, &["new", "machine", "Order"]).code, 0);
+    assert!(p.join("specs/machines").is_dir());
+}
+
+#[test]
+fn mcp_offers_the_machine_tool_with_its_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    machine_project(p, "  - never cancel after paid\n");
+    let (is_error, text) = call_tool(p, "spec_machine", serde_json::json!({}));
+    assert!(!is_error, "{text}");
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["machines"][0]["id"], "SM-0001");
+
+    let (is_error, text) = call_tool(
+        p,
+        "spec_machine",
+        serde_json::json!({"id": "SM-0001", "view": "diagram"}),
+    );
+    assert!(!is_error, "{text}");
+    assert!(text.starts_with("stateDiagram-v2"), "{text}");
+
+    let (is_error, text) = call_tool(p, "spec_machine", serde_json::json!({"view": "tests"}));
+    assert!(is_error, "{text}");
+
+    let other = tempfile::tempdir().unwrap();
+    assert_eq!(run(other.path(), &["init", "--preset", "minimal"]).code, 0);
+    assert_eq!(run(other.path(), &["modules", "add", "mcp"]).code, 0);
+    let names = tool_names(&mcp(
+        other.path(),
+        &[],
+        &[
+            rpc(
+                1,
+                "initialize",
+                serde_json::json!({"protocolVersion": "2025-06-18"}),
+            ),
+            rpc(2, "tools/list", serde_json::json!({})),
+        ],
+    ));
+    assert!(!names.contains(&"spec_machine".to_string()));
+}

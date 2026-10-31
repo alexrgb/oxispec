@@ -122,6 +122,10 @@ oxispec change list --status approved                    # also --json
 
 A `claims` block in any node, and `vocabulary` blocks in nodes of type `vocabulary`, feed the consistency checks (E017 to E019). The syntax and the checks are in [claims.md](claims.md).
 
+## State machines
+
+A `statemachine` block in any node feeds the behavior checks (E020 to E024, W007, W008). The syntax and the checks are in [machines.md](machines.md).
+
 ## Releases
 
 A release of the specs is a **manifest** node of type `release`, written by `oxispec release prepare` as `specs/releases/<version>.md`, and an annotated git tag `specs-v<version>` on the commit that holds it. Enable the `releases` module (`oxispec modules add releases`) to use it.
@@ -246,12 +250,19 @@ Codes are stable. A code is never reused.
 | E017 | error | A line of a `claims` block cannot be read: bad syntax, an unknown variable or value, or a unit that does not fit the variable (see [claims.md](claims.md)) |
 | E018 | error | A `vocabulary` block cannot be read, or declares a variable twice |
 | E019 | error | Claims conflict: in some context where their scopes hold, no value satisfies them all |
+| E020 | error | A `statemachine` block cannot be read (see [machines.md](machines.md)) |
+| E021 | error | A state machine names a state that it does not declare |
+| E022 | error | A state machine has two transitions from one state on one event that can both apply |
+| E023 | error | A state machine breaks a property, and the message gives the path |
+| E024 | error | A state machine links to a node that does not exist |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |
 | W004 | warning | Unknown link kind |
 | W005 | warning | A `should` claim cannot hold in a context where other claims apply |
 | W006 | warning | A claim never applies, because its scope can never hold |
+| W007 | warning | A state cannot be reached from the initial state |
+| W008 | warning | A state has no way out and is not final |
 | I001 | info | A link to another project is not checked. Shown with `--verbose`. |
 | I002 | info | A claim says nothing that another claim does not already say. Shown with `--verbose`. |
 

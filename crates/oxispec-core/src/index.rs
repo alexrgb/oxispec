@@ -27,7 +27,7 @@ use crate::parse::parse_file_text;
 pub const CACHE_DIR: &str = ".oxispec/cache";
 const CACHE_FILE: &str = "index.json";
 /// Bump when the layout of the cache file changes.
-const CACHE_VERSION: u32 = 5;
+const CACHE_VERSION: u32 = 6;
 /// A different engine version may parse differently, so it never reuses a cache.
 const ENGINE: &str = env!("CARGO_PKG_VERSION");
 /// Files modified within this window before the cache was written are not trusted by size and time.

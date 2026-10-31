@@ -914,7 +914,7 @@ pub struct Analysis {
     pub findings: Vec<Finding>,
 }
 
-fn is_inactive(status: Option<&str>) -> bool {
+pub(crate) fn is_inactive(status: Option<&str>) -> bool {
     status.is_some_and(|s| INACTIVE_STATUSES.contains(&s.to_ascii_lowercase().as_str()))
 }
 
