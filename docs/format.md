@@ -126,6 +126,10 @@ A `claims` block in any node, and `vocabulary` blocks in nodes of type `vocabula
 
 A `statemachine` block in any node feeds the behavior checks (E020 to E024, W007, W008). The syntax and the checks are in [machines.md](machines.md).
 
+## Architecture
+
+An `architecture` block in an element or environment node feeds the model checks (E025 to E027, W009, W010) and the views. See [architecture.md](architecture.md).
+
 ## Releases
 
 A release of the specs is a **manifest** node of type `release`, written by `oxispec release prepare` as `specs/releases/<version>.md`, and an annotated git tag `specs-v<version>` on the commit that holds it. Enable the `releases` module (`oxispec modules add releases`) to use it.
@@ -255,6 +259,9 @@ Codes are stable. A code is never reused.
 | E022 | error | A state machine has two transitions from one state on one event that can both apply |
 | E023 | error | A state machine breaks a property, and the message gives the path |
 | E024 | error | A state machine links to a node that does not exist |
+| E025 | error | An `architecture` block cannot be read (see [architecture.md](architecture.md)) |
+| E026 | error | An architecture element, environment or rule refers to a parent, element or host that is missing or of the wrong kind |
+| E027 | error | An architecture rule is broken, and the message gives the path |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |
@@ -263,6 +270,8 @@ Codes are stable. A code is never reused.
 | W006 | warning | A claim never applies, because its scope can never hold |
 | W007 | warning | A state cannot be reached from the initial state |
 | W008 | warning | A state has no way out and is not final |
+| W009 | warning | A container has no owner or no technology |
+| W010 | warning | A container runs in no deployment environment |
 | I001 | info | A link to another project is not checked. Shown with `--verbose`. |
 | I002 | info | A claim says nothing that another claim does not already say. Shown with `--verbose`. |
 

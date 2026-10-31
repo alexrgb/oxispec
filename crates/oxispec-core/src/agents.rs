@@ -94,6 +94,12 @@ pub const SKILLS: &[Skill] = &[
         body: include_str!("../skills/model-state-machines.md"),
     },
     Skill {
+        name: "oxispec-model-architecture",
+        description: "Describe the system's architecture once as a model of systems, containers, components and deployment environments, and draw views from it. Use when a requirement or decision changes how the system is built or deployed, or when oxispec check reports an architecture problem.",
+        requires: &["architecture"],
+        body: include_str!("../skills/model-architecture.md"),
+    },
+    Skill {
         name: "oxispec-apply",
         description: "Implement an approved change set in code and tests, and tie them to the specs with spec: and verifies: comments. Use when asked to build what a change set or requirement describes.",
         requires: &["specs"],
@@ -313,6 +319,7 @@ mod tests {
             "releases",
             "consistency",
             "statemachines",
+            "architecture",
         ]);
         assert_eq!(all.len(), SKILLS.len());
     }

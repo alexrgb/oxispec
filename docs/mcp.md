@@ -31,6 +31,7 @@ Add `"--read-only"` to `args` to leave out the one tool that writes.
 | `spec_history` | How a node changed | `history --json` |
 | `spec_diff` | How the specs differ between two revisions | `diff --json` |
 | `spec_trace` | Code and tests for a node (needs `tests`) | `trace --json` |
+| `spec_architecture` | The architecture model, or with `view` and `id` one Mermaid view (needs `architecture`). Problems come from `spec_check` | `architecture --json`, `architecture view` |
 | `spec_machine` | State machines: all of them, or one `id` with its properties, and with `view` set to `diagram` or `tests` a Mermaid diagram or one test per transition (needs `statemachines`). Problems come from `spec_check` | `machine --json` |
 | `spec_claims` | The vocabulary and the claims on each variable, optionally one `variable` (needs `consistency`). Conflicts come from `spec_check` | `claims --json` |
 | `spec_propose_change` | Writes a draft change set (needs `specs`, not offered with `--read-only`) | `new change` and `link` |

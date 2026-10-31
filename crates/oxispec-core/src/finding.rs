@@ -112,6 +112,15 @@ pub const CODES: &[(&str, &str)] = &[
         "E024",
         "A state machine links to a node that does not exist",
     ),
+    ("E025", "An architecture block cannot be read"),
+    (
+        "E026",
+        "An architecture element, environment or rule refers to something that is not right",
+    ),
+    (
+        "E027",
+        "An architecture rule is broken, with the path that breaks it",
+    ),
     ("W001", "Unknown node type"),
     (
         "W002",
@@ -129,6 +138,8 @@ pub const CODES: &[(&str, &str)] = &[
     ),
     ("W007", "A state cannot be reached from the initial state"),
     ("W008", "A state has no way out and is not final"),
+    ("W009", "A container has no owner or no technology"),
+    ("W010", "A container runs in no deployment environment"),
     ("I001", "A link to another project is not checked"),
     (
         "I002",

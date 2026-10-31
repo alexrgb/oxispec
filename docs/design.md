@@ -802,6 +802,13 @@ Rules are claims with a graph scope, so they use the same solver and the same co
 
 **Setup.** `oxispec modules add architecture` creates `architecture/model/`, a starter system with one container, a `views.yaml`, the render target choice, and a skill (`model-architecture`) so an agent can propose model changes as a normal change set. Importers are optional and added per language and infrastructure tool.
 
+**As built (iteration 13).** See [architecture.md](architecture.md). Where it differs from the text above:
+
+- An element is a node of type `system`, `person`, `container`, `component` or `deployment-environment` with a fenced `architecture` block, not a whole-file YAML model, so it works with history, `--at`, `diff` and `ci` like any node. `uses` lives in the block, while `satisfies` and `decided-by` stay ordinary frontmatter links.
+- Views are context, container, component and deployment, as Mermaid flowcharts only. Dynamic views and the other render targets are not done.
+- Rules are `forbid A -> B` and `forbid A ->* B`, checked on the model graph with the path as the counterexample. They do not use the claims solver yet.
+- Findings are E025 to E027, W009 and W010. Drift checks, API relationships and release diffs are not done.
+
 ## 19. State machines
 
 A small YAML DSL, a node type of its own:
