@@ -21,6 +21,10 @@ use crate::id;
 use crate::node::{KNOWN_LINK_KINDS, KNOWN_TYPES, Node};
 
 pub fn check(graph: &Graph) -> Vec<Finding> {
+    graph.checked.get_or_init(|| run_checks(graph)).clone()
+}
+
+fn run_checks(graph: &Graph) -> Vec<Finding> {
     let mut findings = graph.findings.clone();
     duplicates(graph, &mut findings);
     for node in &graph.nodes {

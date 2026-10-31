@@ -17,7 +17,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -242,16 +242,63 @@ struct Memo {
     root: PathBuf,
     fingerprint: u64,
     graph: Graph,
+    /// When the files were last compared in full.
+    verified: Instant,
 }
+
+/// How long a graph is trusted on the word of the file watcher alone. After
+/// that the files are compared again, in case an event was missed.
+const TRUST: Duration = Duration::from_secs(30);
 
 static MEMO: Mutex<Option<Memo>> = Mutex::new(None);
 static MEMO_ON: AtomicBool = AtomicBool::new(false);
+/// Set when something under the project may have changed since the memo was built.
+static DIRTY: AtomicBool = AtomicBool::new(true);
+static WATCHER: Mutex<Option<notify::RecommendedWatcher>> = Mutex::new(None);
+static WATCHING: AtomicBool = AtomicBool::new(false);
 
 /// Lets [`load`] keep the last graph in memory and hand it out again while no
 /// markdown file has changed. A long-running process (the MCP server) turns
 /// this on; a command that runs once has nothing to gain.
-pub fn keep_graph_in_memory() {
+///
+/// A file watcher tells the process when something changed, so a call that
+/// finds nothing changed does not walk the project. If the watcher cannot
+/// start, every call compares the files instead.
+pub fn keep_graph_in_memory(root: &Path) {
+    use notify::{RecursiveMode, Watcher};
     MEMO_ON.store(true, Ordering::Relaxed);
+    // Some systems report paths in their canonical form, so skip both spellings.
+    let canonical = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let skip: Vec<PathBuf> = [root, canonical.as_path()]
+        .iter()
+        .flat_map(|r| [r.join(".oxispec"), r.join(".git")])
+        .collect();
+    let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+        match event {
+            Ok(event) => {
+                if event
+                    .paths
+                    .iter()
+                    .any(|p| !skip.iter().any(|s| p.starts_with(s)))
+                {
+                    DIRTY.store(true, Ordering::Release);
+                }
+            }
+            // Something went wrong: do not trust the watcher until the next full comparison.
+            Err(_) => DIRTY.store(true, Ordering::Release),
+        }
+    })
+    .and_then(|mut w| w.watch(root, RecursiveMode::Recursive).map(|()| w));
+    if let Ok(w) = watcher {
+        *WATCHER.lock().unwrap_or_else(|e| e.into_inner()) = Some(w);
+        WATCHING.store(true, Ordering::Relaxed);
+    }
+}
+
+/// Forgets that the files were unchanged. Commands that write call this, so
+/// the next load does not wait for the watcher to say so.
+pub fn graph_may_have_changed() {
+    DIRTY.store(true, Ordering::Release);
 }
 
 /// A number that changes when a markdown file is added, removed, resized or
@@ -292,17 +339,37 @@ fn walk(root: &Path) -> Vec<(PathBuf, String)> {
 }
 
 pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
-    // Walking is cheap. Reading, hashing and parsing wait on the disk and the CPU, so they
-    // are spread over a few threads. A cold start on a big project is mostly that waiting.
-    let found = walk(root);
     let memo_on = use_cache && MEMO_ON.load(Ordering::Relaxed);
-    let print = if memo_on { fingerprint(&found) } else { None };
-    if let Some(print) = print
+    if memo_on
+        && WATCHING.load(Ordering::Relaxed)
+        && !DIRTY.load(Ordering::Acquire)
         && let Ok(guard) = MEMO.lock()
         && let Some(memo) = guard.as_ref()
         && memo.root == root
+        && memo.verified.elapsed() < TRUST
+    {
+        let files = memo.graph.nodes.len();
+        let stats = LoadStats {
+            files,
+            reused: files,
+            ..LoadStats::default()
+        };
+        return (memo.graph.clone(), stats);
+    }
+    // Changes that arrive while this load runs must leave the flag set.
+    DIRTY.store(false, Ordering::Release);
+
+    // Walking is cheap. Reading, hashing and parsing wait on the disk and the CPU, so they
+    // are spread over a few threads. A cold start on a big project is mostly that waiting.
+    let found = walk(root);
+    let print = if memo_on { fingerprint(&found) } else { None };
+    if let Some(print) = print
+        && let Ok(mut guard) = MEMO.lock()
+        && let Some(memo) = guard.as_mut()
+        && memo.root == root
         && memo.fingerprint == print
     {
+        memo.verified = Instant::now();
         let stats = LoadStats {
             files: found.len(),
             reused: found.len(),
@@ -318,7 +385,10 @@ pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
             root: root.to_path_buf(),
             fingerprint: print,
             graph: graph.clone(),
+            verified: Instant::now(),
         });
+    } else {
+        DIRTY.store(true, Ordering::Release);
     }
     (graph, stats)
 }
