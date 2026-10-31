@@ -61,7 +61,7 @@ pub const MODULES: &[ModuleInfo] = &[
         name: "architecture",
         description: "C4 and deployment model, views, rules",
         needs: &["core"],
-        implemented: false,
+        implemented: true,
     },
     ModuleInfo {
         name: "statemachines",

@@ -9,6 +9,7 @@
 //! E013 approved or merged change set without `approved_by`
 //! E017 to E019, W005, W006, I002: claims and the vocabulary, see `claims`
 //! E020 to E024, W007, W008: state machines, see `machines`
+//! E025 to E027, W009, W010: the architecture model, see `architecture`
 //! W001 unknown node type  W004 unknown link kind    I001 external reference, not checked
 
 use std::collections::{HashMap, HashSet};
@@ -35,6 +36,7 @@ pub fn check(graph: &Graph) -> Vec<Finding> {
     supersede_cycles(graph, &mut findings);
     findings.extend(crate::claims::check(graph));
     findings.extend(crate::machines::check(graph));
+    findings.extend(crate::architecture::check(graph));
     findings
         .sort_by(|a, b| (a.path.as_ref(), a.line, a.code).cmp(&(b.path.as_ref(), b.line, b.code)));
     findings

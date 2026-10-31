@@ -96,6 +96,9 @@ pub struct Node {
     /// `statemachine` blocks, read by [`crate::machines`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub machines: Vec<TextBlock>,
+    /// `architecture` blocks, read by [`crate::architecture`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub architecture: Vec<TextBlock>,
     /// BLAKE3 hash of everything after the frontmatter, to see that the text changed.
     #[serde(default)]
     pub body_hash: String,

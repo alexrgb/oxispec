@@ -212,6 +212,18 @@ impl Server<'_> {
                 false,
             ));
         }
+        if self.cfg.has("architecture") {
+            tools.push(tool(
+                "spec_architecture",
+                "The architecture model: its elements, environments and rules, or with `view` and `id` one view as a Mermaid flowchart (context and container views are of a system, a component view of a container, a deployment view of an environment). Problems come from spec_check.",
+                json!({
+                    "view": {"type": "string", "enum": ["context", "container", "component", "deployment"], "description": "Which view to draw. Needs `id`."},
+                    "id": {"type": "string", "description": "The system, container or environment the view is of"},
+                }),
+                &[],
+                false,
+            ));
+        }
         if self.cfg.has("statemachines") {
             tools.push(tool(
                 "spec_machine",
@@ -305,6 +317,22 @@ impl Server<'_> {
                     cmd.extend(["--var", variable]);
                 }
                 self.cli(&cmd)
+            }
+            "spec_architecture" => {
+                let view = optional_word(args, "view")?;
+                let node = optional_id(args, "id")?;
+                match (view, node) {
+                    (None, None) => self.cli(&["architecture", "--json"]),
+                    (Some(view), Some(node)) => {
+                        if !["context", "container", "component", "deployment"]
+                            .contains(&view.as_str())
+                        {
+                            anyhow::bail!("`view` is context, container, component or deployment");
+                        }
+                        self.cli(&["architecture", "view", &view, &node])
+                    }
+                    _ => anyhow::bail!("`view` and `id` go together"),
+                }
             }
             "spec_machine" => {
                 let mut cmd = vec!["machine"];

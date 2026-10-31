@@ -3744,3 +3744,252 @@ fn mcp_offers_the_machine_tool_with_its_module() {
     ));
     assert!(!names.contains(&"spec_machine".to_string()));
 }
+
+/// Writes an architecture element or environment as a node.
+fn arch_node(p: &Path, file: &str, id: &str, ty: &str, block: &str) {
+    let path = p.join("architecture/model").join(file);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        path,
+        format!(
+            "---\nid: {id}\ntype: {ty}\nstatus: accepted\n---\n# {id}\n\n```architecture\n{block}```\n"
+        ),
+    )
+    .unwrap();
+}
+
+/// A shop: web and API containers and a database in one system, a customer and a payment system.
+fn architecture_project(p: &Path) {
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    arch_node(p, "shop.md", "C4-0001", "system", "name: Shop\n");
+    arch_node(
+        p,
+        "web.md",
+        "C4-0002",
+        "container",
+        "name: Web\ntechnology: React\nowner: web\nparent: C4-0001\nuses:\n  - {to: C4-0003, description: calls, technology: HTTPS}\n",
+    );
+    arch_node(
+        p,
+        "api.md",
+        "C4-0003",
+        "container",
+        "name: Orders API\ntechnology: Go\nowner: orders\nparent: C4-0001\nuses:\n  - {to: C4-0004, description: reads and writes}\n  - {to: C4-0006, description: charges cards}\n",
+    );
+    arch_node(
+        p,
+        "db.md",
+        "C4-0004",
+        "container",
+        "name: Orders DB\ntechnology: Postgres\nowner: orders\nparent: C4-0001\n",
+    );
+    arch_node(
+        p,
+        "customer.md",
+        "C4-0005",
+        "person",
+        "name: Customer\nuses:\n  - {to: C4-0002, description: browses}\n",
+    );
+    arch_node(p, "payments.md", "C4-0006", "system", "name: Payments\n");
+    arch_node(
+        p,
+        "prod.md",
+        "DEP-0001",
+        "deployment-environment",
+        "name: Production\nnodes:\n  - {id: eks, kind: kubernetes, region: eu-west-1, hosts: [C4-0002, C4-0003]}\n  - {id: rds, hosts: [C4-0004]}\n",
+    );
+}
+
+#[test]
+fn new_architecture_writes_elements_and_a_container_needs_its_parent() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let out = run(p, &["new", "architecture", "system", "Shop"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("C4-0001"), "{}", out.stdout);
+    assert!(p.join("architecture/model/0001-shop.md").is_file());
+    let out = run(p, &["new", "architecture", "environment", "Production"]);
+    assert!(out.stdout.contains("DEP-0001"), "{}", out.stdout);
+    assert_eq!(run(p, &["check"]).code, 0);
+
+    assert_eq!(run(p, &["new", "architecture", "container", "Web"]).code, 0);
+    let out = run(p, &["check", "--json"]);
+    let v = json(&out);
+    let messages: Vec<_> = v["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["message"].as_str().unwrap().to_string())
+        .collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| m == "container C4-0002: has no `parent`, which must be a system"),
+        "{messages:?}"
+    );
+}
+
+#[test]
+fn architecture_lists_and_draws_views_from_one_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    architecture_project(p);
+    assert_eq!(run(p, &["check"]).code, 0);
+
+    let out = run(p, &["architecture"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("container"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("Orders API [Go] in C4-0001"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("environment DEP-0001"),
+        "{}",
+        out.stdout
+    );
+
+    let v = json(&run(p, &["architecture", "--json"]));
+    assert_eq!(v["elements"].as_array().unwrap().len(), 6);
+    assert_eq!(v["environments"][0]["nodes"][0]["hosts"][0], "C4-0002");
+
+    let out = run(p, &["architecture", "view", "context", "C4-0001"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("title: context view of Shop"));
+    assert!(
+        out.stdout.contains("C4_0005 -->|\"browses\"| C4_0001"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("C4_0001 -->|\"charges cards\"| C4_0006")
+    );
+
+    let out = run(p, &["architecture", "view", "container", "C4-0001"]);
+    assert!(
+        out.stdout.contains("subgraph C4_0001[\"Shop\"]"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("C4_0002 -->|\"calls [HTTPS]\"| C4_0003")
+    );
+
+    let v = json(&run(
+        p,
+        &["architecture", "view", "deployment", "DEP-0001", "--json"],
+    ));
+    assert_eq!(v["nodes"].as_array().unwrap().len(), 3);
+    assert!(v["mermaid"].as_str().unwrap().contains("Production"));
+
+    let out = run(p, &["architecture", "view", "component", "C4-0001"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("is of a container"), "{}", out.stderr);
+}
+
+#[test]
+fn a_broken_architecture_rule_names_the_path_and_ci_reports_it_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    architecture_project(p);
+    commit_all(p, "a shop");
+    git(p, &["checkout", "-q", "-b", "feature"]);
+    arch_node(
+        p,
+        "shop.md",
+        "C4-0001",
+        "system",
+        "name: Shop\nrules:\n  - forbid C4-0002 ->* C4-0004\n",
+    );
+    let out = run(p, &["ci", "--base", "main", "--json"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    let v = json(&out);
+    assert_eq!(v["new_findings"][0]["code"], "E027");
+    assert!(
+        v["new_findings"][0]["message"]
+            .as_str()
+            .unwrap()
+            .ends_with("is broken by C4-0002 -> C4-0003 -> C4-0004"),
+        "{v}"
+    );
+
+    commit_all(p, "forbid it");
+    git(p, &["checkout", "-q", "-b", "next"]);
+    run(p, &["new", "requirement", "auth", "Something else"]);
+    let out = run(p, &["ci", "--base", "feature", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert_eq!(json(&out)["existing_findings"], 1);
+}
+
+#[test]
+fn architecture_needs_its_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "minimal"]).code, 0);
+    for args in [
+        &["new", "architecture", "system", "Shop"][..],
+        &["architecture"][..],
+    ] {
+        let out = run(p, args);
+        assert_eq!(out.code, 2, "{args:?}");
+        assert!(out.stderr.contains("architecture"), "{}", out.stderr);
+    }
+    assert_eq!(run(p, &["modules", "add", "architecture"]).code, 0);
+    assert_eq!(run(p, &["new", "architecture", "system", "Shop"]).code, 0);
+    assert!(p.join("architecture/model").is_dir());
+}
+
+#[test]
+fn mcp_offers_the_architecture_tool_with_its_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    architecture_project(p);
+    let (is_error, text) = call_tool(p, "spec_architecture", serde_json::json!({}));
+    assert!(!is_error, "{text}");
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["elements"].as_array().unwrap().len(), 6);
+
+    let (is_error, text) = call_tool(
+        p,
+        "spec_architecture",
+        serde_json::json!({"view": "container", "id": "C4-0001"}),
+    );
+    assert!(!is_error, "{text}");
+    assert!(text.contains("flowchart LR"), "{text}");
+
+    let (is_error, _) = call_tool(
+        p,
+        "spec_architecture",
+        serde_json::json!({"view": "container"}),
+    );
+    assert!(is_error);
+    let (is_error, _) = call_tool(
+        p,
+        "spec_architecture",
+        serde_json::json!({"view": "--json", "id": "C4-0001"}),
+    );
+    assert!(is_error);
+
+    let other = tempfile::tempdir().unwrap();
+    assert_eq!(run(other.path(), &["init", "--preset", "minimal"]).code, 0);
+    assert_eq!(run(other.path(), &["modules", "add", "mcp"]).code, 0);
+    let names = tool_names(&mcp(
+        other.path(),
+        &[],
+        &[
+            rpc(
+                1,
+                "initialize",
+                serde_json::json!({"protocolVersion": "2025-06-18"}),
+            ),
+            rpc(2, "tools/list", serde_json::json!({})),
+        ],
+    ));
+    assert!(!names.contains(&"spec_architecture".to_string()));
+}

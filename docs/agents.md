@@ -9,6 +9,7 @@ Skills tell an AI coding agent how to work with the specs: how to look things up
 | `oxispec-explore` | core | Finding and reading nodes, history and links before writing |
 | `oxispec-propose` | specs | A change set with new or edited requirements, left for a person to approve |
 | `oxispec-extract-claims` | consistency | Writing claims and the vocabulary for a requirement, and what to do with a conflict |
+| `oxispec-model-architecture` | architecture | Modelling systems, containers, components and environments, rules, and drawing views |
 | `oxispec-model-state-machines` | statemachines | Writing a state machine and its properties, and what to do with a violated one |
 | `oxispec-apply` | specs | Implementing an approved change, with `spec:` and `verifies:` comments |
 | `oxispec-verify` | specs | `check`, `coverage`, test results and suspect links, in order |

@@ -14,6 +14,7 @@ use oxispec_core::node::KNOWN_LINK_KINDS;
 use oxispec_core::{Finding, Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, modules};
 
 mod agents;
+mod architecture;
 mod changes;
 mod ci;
 mod claims;
@@ -139,6 +140,16 @@ enum Command {
         at: Option<String>,
         #[arg(long)]
         json: bool,
+    },
+    /// The architecture model: list its elements, or draw a view of it as Mermaid
+    Architecture {
+        /// Read the specs as they were at a git revision
+        #[arg(long, global = true)]
+        at: Option<String>,
+        #[arg(long, global = true)]
+        json: bool,
+        #[command(subcommand)]
+        action: Option<ArchitectureAction>,
     },
     /// List state machines, or show one with its properties, a diagram or generated tests
     Machine {
@@ -379,6 +390,27 @@ enum ModulesAction {
 }
 
 #[derive(Subcommand)]
+enum ArchitectureAction {
+    /// List the elements, environments and rules (the default)
+    List,
+    /// Draw one view as a Mermaid flowchart
+    View {
+        kind: architecture::ViewArg,
+        /// The system, container or environment the view is of
+        id: String,
+    },
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum ElementKind {
+    System,
+    Person,
+    Container,
+    Component,
+    Environment,
+}
+
+#[derive(Subcommand)]
 enum NewKind {
     /// A requirement with one scenario, for example: new requirement auth "Admin session timeout"
     Requirement { domain: String, title: String },
@@ -390,6 +422,8 @@ enum NewKind {
     Vocabulary { title: String },
     /// A state machine: states, events and transitions, with properties that are checked
     Machine { title: String },
+    /// An element of the architecture model, or a deployment environment
+    Architecture { kind: ElementKind, title: String },
 }
 
 #[derive(Subcommand)]
@@ -536,6 +570,15 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let root = project_root(cli.root.as_deref())?;
             claims::claims_command(&root, variable.as_deref(), at.as_deref(), json, cache)
         }
+        Command::Architecture { at, json, action } => {
+            let root = project_root(cli.root.as_deref())?;
+            match action.unwrap_or(ArchitectureAction::List) {
+                ArchitectureAction::List => architecture::list(&root, at.as_deref(), json, cache),
+                ArchitectureAction::View { kind, id } => {
+                    architecture::view(&root, kind, &id, at.as_deref(), json, cache)
+                }
+            }
+        }
         Command::Machine {
             id,
             diagram,
@@ -620,6 +663,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 NewKind::Vocabulary { title } => {
                     require_module(&cfg, "consistency")?;
                     new_vocabulary(&root, &title, scheme, cache)?
+                }
+                NewKind::Architecture { kind, title } => {
+                    require_module(&cfg, "architecture")?;
+                    new_element(&root, kind, &title, scheme, cache)?
                 }
                 NewKind::Machine { title } => {
                     require_module(&cfg, "statemachines")?;
@@ -907,6 +954,9 @@ fn ensure_module_dirs(root: &Path, cfg: &Config) -> Result<()> {
     }
     if cfg.has("consistency") {
         fs::create_dir_all(root.join("specs/vocabulary"))?;
+    }
+    if cfg.has("architecture") {
+        fs::create_dir_all(root.join("architecture/model"))?;
     }
     if cfg.has("statemachines") {
         fs::create_dir_all(root.join("specs/machines"))?;
@@ -1498,6 +1548,64 @@ fn new_vocabulary(
     let body = VOCABULARY_TEMPLATE
         .replace("@ID@", &id)
         .replace("@TITLE@", title);
+    write_new(root, &rel, &body)?;
+    Ok((id, rel))
+}
+
+const ELEMENT_TEMPLATE: &str = "---
+id: @ID@
+type: @TYPE@
+status: draft
+---
+# @ID@: @TITLE@
+
+What it is and why it exists.
+
+```architecture
+name: @TITLE@
+@FIELDS@```
+";
+
+/// The starter fields for each kind of element.
+fn element_fields(kind: ElementKind) -> &'static str {
+    match kind {
+        ElementKind::System | ElementKind::Person => {
+            "# uses:\n#   - {to: C4-0002, description: sends orders}\n"
+        }
+        ElementKind::Container => {
+            "technology: \nowner: \nparent: # the ID of its system\n# uses:\n#   - {to: C4-0002, description: reads and writes, technology: SQL}\n"
+        }
+        ElementKind::Component => {
+            "parent: # the ID of its container\n# uses:\n#   - {to: C4-0002, description: calls}\n"
+        }
+        ElementKind::Environment => {
+            "nodes:\n#  - {id: cluster, kind: kubernetes-cluster, region: eu-west-1, hosts: [C4-0002]}\n"
+        }
+    }
+}
+
+fn new_element(
+    root: &Path,
+    kind: ElementKind,
+    title: &str,
+    scheme: IdScheme,
+    cache: bool,
+) -> Result<(String, PathBuf)> {
+    let (prefix, ty) = match kind {
+        ElementKind::System => ("C4-", "system"),
+        ElementKind::Person => ("C4-", "person"),
+        ElementKind::Container => ("C4-", "container"),
+        ElementKind::Component => ("C4-", "component"),
+        ElementKind::Environment => ("DEP-", "deployment-environment"),
+    };
+    let id = allocate_id(&load_graph(root, cache), prefix, scheme)?;
+    let suffix = id.strip_prefix(prefix).unwrap_or(&id);
+    let rel = PathBuf::from("architecture/model").join(format!("{suffix}-{}.md", slug(title)?));
+    let body = ELEMENT_TEMPLATE
+        .replace("@ID@", &id)
+        .replace("@TYPE@", ty)
+        .replace("@TITLE@", title)
+        .replace("@FIELDS@", element_fields(kind));
     write_new(root, &rel, &body)?;
     Ok((id, rel))
 }
