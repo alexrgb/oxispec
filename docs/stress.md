@@ -51,7 +51,7 @@ A command over its budget (seconds and megabytes, per preset, in `crates/oxispec
 The first runs found, and the tests now cover:
 
 - Several `oxispec search` processes starting at the same time on a cold cache corrupted the search index (lock errors, missing files). A file lock now serializes building it.
-- `oxispec new` processes at the same time picked the same ID. A lock now covers choosing an ID and writing its file.
+- `oxispec new` processes at the same time picked the same ID, and `oxispec link` processes at the same time on one file lost links. One project lock now covers every command that writes.
 
 ## In CI
 
