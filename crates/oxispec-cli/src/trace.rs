@@ -41,16 +41,16 @@ pub fn trace_command(
                 "files_scanned": scan.files,
                 "annotations": scan.annotations,
             });
-            println!("{}", serde_json::to_string_pretty(&out)?);
+            outln!("{}", serde_json::to_string_pretty(&out)?);
         } else {
             for a in &scan.annotations {
                 let kind = match a.kind {
                     Kind::Implements => "spec",
                     Kind::Verifies => "verifies",
                 };
-                println!("{:<34} {kind:<9} {}", place(a), a.target);
+                outln!("{:<34} {kind:<9} {}", place(a), a.target);
             }
-            println!(
+            outln!(
                 "{} annotations in {} files",
                 scan.annotations.len(),
                 scan.files
@@ -101,32 +101,32 @@ pub fn trace_command(
                 "anchor": anchor, "name": name, "verified_by": tests,
             })).collect::<Vec<_>>(),
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
-    println!(
+    outln!(
         "{}  {title}  ({})",
         node.id,
         node.status.as_deref().unwrap_or("no status")
     );
-    println!("implemented by:");
+    outln!("implemented by:");
     if implementers.is_empty() {
-        println!("  nothing yet");
+        outln!("  nothing yet");
     }
     for a in implementers {
-        println!("  {}", place(a));
+        outln!("  {}", place(a));
     }
-    println!("scenarios:");
+    outln!("scenarios:");
     if scenarios.is_empty() {
-        println!("  none");
+        outln!("  none");
     }
     for (anchor, name, tests) in scenarios {
         let label = anchor.unwrap_or_else(|| "(no anchor)".to_string());
         if tests.is_empty() {
-            println!("  {label:<12} {name}: NOT VERIFIED");
+            outln!("  {label:<12} {name}: NOT VERIFIED");
         } else {
             let places: Vec<String> = tests.iter().map(|a| place(a)).collect();
-            println!("  {label:<12} {name}: verified by {}", places.join(", "));
+            outln!("  {label:<12} {name}: verified by {}", places.join(", "));
         }
     }
     Ok(())
@@ -146,17 +146,17 @@ fn list(title: &str, items: &[String], all: bool) {
     if items.is_empty() {
         return;
     }
-    println!("{title}:");
+    outln!("{title}:");
     let shown = if all {
         items.len()
     } else {
         items.len().min(20)
     };
     for item in &items[..shown] {
-        println!("  {item}");
+        outln!("  {item}");
     }
     if shown < items.len() {
-        println!(
+        outln!(
             "  ... and {} more (--all shows everything)",
             items.len() - shown
         );
@@ -252,23 +252,23 @@ pub fn coverage_command(root: &Path, options: &CoverageOptions) -> Result<ExitCo
             })),
             "failed": failed,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
     } else {
         for f in &result.findings {
-            println!("{}", crate::finding_line(f));
+            outln!("{}", crate::finding_line(f));
             if let Some(path) = &f.path {
-                println!("  --> {}:{}", path.display(), f.line.unwrap_or(1));
+                outln!("  --> {}:{}", path.display(), f.line.unwrap_or(1));
             }
         }
         list("not implemented", &result.unimplemented, options.all);
         list("not verified", &result.unverified, options.all);
-        println!(
+        outln!(
             "requirements: {} implemented of {} ({:.0}%)",
             result.implemented,
             result.requirements,
             result.implemented_percent()
         );
-        println!(
+        outln!(
             "scenarios:    {} verified of {} ({:.0}%)",
             result.verified,
             result.scenarios,
@@ -277,7 +277,7 @@ pub fn coverage_command(root: &Path, options: &CoverageOptions) -> Result<ExitCo
         if imported.is_some() {
             list("failing", &failing, options.all);
             list("no matching result", &no_result, options.all);
-            println!(
+            outln!(
                 "passing:      {} of {} ({:.0}%){}",
                 passing.len(),
                 result.scenarios,
@@ -289,22 +289,22 @@ pub fn coverage_command(root: &Path, options: &CoverageOptions) -> Result<ExitCo
                 }
             );
             if stale {
-                println!("note: the test results are from another commit than HEAD");
+                outln!("note: the test results are from another commit than HEAD");
             }
         }
         if result.unanchored_scenarios > 0 {
-            println!(
+            outln!(
                 "{} scenarios have no {{#anchor}}, so no test can name them",
                 result.unanchored_scenarios
             );
         }
-        println!(
+        outln!(
             "{} annotations in {} files",
             scan.annotations.len(),
             scan.files
         );
         if below {
-            println!("below the --fail-under threshold");
+            outln!("below the --fail-under threshold");
         }
     }
     Ok(if failed {
@@ -356,7 +356,7 @@ pub fn suspect_command(
             "links": shown,
             "failed": failed,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(if failed {
             ExitCode::from(1)
         } else {
@@ -364,9 +364,9 @@ pub fn suspect_command(
         });
     }
     for f in suspect::findings(&links) {
-        println!("{}", crate::finding_line(&f));
+        outln!("{}", crate::finding_line(&f));
         if let Some(path) = &f.path {
-            println!("  --> {}:{}", path.display(), f.line.unwrap_or(1));
+            outln!("  --> {}:{}", path.display(), f.line.unwrap_or(1));
         }
     }
     for link in &links {
@@ -376,21 +376,21 @@ pub fn suspect_command(
             State::Ok if all => "ok",
             _ => continue,
         };
-        println!(
+        outln!(
             "{label:<12} {} {} {}",
             link.target,
             place_of(link),
             link.symbol.as_deref().unwrap_or("")
         );
     }
-    println!(
+    outln!(
         "{} links: {ok} ok, {suspects} suspect, {unconfirmed} unconfirmed, {orphaned} orphaned",
         links.len() - orphaned
     );
     if suspects > 0 {
-        println!("look at each one, then run `oxispec confirm ID` for those that are still right");
+        outln!("look at each one, then run `oxispec confirm ID` for those that are still right");
     } else if unconfirmed + orphaned > 0 {
-        println!("`oxispec confirm --all` records the links as they are now");
+        outln!("`oxispec confirm --all` records the links as they are now");
     }
     Ok(if failed {
         ExitCode::from(1)
@@ -422,21 +422,23 @@ pub fn confirm_command(
     let filter = (!all).then_some(bases.as_slice());
     let done = suspect::confirm(&graph, &scan.annotations, &mut lock, filter);
     if dry_run {
-        println!(
+        outln!(
             "would confirm {} link(s) and drop {} confirmation(s) whose link is gone",
-            done.confirmed, done.pruned
+            done.confirmed,
+            done.pruned
         );
         return Ok(());
     }
     if done.confirmed + done.pruned > 0 {
         suspect::save(root, &lock)?;
     }
-    println!(
+    outln!(
         "confirmed {} link(s), dropped {} confirmation(s) whose link is gone",
-        done.confirmed, done.pruned
+        done.confirmed,
+        done.pruned
     );
     if done.confirmed + done.pruned > 0 {
-        println!("commit {} to share it", suspect::LOCK_PATH);
+        outln!("commit {} to share it", suspect::LOCK_PATH);
     }
     Ok(())
 }
@@ -459,7 +461,7 @@ pub fn results_import(root: &Path, files: &[PathBuf], replace: bool) -> Result<(
     }
     stored.commit = git::resolve_rev(root, "HEAD").ok().map(|r| r.oid);
     results::save(root, &stored)?;
-    println!(
+    outln!(
         "imported {read} results from {} file(s); now {} tests: {} passed, {} failed, {} skipped",
         files.len(),
         stored.tests.len(),
@@ -477,7 +479,7 @@ pub fn results_show(root: &Path, json_output: bool) -> Result<()> {
     };
     if json_output {
         let out = json!({"schema_version": OUTPUT_SCHEMA_VERSION, "commit": stored.commit, "tests": stored.tests});
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
     for t in &stored.tests {
@@ -486,9 +488,9 @@ pub fn results_show(root: &Path, json_output: bool) -> Result<()> {
             results::Outcome::Fail => "FAIL",
             results::Outcome::Skip => "skip",
         };
-        println!("{outcome:<5}{}", t.name);
+        outln!("{outcome:<5}{}", t.name);
     }
-    println!(
+    outln!(
         "{} tests: {} passed, {} failed, {} skipped",
         stored.tests.len(),
         stored.count(results::Outcome::Pass),
@@ -501,7 +503,7 @@ pub fn results_show(root: &Path, json_output: bool) -> Result<()> {
 pub fn results_clear(root: &Path) -> Result<()> {
     scan_module(root)?;
     results::clear(root)?;
-    println!("removed the imported test results");
+    outln!("removed the imported test results");
     Ok(())
 }
 

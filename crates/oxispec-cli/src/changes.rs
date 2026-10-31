@@ -38,7 +38,7 @@ pub fn change_status(
     }
     let from = node.status.clone().unwrap_or_default();
     if from == to {
-        println!("{} is already {to}", node.id);
+        outln!("{} is already {to}", node.id);
         return Ok(());
     }
     let allowed = change::next_statuses(&from);
@@ -90,7 +90,7 @@ pub fn change_status(
         .with_context(|| format!("cannot edit {}", node.path.display()))?;
     fs::write(&path, updated).with_context(|| format!("cannot write {}", path.display()))?;
     let from_text = if from.is_empty() { "no status" } else { &from };
-    println!("{}: {from_text} -> {to}{approval}", node.id);
+    outln!("{}: {from_text} -> {to}{approval}", node.id);
     Ok(())
 }
 
@@ -129,11 +129,11 @@ pub fn change_list(
             })
             .collect();
         let out = json!({"schema_version": OUTPUT_SCHEMA_VERSION, "change_sets": list});
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
     if changes.is_empty() {
-        println!(
+        outln!(
             "no change sets{}",
             status.map_or(String::new(), |s| format!(" that are {s}"))
         );
@@ -144,7 +144,7 @@ pub fn change_list(
             (Some(by), None) => format!("  approved by {by}"),
             _ => String::new(),
         };
-        println!(
+        outln!(
             "{:<12} {:<10} {}{approval}",
             n.id,
             n.status.as_deref().unwrap_or("no status"),

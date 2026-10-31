@@ -13,6 +13,9 @@ use oxispec_core::index;
 use oxispec_core::node::KNOWN_LINK_KINDS;
 use oxispec_core::{Finding, Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, modules};
 
+#[macro_use]
+mod output;
+
 mod agents;
 mod architecture;
 mod changes;
@@ -567,7 +570,7 @@ enum ReleaseAction {
 }
 
 fn main() -> ExitCode {
-    // `oxispec ... | head` closes our output early. `println!` panics on that, and the
+    // `oxispec ... | head` closes our output early. `outln!` panics on that, and the
     // panic message is noise: stop quietly, as other command line tools do.
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -726,7 +729,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     new_machine(&root, &title, scheme, cache)?
                 }
             };
-            println!("created {} ({})", created.0, created.1.display());
+            outln!("created {} ({})", created.0, created.1.display());
             Ok(ExitCode::SUCCESS)
         }
         Command::Change { action } => {
@@ -1078,7 +1081,7 @@ fn init(
         IdScheme::Sequential => "sequential",
         IdScheme::Random => "random",
     };
-    println!(
+    outln!(
         "initialized {} with modules: {} (ids: {scheme})",
         dir.display(),
         cfg.modules.join(", ")
@@ -1095,7 +1098,7 @@ fn warn_planned(names: &[String]) {
         .map(String::as_str)
         .collect();
     if !planned.is_empty() {
-        println!(
+        outln!(
             "note: not implemented yet, recorded only: {}",
             planned.join(", ")
         );
@@ -1116,7 +1119,7 @@ fn modules_command(explicit: Option<&Path>, action: ModulesAction) -> Result<()>
                     None => "",
                 };
                 let status = if m.implemented { "" } else { " (planned)" };
-                println!("{:<14} {:<8} {}{}", m.name, state, m.description, status);
+                outln!("{:<14} {:<8} {}{}", m.name, state, m.description, status);
             }
             Ok(())
         }
@@ -1136,12 +1139,12 @@ fn modules_command(explicit: Option<&Path>, action: ModulesAction) -> Result<()>
             config::save(&root, &cfg)?;
             ensure_module_dirs(&root, &cfg)?;
             if added.is_empty() {
-                println!("nothing to add");
+                outln!("nothing to add");
             } else {
-                println!("enabled: {}", added.join(", "));
+                outln!("enabled: {}", added.join(", "));
                 warn_planned(&added);
                 if added.iter().any(|m| m == "agents") {
-                    println!("run `oxispec agents update` to write the skills");
+                    outln!("run `oxispec agents update` to write the skills");
                 }
             }
             Ok(())
@@ -1169,7 +1172,7 @@ fn modules_command(explicit: Option<&Path>, action: ModulesAction) -> Result<()>
             }
             cfg.modules.retain(|m| !names.contains(m));
             config::save(&root, &cfg)?;
-            println!("disabled: {} (files are kept)", names.join(", "));
+            outln!("disabled: {} (files are kept)", names.join(", "));
             Ok(())
         }
     }
@@ -1212,9 +1215,9 @@ fn link_command(root: &Path, from: &str, kind: &str, to: &str, cache: bool) -> R
         LinkEdit::Added(updated) => {
             fs::write(&path, updated)
                 .with_context(|| format!("cannot write {}", path.display()))?;
-            println!("linked {} -[{kind}]-> {to}", node.id);
+            outln!("linked {} -[{kind}]-> {to}", node.id);
         }
-        LinkEdit::AlreadyLinked => println!("{} already has {kind} -> {to}", node.id),
+        LinkEdit::AlreadyLinked => outln!("{} already has {kind} -> {to}", node.id),
     }
     Ok(())
 }
@@ -1264,9 +1267,9 @@ fn index_command(root: &Path, rebuild: bool, json: bool) -> Result<()> {
             "removed": stats.removed,
             "cache_written": stats.cache_written,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
     } else {
-        println!(
+        outln!(
             "indexed {} markdown files ({} nodes): {} parsed, {} reused, {} removed",
             stats.files,
             graph.nodes.len(),
@@ -1275,9 +1278,7 @@ fn index_command(root: &Path, rebuild: bool, json: bool) -> Result<()> {
             stats.removed
         );
         if stats.parsed > 0 && !stats.cache_written {
-            println!(
-                "note: the cache could not be written, so the next run parses everything again"
-            );
+            outln!("note: the cache could not be written, so the next run parses everything again");
         }
     }
     Ok(())
@@ -1318,28 +1319,28 @@ fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<Exi
             "warnings": warnings,
             "findings": findings,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
     } else {
         if let Some(rev) = &revision {
-            println!("checking {rev}");
+            outln!("checking {rev}");
         }
         for f in &findings {
             if f.severity == Severity::Info && !options.verbose {
                 continue;
             }
-            println!("{}", finding_line(f));
+            outln!("{}", finding_line(f));
             if let Some(path) = &f.path {
                 match f.line {
-                    Some(line) => println!("  --> {}:{line}", path.display()),
-                    None => println!("  --> {}", path.display()),
+                    Some(line) => outln!("  --> {}:{line}", path.display()),
+                    None => outln!("  --> {}", path.display()),
                 }
             }
         }
         match scope {
-            Some((base, files)) => println!(
+            Some((base, files)) => outln!(
                 "{checked} of {total} nodes checked ({files} changed files since {base}, and the nodes that link to them): {errors} errors, {warnings} warnings"
             ),
-            None => println!("{total} nodes checked: {errors} errors, {warnings} warnings"),
+            None => outln!("{total} nodes checked: {errors} errors, {warnings} warnings"),
         }
     }
     let failed = errors > 0 || (options.strict && warnings > 0);
@@ -1372,21 +1373,21 @@ fn show(root: &Path, id: &str, json: bool, cache: bool, at: Option<&str>) -> Res
             "node": node,
             "incoming": incoming,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
     if let Some(rev) = &revision {
-        println!("at {rev}");
+        outln!("at {rev}");
     }
-    println!(
+    outln!(
         "{}  {}  [{}]",
         node.id,
         node.ty,
         node.status.as_deref().unwrap_or("no status")
     );
-    println!("path:  {}", node.path.display());
+    outln!("path:  {}", node.path.display());
     if let Some(owner) = &node.owner {
-        println!("owner: {owner}");
+        outln!("owner: {owner}");
     }
     for r in &node.requirements {
         let anchors: Vec<&str> = r
@@ -1397,9 +1398,9 @@ fn show(root: &Path, id: &str, json: bool, cache: bool, at: Option<&str>) -> Res
         let count = r.scenarios.len();
         let noun = if count == 1 { "scenario" } else { "scenarios" };
         if anchors.is_empty() {
-            println!("requirement: {} ({count} {noun})", r.name);
+            outln!("requirement: {} ({count} {noun})", r.name);
         } else {
-            println!(
+            outln!(
                 "requirement: {} ({count} {noun}, anchors {})",
                 r.name,
                 anchors.join(", ")
@@ -1407,17 +1408,17 @@ fn show(root: &Path, id: &str, json: bool, cache: bool, at: Option<&str>) -> Res
         }
     }
     if !node.links.is_empty() {
-        println!("links:");
+        outln!("links:");
         for (kind, targets) in &node.links {
             for t in targets {
-                println!("  {kind} -> {t}");
+                outln!("  {kind} -> {t}");
             }
         }
     }
     if !incoming.is_empty() {
-        println!("linked from:");
+        outln!("linked from:");
         for (n, kind) in incoming {
-            println!("  {} ({kind})  {}", n.id, n.path.display());
+            outln!("  {} ({kind})  {}", n.id, n.path.display());
         }
     }
     Ok(())

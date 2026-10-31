@@ -150,7 +150,7 @@ pub fn site_command(root: &Path, args: &SiteArgs) -> Result<()> {
     };
     let pages = render(&graph, &options, &*text);
     write_pages(&args.out, &pages)?;
-    println!("wrote {} pages to {}", pages.len(), args.out.display());
+    outln!("wrote {} pages to {}", pages.len(), args.out.display());
     Ok(())
 }
 
@@ -230,7 +230,7 @@ fn releases(root: &Path, args: &SiteArgs, title: &str) -> Result<()> {
 
     fs::create_dir_all(&args.out)?;
     fs::write(args.out.join("index.html"), root_page(title, &versions))?;
-    println!(
+    outln!(
         "wrote {total} pages for {} versions to {}",
         versions.len(),
         args.out.display()

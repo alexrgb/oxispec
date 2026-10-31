@@ -105,14 +105,14 @@ pub fn rollback_command(root: &Path, options: &Options<'_>) -> Result<()> {
             "new_errors": new_errors,
             "uncommitted": uncommitted,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
     } else {
-        println!("rolling back to {revision}");
+        outln!("rolling back to {revision}");
         for action in &actions {
-            println!("  {}", action.describe());
+            outln!("  {}", action.describe());
         }
         if acting.is_empty() {
-            println!("  nothing to do");
+            outln!("  nothing to do");
         }
     }
 
@@ -128,7 +128,7 @@ pub fn rollback_command(root: &Path, options: &Options<'_>) -> Result<()> {
         ));
         if !options.json {
             for f in &new_errors {
-                println!("  would break: {}", crate::finding_line(f));
+                outln!("  would break: {}", crate::finding_line(f));
             }
         }
     }
@@ -144,7 +144,7 @@ pub fn rollback_command(root: &Path, options: &Options<'_>) -> Result<()> {
     }
     if options.dry_run {
         if !options.json {
-            println!("dry run: nothing was changed");
+            outln!("dry run: nothing was changed");
         }
         return Ok(());
     }
@@ -170,7 +170,7 @@ pub fn rollback_command(root: &Path, options: &Options<'_>) -> Result<()> {
         fs::write(&full, bytes).with_context(|| format!("cannot write {}", path.display()))?;
     }
     if !options.json {
-        println!(
+        outln!(
             "wrote {} file(s), deleted {}. Review it with `oxispec diff HEAD`, then commit. The commit is the new revision, and history is not rewritten.",
             contents.len(),
             removals.len()

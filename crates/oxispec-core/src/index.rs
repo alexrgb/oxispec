@@ -15,6 +15,8 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -235,18 +237,44 @@ fn process(path: &Path, key: &str, old: Option<&CacheFile>, written_at: u128) ->
 ///
 /// With `use_cache`, unchanged files are not parsed again and the cache is
 /// updated when something changed.
-pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
-    let old = if use_cache { read_cache(root) } else { None };
-    let written_at = old.as_ref().map_or(0, |c| c.written_at_ns);
-    let mut stats = LoadStats::default();
-    let mut nodes: Vec<Node> = Vec::new();
-    let mut findings: Vec<Finding> = Vec::new();
-    let mut entries: BTreeMap<String, Entry> = BTreeMap::new();
-    let mut seen: HashSet<String> = HashSet::new();
-    let mut dirty = false;
+/// The last graph a long-running process loaded, and what the files looked like then.
+struct Memo {
+    root: PathBuf,
+    fingerprint: u64,
+    graph: Graph,
+}
 
-    // Walking is cheap. Reading, hashing and parsing wait on the disk and the CPU, so they
-    // are spread over a few threads. A cold start on a big project is mostly that waiting.
+static MEMO: Mutex<Option<Memo>> = Mutex::new(None);
+static MEMO_ON: AtomicBool = AtomicBool::new(false);
+
+/// Lets [`load`] keep the last graph in memory and hand it out again while no
+/// markdown file has changed. A long-running process (the MCP server) turns
+/// this on; a command that runs once has nothing to gain.
+pub fn keep_graph_in_memory() {
+    MEMO_ON.store(true, Ordering::Relaxed);
+}
+
+/// A number that changes when a markdown file is added, removed, resized or
+/// modified. `None` when a file changed in the last two seconds, because a
+/// second edit in the same clock tick could then go unseen.
+fn fingerprint(found: &[(PathBuf, String)]) -> Option<u64> {
+    let now = now_ns();
+    let mut hasher = blake3::Hasher::new();
+    for (path, key) in found {
+        let meta = fs::metadata(path).ok()?;
+        let mtime = mtime_ns(&meta);
+        if now.saturating_sub(mtime) < RACY_WINDOW_NS {
+            return None;
+        }
+        hasher.update(key.as_bytes());
+        hasher.update(&meta.len().to_le_bytes());
+        hasher.update(&mtime.to_le_bytes());
+    }
+    let digest = hasher.finalize();
+    Some(u64::from_le_bytes(digest.as_bytes()[..8].try_into().ok()?))
+}
+
+fn walk(root: &Path) -> Vec<(PathBuf, String)> {
     let walker = ignore::WalkBuilder::new(root).require_git(false).build();
     let mut found: Vec<(PathBuf, String)> = Vec::new();
     for dirent in walker.flatten() {
@@ -260,6 +288,51 @@ pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
         let key = key_of(path.strip_prefix(root).unwrap_or(path));
         found.push((path.to_path_buf(), key));
     }
+    found
+}
+
+pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
+    // Walking is cheap. Reading, hashing and parsing wait on the disk and the CPU, so they
+    // are spread over a few threads. A cold start on a big project is mostly that waiting.
+    let found = walk(root);
+    let memo_on = use_cache && MEMO_ON.load(Ordering::Relaxed);
+    let print = if memo_on { fingerprint(&found) } else { None };
+    if let Some(print) = print
+        && let Ok(guard) = MEMO.lock()
+        && let Some(memo) = guard.as_ref()
+        && memo.root == root
+        && memo.fingerprint == print
+    {
+        let stats = LoadStats {
+            files: found.len(),
+            reused: found.len(),
+            ..LoadStats::default()
+        };
+        return (memo.graph.clone(), stats);
+    }
+    let (graph, stats) = load_files(root, use_cache, found);
+    if let Some(print) = print
+        && let Ok(mut guard) = MEMO.lock()
+    {
+        *guard = Some(Memo {
+            root: root.to_path_buf(),
+            fingerprint: print,
+            graph: graph.clone(),
+        });
+    }
+    (graph, stats)
+}
+
+fn load_files(root: &Path, use_cache: bool, found: Vec<(PathBuf, String)>) -> (Graph, LoadStats) {
+    let old = if use_cache { read_cache(root) } else { None };
+    let written_at = old.as_ref().map_or(0, |c| c.written_at_ns);
+    let mut stats = LoadStats::default();
+    let mut nodes: Vec<Node> = Vec::new();
+    let mut findings: Vec<Finding> = Vec::new();
+    let mut entries: BTreeMap<String, Entry> = BTreeMap::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut dirty = false;
+
     stats.files = found.len();
 
     let workers = std::thread::available_parallelism()

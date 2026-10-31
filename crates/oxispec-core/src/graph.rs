@@ -8,7 +8,7 @@ use crate::id;
 use crate::node::Node;
 use crate::parse::parse_file_text;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Graph {
     pub nodes: Vec<Node>,
     /// Findings from reading files, before any check runs.

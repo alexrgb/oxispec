@@ -21,18 +21,18 @@ pub fn status_command(root: &Path, at: Option<&str>, json: bool, cache: bool) ->
         let mut out = serde_json::to_value(&summary)?;
         out["schema_version"] = OUTPUT_SCHEMA_VERSION.into();
         out["at"] = serde_json::to_value(revision.as_ref().map(crate::revision_json))?;
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
     if let Some(rev) = &revision {
-        println!("reading {rev}");
+        outln!("reading {rev}");
     }
     print_text(&summary);
     Ok(())
 }
 
 fn print_text(s: &Summary) {
-    println!("{} nodes, {} links", s.nodes, s.links);
+    outln!("{} nodes, {} links", s.nodes, s.links);
     for (ty, count) in &s.types {
         let breakdown = s
             .statuses
@@ -42,21 +42,23 @@ fn print_text(s: &Summary) {
                 format!(" ({})", parts.join(", "))
             })
             .unwrap_or_default();
-        println!("  {ty:<14} {count}{breakdown}");
+        outln!("  {ty:<14} {count}{breakdown}");
     }
     if s.requirements > 0 {
         let percent =
             (s.requirements_with_claims as f64 * 1000.0 / s.requirements as f64).round() / 10.0;
-        println!(
+        outln!(
             "{} scenarios; {} of {} requirements have claims ({percent}%)",
-            s.scenarios, s.requirements_with_claims, s.requirements
+            s.scenarios,
+            s.requirements_with_claims,
+            s.requirements
         );
     }
     if s.errors + s.warnings == 0 {
-        println!("checks: clean");
+        outln!("checks: clean");
     } else {
         let codes: Vec<String> = s.codes.iter().map(|(c, n)| format!("{c} x{n}")).collect();
-        println!(
+        outln!(
             "checks: {} errors, {} warnings ({}); `oxispec check` lists them",
             s.errors,
             s.warnings,
@@ -64,9 +66,9 @@ fn print_text(s: &Summary) {
         );
     }
     if !s.changes_in_flight.is_empty() {
-        println!("changes in flight: {}", s.changes_in_flight.join(", "));
+        outln!("changes in flight: {}", s.changes_in_flight.join(", "));
     }
     if let Some(version) = &s.latest_release {
-        println!("latest release: {version}");
+        outln!("latest release: {version}");
     }
 }
