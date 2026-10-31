@@ -2,7 +2,7 @@
 //!
 //! Messages are JSON-RPC 2.0, one per line. Reading tools call the same code as the
 //! `--json` commands, so an agent and a person see the same answers. The server can
-//! propose a change set. It cannot approve one.
+//! offer nodes as resources and a few prompts, and propose a change set. It cannot approve one.
 
 use std::io::{BufRead, Write};
 use std::path::Path;
@@ -21,6 +21,62 @@ const VERSIONS: &[&str] = &["2025-06-18", "2025-03-26", "2024-11-05"];
 const INSTRUCTIONS: &str = "Specs, decisions and tests for this project, as a graph of linked nodes. \
 Start with spec_search or spec_context, read nodes with spec_get, and run spec_check before you finish. spec_check also reports requirements whose claims contradict each other. \
 spec_propose_change writes a draft change set. Only a person approves it. Quote node IDs exactly as returned.";
+
+/// Resource URIs for nodes: `oxispec://node/REQ-AUTH-0001`.
+const NODE_URI: &str = "oxispec://node/";
+const RESOURCE_PAGE: usize = 500;
+
+/// Prompts: a name, what it does, and the text sent with the node's ID filled in.
+const PROMPTS: &[(&str, &str, &str)] = &[
+    (
+        "review-requirement",
+        "Review a requirement for gaps, ambiguity and conflicts",
+        "Review the requirement {id}. Call spec_context for {id}, read what it links to, and run spec_check. \
+Report: wording that is ambiguous or cannot be tested, scenarios that are missing, conflicts with other requirements or decisions, and links that look wrong. Quote node IDs exactly. Do not edit anything.",
+    ),
+    (
+        "implement-requirement",
+        "Plan and write the code and tests for a requirement",
+        "Implement the requirement {id}. Call spec_context for {id} and spec_trace for {id} to see what exists. \
+Write the code with a `spec: {id}` comment and a test with a `verifies: {id}` comment for each scenario, then run spec_check. If the spec is wrong or unclear, say so and propose the change with spec_propose_change instead of working around it.",
+    ),
+    (
+        "assess-impact",
+        "Say what a change to a node would affect",
+        "Assess the impact of changing {id}. Call spec_neighbors for {id} with depth 3, and spec_trace for each requirement you find. \
+List the nodes, code and tests that would need to change, and what could break. Do not edit anything.",
+    ),
+];
+
+fn prompt_list() -> Vec<Value> {
+    PROMPTS
+        .iter()
+        .map(|(name, description, _)| {
+            json!({
+                "name": name,
+                "description": description,
+                "arguments": [{"name": "id", "description": "A node ID such as REQ-AUTH-0001", "required": true}],
+            })
+        })
+        .collect()
+}
+
+fn prompt_get(params: &Value) -> Result<Value> {
+    let name = params.get("name").and_then(Value::as_str).unwrap_or("");
+    let (_, description, template) = PROMPTS
+        .iter()
+        .find(|(n, _, _)| *n == name)
+        .with_context(|| format!("unknown prompt `{name}`"))?;
+    let args = params.get("arguments").cloned().unwrap_or(json!({}));
+    let node = node_id(&args, "id")?;
+    Ok(json!({
+        "description": description,
+        "messages": [{
+            "role": "user",
+            "content": {"type": "text", "text": template.replace("{id}", &node)},
+        }],
+    }))
+}
 
 struct Server<'a> {
     root: &'a Path,
@@ -96,7 +152,11 @@ impl Server<'_> {
                     &id,
                     json!({
                         "protocolVersion": version,
-                        "capabilities": {"tools": {"listChanged": false}},
+                        "capabilities": {
+                            "tools": {"listChanged": false},
+                            "resources": {"subscribe": false, "listChanged": false},
+                            "prompts": {"listChanged": false},
+                        },
                         "serverInfo": {"name": "oxispec", "version": env!("CARGO_PKG_VERSION")},
                         "instructions": INSTRUCTIONS,
                     }),
@@ -104,6 +164,29 @@ impl Server<'_> {
             }
             "ping" => result(&id, json!({})),
             "tools/list" => result(&id, json!({"tools": self.tools()})),
+            "resources/list" => match self.resources(&params) {
+                Ok(value) => result(&id, value),
+                Err(e) => error(id, -32602, &format!("{e:#}")),
+            },
+            "resources/templates/list" => result(
+                &id,
+                json!({"resourceTemplates": [{
+                    "uriTemplate": format!("{NODE_URI}{{id}}"),
+                    "name": "node",
+                    "title": "A spec node",
+                    "description": "The markdown of one node, by ID, for example REQ-AUTH-0001",
+                    "mimeType": "text/markdown",
+                }]}),
+            ),
+            "resources/read" => match self.read_resource(&params) {
+                Ok(value) => result(&id, value),
+                Err(e) => error(id, -32002, &format!("{e:#}")),
+            },
+            "prompts/list" => result(&id, json!({"prompts": prompt_list()})),
+            "prompts/get" => match prompt_get(&params) {
+                Ok(value) => result(&id, value),
+                Err(e) => error(id, -32602, &format!("{e:#}")),
+            },
             "tools/call" => {
                 let name = params.get("name").and_then(Value::as_str).unwrap_or("");
                 let args = params.get("arguments").cloned().unwrap_or(json!({}));
@@ -374,6 +457,55 @@ impl Server<'_> {
     }
 
     /// Runs this same program with `--json`. Exit code 1 means findings, which is an answer.
+    /// One page of node resources, `RESOURCE_PAGE` at a time. The cursor is an offset.
+    fn resources(&self, params: &Value) -> Result<Value> {
+        let start = match params.get("cursor").and_then(Value::as_str) {
+            None => 0,
+            Some(c) => c.parse::<usize>().context("bad cursor")?,
+        };
+        let graph = self.graph(None)?;
+        let mut nodes: Vec<_> = graph.nodes.iter().collect();
+        nodes.sort_by(|a, b| a.id.cmp(&b.id));
+        let page: Vec<Value> = nodes
+            .iter()
+            .skip(start)
+            .take(RESOURCE_PAGE)
+            .map(|n| {
+                json!({
+                    "uri": format!("{NODE_URI}{}", n.id),
+                    "name": n.id,
+                    "title": n.title,
+                    "description": format!("{}{}", n.ty, n.status.as_ref().map(|s| format!(", {s}")).unwrap_or_default()),
+                    "mimeType": "text/markdown",
+                })
+            })
+            .collect();
+        let end = start + page.len();
+        let mut out = json!({"resources": page});
+        if end < nodes.len() {
+            out["nextCursor"] = json!(end.to_string());
+        }
+        Ok(out)
+    }
+
+    fn read_resource(&self, params: &Value) -> Result<Value> {
+        let uri = params
+            .get("uri")
+            .and_then(Value::as_str)
+            .context("`uri` is required")?;
+        let node_id = uri
+            .strip_prefix(NODE_URI)
+            .with_context(|| format!("`{uri}` is not an oxispec resource"))?;
+        valid_id(node_id)?;
+        let graph = self.graph(None)?;
+        let node = graph
+            .get(node_id)
+            .with_context(|| format!("no node with id {node_id}"))?;
+        let text = std::fs::read_to_string(self.root.join(&node.path))
+            .with_context(|| format!("cannot read {}", node.path.display()))?;
+        Ok(json!({"contents": [{"uri": uri, "mimeType": "text/markdown", "text": text}]}))
+    }
+
     fn cli(&self, args: &[&str]) -> Result<String> {
         let exe = std::env::current_exe().context("cannot find the oxispec program")?;
         let out = Command::new(exe)

@@ -36,8 +36,9 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | 13 | `feat/13-architecture` | C4 and deployment model, views, Mermaid output, architecture rules | Container, component and deployment views render from one model. **Merged** (#26). Scope as built: an `architecture` block on system, person, container, component and environment nodes, context, container, component and deployment views as Mermaid, `forbid` rules with the path that breaks them, checks, `new architecture`, a skill and an MCP tool. No dynamic views, API or drift checks, PlantUML, Structurizr or D2 output. |
 | 14 | `feat/14-release-pipeline` | Product release pipeline: dist builds, GitHub Releases, installers, Homebrew, npm, crates.io | A tag would build and publish every channel. **Merged** (#27). Scope as built: `dist` configuration and generated workflow for five targets, shell and PowerShell installers, Homebrew and npm publish jobs, a crates.io job, a CI check that the library packages, [releasing.md](releasing.md). Nothing is published until the one-time setup is done and a tag is pushed. No musl, signing or notarization, winget or system packages. |
 | 15 | `feat/15-connect` | `oxispec connect`: write the MCP entry into the config files of Claude Code, Cursor, Gemini CLI and VS Code | The entry is added without touching other settings, twice is a no-op, a file with comments is refused. **Merged** (#33). |
-| 16 | `feat/16-status` | `oxispec status` and the MCP tool `spec_status`: counts by type and status, findings by code, changes in flight, latest release | A person or an agent sees what needs attention in one call. **In review.** |
-| 17+ | later | Server mode, RBAC and ABAC, natural language layer, workspaces and federation | See design sections 10, 14 and 19 |
+| 16 | `feat/16-status` | `oxispec status` and the MCP tool `spec_status`: counts by type and status, findings by code, changes in flight, latest release | A person or an agent sees what needs attention in one call. **Merged** (#34). |
+| 17 | `feat/17-mcp-resources` | MCP resources (one per node) and three prompts | A client can list and read nodes as resources and get the prompts. **In review.** |
+| 18+ | later | Server mode, RBAC and ABAC, natural language layer, workspaces and federation | See design sections 10, 14 and 19 |
 
 The plan changes as we learn. Change it in a pull request, like anything else.
 
@@ -66,5 +67,6 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 13** (#26): the architecture model, views and rules. See [architecture.md](architecture.md).
 - **Iteration 14** (#27): the release pipeline. See [releasing.md](releasing.md).
 - **Iteration 15** (#33): `oxispec connect`. See [mcp.md](mcp.md#connect-a-client).
-- **Iteration 16**: `oxispec status`.
+- **Iteration 16** (#34): `oxispec status`.
+- **Iteration 17**: MCP resources and prompts. See [mcp.md](mcp.md#resources-and-prompts).
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

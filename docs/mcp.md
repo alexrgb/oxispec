@@ -2,7 +2,7 @@
 
 `oxispec mcp` serves the specs to AI clients over the [Model Context Protocol](https://modelcontextprotocol.io), on stdin and stdout. It needs the `mcp` module (`oxispec modules add mcp`, included in the `standard` preset). The client starts it, so there is nothing to host.
 
-The server speaks protocol versions 2025-06-18, 2025-03-26 and 2024-11-05, with one JSON-RPC message per line. It offers tools only. Resources and prompts are not offered yet.
+The server speaks protocol versions 2025-06-18, 2025-03-26 and 2024-11-05, with one JSON-RPC message per line. It offers tools, node resources and three prompts.
 
 ## Connect a client
 
@@ -53,6 +53,18 @@ Tool names use underscores, not dots, because some clients do not accept dots. T
 **Arguments are checked.** IDs must be valid IDs, revisions cannot start with `-`, and numbers have limits, so an argument cannot be read as an option by git or by `oxispec`.
 
 **An error is a result.** A tool that fails returns `isError: true` and a message the agent can read. A malformed message gets a JSON-RPC error.
+
+## Resources and prompts
+
+**Resources.** Every node is a resource with the URI `oxispec://node/<ID>` and the MIME type `text/markdown`. `resources/list` returns them sorted by ID, 500 to a page with a `nextCursor`; `resources/templates/list` gives the template `oxispec://node/{id}`; `resources/read` returns the file as it is in the working tree. Clients that let a person attach a resource can attach a node this way. Only `oxispec://node/` URIs are read, and the ID is validated first. There are no subscriptions: the list is read when asked.
+
+**Prompts.** Each takes one argument, `id`, and sends one user message that tells the agent which tools to call:
+
+| Prompt | Asks the agent to |
+|---|---|
+| `review-requirement` | review a requirement for ambiguity, missing scenarios and conflicts, without editing |
+| `implement-requirement` | write code and tests with `spec:` and `verifies:` comments, then run `spec_check` |
+| `assess-impact` | list what changing a node would affect, without editing |
 
 ## Context packs
 

@@ -4355,3 +4355,83 @@ fn status_summarizes_the_project_in_text_and_json() {
     let outside = tempfile::tempdir().unwrap();
     assert_eq!(run(outside.path(), &["status"]).code, 2);
 }
+
+#[test]
+fn mcp_offers_nodes_as_resources_and_a_few_prompts() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    let id = {
+        let out = run(p, &["new", "requirement", "auth", "Third one"]);
+        created_id(&out)
+    };
+    let uri = format!("oxispec://node/{id}");
+    let replies = mcp(
+        p,
+        &[],
+        &[
+            rpc(
+                1,
+                "initialize",
+                serde_json::json!({"protocolVersion": "2025-06-18"}),
+            ),
+            rpc(2, "resources/list", serde_json::json!({})),
+            rpc(3, "resources/templates/list", serde_json::json!({})),
+            rpc(4, "resources/read", serde_json::json!({"uri": uri})),
+            rpc(
+                5,
+                "resources/read",
+                serde_json::json!({"uri": "file:///etc/passwd"}),
+            ),
+            rpc(
+                6,
+                "resources/read",
+                serde_json::json!({"uri": "oxispec://node/--bad"}),
+            ),
+            rpc(7, "resources/list", serde_json::json!({"cursor": "x"})),
+            rpc(8, "prompts/list", serde_json::json!({})),
+            rpc(
+                9,
+                "prompts/get",
+                serde_json::json!({"name": "assess-impact", "arguments": {"id": id}}),
+            ),
+            rpc(
+                10,
+                "prompts/get",
+                serde_json::json!({"name": "nope", "arguments": {"id": id}}),
+            ),
+            rpc(
+                11,
+                "prompts/get",
+                serde_json::json!({"name": "assess-impact", "arguments": {"id": "--x"}}),
+            ),
+        ],
+    );
+    let by = |n: u64| replies.iter().find(|r| r["id"] == n).unwrap();
+    assert!(by(1)["result"]["capabilities"]["resources"].is_object());
+    assert!(by(1)["result"]["capabilities"]["prompts"].is_object());
+    let listed = by(2)["result"]["resources"].as_array().unwrap();
+    assert_eq!(listed.len(), 4);
+    assert!(listed.iter().any(|r| r["uri"] == uri.as_str()));
+    assert!(by(2)["result"].get("nextCursor").is_none());
+    assert_eq!(
+        by(3)["result"]["resourceTemplates"][0]["uriTemplate"],
+        "oxispec://node/{id}"
+    );
+    let text = by(4)["result"]["contents"][0]["text"].as_str().unwrap();
+    assert!(text.contains("Third one"), "{text}");
+    for n in [5, 6] {
+        assert!(by(n).get("error").is_some(), "{}", by(n));
+    }
+    assert!(by(7).get("error").is_some());
+    assert_eq!(by(8)["result"]["prompts"].as_array().unwrap().len(), 3);
+    let message = by(9)["result"]["messages"][0]["content"]["text"]
+        .as_str()
+        .unwrap();
+    assert!(
+        message.contains(&id) && !message.contains("{id}"),
+        "{message}"
+    );
+    assert!(by(10).get("error").is_some());
+    assert!(by(11).get("error").is_some());
+}
