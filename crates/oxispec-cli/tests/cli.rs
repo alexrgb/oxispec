@@ -4138,3 +4138,34 @@ fn hostile_files_never_make_a_command_panic() {
     let check = run(p, &["check"]);
     assert!(check.stdout.contains("E023"), "{}", check.stdout);
 }
+
+#[test]
+fn links_added_at_the_same_time_to_one_file_are_all_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(
+        run(p, &["init", "--preset", "standard", "--agents", "none"]).code,
+        0
+    );
+    run(p, &["new", "requirement", "race", "Source"]);
+    for n in 0..8 {
+        run(p, &["new", "requirement", "race", &format!("Target {n}")]);
+    }
+    let handles: Vec<_> = (2..=9)
+        .map(|n| {
+            let p = p.to_path_buf();
+            std::thread::spawn(move || {
+                let to = format!("REQ-RACE-{n:04}");
+                let out = run(&p, &["link", "REQ-RACE-0001", "refines", &to]);
+                assert_eq!(out.code, 0, "{}", out.stderr);
+            })
+        })
+        .collect();
+    for h in handles {
+        h.join().unwrap();
+    }
+    let v = json(&run(p, &["show", "REQ-RACE-0001", "--json"]));
+    let links = v["node"]["links"]["refines"].as_array().unwrap();
+    assert_eq!(links.len(), 8, "{v}");
+}

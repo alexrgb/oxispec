@@ -29,6 +29,7 @@ Fixed in the pull requests that added this review and the stress tool:
 5. **The deployment view was quadratic.** Building edges compared every pair of hosted elements and allocated for each, about half a second at 1,500 containers. It uses a lookup now.
 
 6. **`machine --tests` ran out of memory on a big machine.** It built every test's whole path before printing, so memory grew with transitions times depth, and the CI runner killed it on a 10,000-state machine. The tests are made one at a time now, there is a `--limit`, and the MCP tool returns at most 200. The stress workflow on `main` found this one, on its first run.
+7. **Commands that edit a file could lose each other's edits.** Eight `oxispec link` runs at once on one requirement kept 5 of 8 links. Every command that writes (`new`, `link`, `change`, `confirm`, `results`, `release`, `rollback`) now takes one project lock first, and a test covers it.
 
 Not fixed, and worth knowing:
 
@@ -36,7 +37,6 @@ Not fixed, and worth knowing:
 - **A state machine block has a size limit.** The YAML parser stops at 250,000 nodes, about 30,000 transitions in one block, and the block is reported as unreadable.
 - **Each MCP read call starts a process.** A call costs tens of milliseconds even on a small project. Fine for an agent, wrong for a server. Server mode will need the graph in memory.
 - **`site` is the slowest command.** About 1.5 ms per page: 9 to 15 seconds for 12,000 nodes.
-- **Other commands that edit files are not locked.** `link`, `change status`, `rollback` and `confirm` read a file and write it back, so two at once on one file can lose an edit. Only `new` is locked now. Git is still the answer for separate working trees.
 - **The search lock serializes all persistent searches.** Under 8 parallel readers on a small project the median search took 0.4 s. A shared lock for readers would fix it if it matters.
 
 ## Scale
@@ -58,5 +58,5 @@ MCP load, 8 clients on 2,000 requirements: about 100 requests per second, p95 ar
 1. Tighten the budgets. The first run on a CI machine (large preset, Linux) was well inside them: cold `check` 0.7 s against a budget of 13.6 s, `site` 1.0 s against 35 s. Cold start is the part that was slow on the laptop and is fast on the runner.
 2. Add a property test that compares the claims solver with a brute force over small domains. It is the piece where a wrong answer would be silent.
 3. Cover the weak files above, starting with `oxispec-cli/src/agents.rs`.
-4. Read files in parallel on a cold start, and decide whether the other editing commands need the same lock as `new`.
+4. Read files in parallel on a cold start.
 5. Before server mode, hold the graph in memory so a request does not start a process.

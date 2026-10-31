@@ -663,8 +663,8 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let cfg = config::load(&root)?;
             let scheme = id_scheme.map_or(cfg.id_scheme, IdScheme::from);
             // Allocating an ID and writing its file must not interleave with another
-            // `oxispec new` in the same project, or both would pick the same number.
-            let _lock = lock_for_new(&root)?;
+            // command that writes in the same project, or both would pick the same number.
+            let _lock = lock_project(&root)?;
             let created = match kind {
                 NewKind::Requirement { domain, title } => {
                     require_module(&cfg, "specs")?;
@@ -696,6 +696,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
         }
         Command::Change { action } => {
             let root = project_root(cli.root.as_deref())?;
+            let _lock = lock_project(&root)?;
             match action {
                 ChangeAction::Status {
                     id,
@@ -780,11 +781,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
         }
         Command::Confirm { ids, all, dry_run } => {
             let root = project_root(cli.root.as_deref())?;
+            let _lock = lock_project(&root)?;
             trace::confirm_command(&root, &ids, all, dry_run, cache)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Results { action } => {
             let root = project_root(cli.root.as_deref())?;
+            let _lock = lock_project(&root)?;
             match action {
                 ResultsAction::Import { files, replace } => {
                     trace::results_import(&root, &files, replace)?
@@ -814,6 +817,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
         }
         Command::Release { action } => {
             let root = project_root(cli.root.as_deref())?;
+            let _lock = lock_project(&root)?;
             let ready = match action {
                 ReleaseAction::Prepare {
                     version,
@@ -843,6 +847,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
         }
         Command::Link { from, kind, to } => {
             let root = project_root(cli.root.as_deref())?;
+            let _lock = lock_project(&root)?;
             config::load(&root)?;
             link_command(&root, &from, &kind, &to, cache)?;
             Ok(ExitCode::SUCCESS)
@@ -900,6 +905,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             json,
         } => {
             let root = project_root(cli.root.as_deref())?;
+            let _lock = lock_project(&root)?;
             let options = rollback::Options {
                 revision: &revision,
                 ids,
@@ -1628,8 +1634,10 @@ fn new_element(
     Ok((id, rel))
 }
 
-/// An exclusive lock, held until the returned file is dropped.
-fn lock_for_new(root: &Path) -> Result<fs::File> {
+/// An exclusive lock on the project for a command that writes files, held until the returned
+/// file is dropped. Two such commands at once would otherwise read the same file, change it
+/// differently, and the second write would erase the first.
+fn lock_project(root: &Path) -> Result<fs::File> {
     let dir = root.join(oxispec_core::index::CACHE_DIR);
     fs::create_dir_all(&dir)?;
     let file = OpenOptions::new()
