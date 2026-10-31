@@ -18,6 +18,7 @@ mod architecture;
 mod changes;
 mod ci;
 mod claims;
+mod connect;
 mod context;
 mod git;
 mod history;
@@ -112,6 +113,17 @@ enum Command {
     Agents {
         #[command(subcommand)]
         action: AgentsAction,
+    },
+    /// Add the MCP server to the config files of AI clients (claude, cursor, gemini, copilot)
+    Connect {
+        /// The clients to write for (default: the project's `agents`, else all four)
+        clients: Vec<String>,
+        /// Start the server with `--read-only`
+        #[arg(long)]
+        read_only: bool,
+        /// Show what would be written, and write nothing
+        #[arg(long)]
+        dry_run: bool,
     },
     /// The text of some nodes and what is near them, sized to a token budget, for an agent
     Context {
@@ -628,6 +640,15 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let cfg = config::load(&root)?;
             require_module(&cfg, "mcp")?;
             mcp::serve(&root, read_only)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Connect {
+            clients,
+            read_only,
+            dry_run,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            connect::connect_command(&root, &clients, read_only, dry_run)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Agents { action } => match action {

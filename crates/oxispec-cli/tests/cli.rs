@@ -4281,3 +4281,56 @@ fn a_small_budget_leaves_related_nodes_as_pointers() {
     let out = run(p, &["context", "REQ-A-9999"]);
     assert_eq!(out.code, 2);
 }
+
+#[test]
+fn connect_writes_the_mcp_entry_and_keeps_other_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(run(dir.path(), &["init"]).code, 0);
+    std::fs::create_dir_all(dir.path().join(".gemini")).unwrap();
+    std::fs::write(
+        dir.path().join(".gemini/settings.json"),
+        r#"{"theme":"dark"}"#,
+    )
+    .unwrap();
+
+    let dry = run(dir.path(), &["connect", "--dry-run"]);
+    assert_eq!(dry.code, 0, "{}", dry.stderr);
+    assert!(dry.stdout.contains("would create .mcp.json"));
+    assert!(!dir.path().join(".mcp.json").exists());
+
+    let out = run(dir.path(), &["connect", "--read-only"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let claude = std::fs::read_to_string(dir.path().join(".mcp.json")).unwrap();
+    assert!(claude.contains("--read-only"));
+    let vscode = std::fs::read_to_string(dir.path().join(".vscode/mcp.json")).unwrap();
+    assert!(vscode.contains("\"servers\"") && vscode.contains("stdio"));
+    let gemini = std::fs::read_to_string(dir.path().join(".gemini/settings.json")).unwrap();
+    assert!(gemini.contains("\"theme\": \"dark\"") && gemini.contains("oxispec"));
+
+    let again = run(dir.path(), &["connect", "--read-only"]);
+    assert!(
+        again.stdout.contains("unchanged .mcp.json"),
+        "{}",
+        again.stdout
+    );
+}
+
+#[test]
+fn connect_refuses_unknown_clients_and_files_it_cannot_merge() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(run(dir.path(), &["init"]).code, 0);
+    let bad = run(dir.path(), &["connect", "vim"]);
+    assert_eq!(bad.code, 2);
+    assert!(bad.stderr.contains("unknown client `vim`"));
+
+    std::fs::write(dir.path().join(".mcp.json"), "{ // mine\n}").unwrap();
+    let out = run(dir.path(), &["connect", "claude", "cursor"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("by hand"), "{}", out.stderr);
+    // Nothing else was written either.
+    assert!(!dir.path().join(".cursor/mcp.json").exists());
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join(".mcp.json")).unwrap(),
+        "{ // mine\n}"
+    );
+}

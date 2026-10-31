@@ -42,6 +42,7 @@ oxispec release publish 0.2.0           # gates, then the tag specs-v0.2.0 (need
 oxispec agents update                   # skills for Claude Code, Cursor, Copilot and Gemini CLI
 oxispec context REQ-AUTH-0001 --budget 4000   # the node and what is near it, sized for an agent
 oxispec mcp                             # the specs as an MCP server, for AI clients (needs the mcp module)
+oxispec connect                         # add that server to the config of Claude Code, Cursor, Gemini CLI, VS Code
 oxispec new vocabulary "Auth words"     # typed variables for claims (needs the consistency module)
 oxispec claims                          # the vocabulary and the claims; `check` reports conflicts
 oxispec new architecture system "Shop" # an element of the architecture model (needs the architecture module)
