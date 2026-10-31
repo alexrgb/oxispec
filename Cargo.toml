@@ -8,10 +8,13 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/alexrgb/oxispec"
 rust-version = "1.89"
-# Not published to crates.io yet. Remove when the first release is published.
-publish = false
+homepage = "https://github.com/alexrgb/oxispec"
+keywords = ["specs", "adr", "requirements", "mcp", "ai-agents"]
+categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
+# The version moves with `workspace.package.version` in every release. See docs/releasing.md.
+oxispec-core = { path = "crates/oxispec-core", version = "=0.0.1" }
 anyhow = "1"
 blake3 = { version = "1", features = ["pure"] }
 clap = { version = "4", features = ["derive"] }
@@ -22,3 +25,8 @@ serde-saphyr = "2"
 serde_json = "1"
 tempfile = "3"
 thiserror = "2"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
