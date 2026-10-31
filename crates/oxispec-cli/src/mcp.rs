@@ -86,7 +86,7 @@ struct Server<'a> {
 pub fn serve(root: &Path, read_only: bool) -> Result<()> {
     let cfg = config::load(root)?;
     // Calls come one after another in this process, so the graph can stay loaded.
-    index::keep_graph_in_memory();
+    index::keep_graph_in_memory(root);
     let server = Server {
         root,
         cfg,

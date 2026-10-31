@@ -52,7 +52,9 @@ Tool names use underscores, not dots, because some clients do not accept dots. T
 
 **Arguments are checked.** IDs must be valid IDs, revisions cannot start with `-`, and numbers have limits, so an argument cannot be read as an option by git or by `oxispec`.
 
-**No process per call.** Tools run in the server's own process, with the same code as the commands. The server keeps the last graph in memory and reuses it while no markdown file has been added, removed, resized or modified; a file changed in the last two seconds is read again, so an edit is never missed. Edits made while the server runs show up on the next call.
+**No process per call.** Tools run in the server's own process, with the same code as the commands. The server keeps the last graph, and the result of the checks on it, in memory. A file watcher tells it when something under the project changed, so a call that finds nothing changed reads no files at all. Commands that write tell the server themselves, without waiting for the watcher. Edits made while the server runs show up on the next call; the watcher reports in milliseconds, which is much less than the time an agent takes between calls.
+
+Two fallbacks keep it correct. If the watcher cannot start (for example, the system is out of watch handles), every call compares the files instead, as before. And every 30 seconds the files are compared in full anyway, in case an event was missed. A file changed in the last two seconds is never kept, because a second edit in the same clock tick could go unseen.
 
 **An error is a result.** A tool that fails returns `isError: true` and a message the agent can read. A malformed message gets a JSON-RPC error.
 

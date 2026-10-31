@@ -1673,7 +1673,17 @@ fn new_element(
 /// An exclusive lock on the project for a command that writes files, held until the returned
 /// file is dropped. Two such commands at once would otherwise read the same file, change it
 /// differently, and the second write would erase the first.
-fn lock_project(root: &Path) -> Result<fs::File> {
+/// Holds the project lock. Dropping it tells a long-running process (the MCP
+/// server) that files may have changed, without waiting for the file watcher.
+struct ProjectLock(#[allow(dead_code)] fs::File);
+
+impl Drop for ProjectLock {
+    fn drop(&mut self) {
+        oxispec_core::index::graph_may_have_changed();
+    }
+}
+
+fn lock_project(root: &Path) -> Result<ProjectLock> {
     let dir = root.join(oxispec_core::index::CACHE_DIR);
     fs::create_dir_all(&dir)?;
     let file = OpenOptions::new()
@@ -1684,7 +1694,7 @@ fn lock_project(root: &Path) -> Result<fs::File> {
         .context("cannot create the lock for `oxispec new`")?;
     file.lock()
         .context("cannot lock the project for `oxispec new`")?;
-    Ok(file)
+    Ok(ProjectLock(file))
 }
 
 fn new_machine(

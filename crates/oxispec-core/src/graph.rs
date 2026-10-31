@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 
 use crate::finding::Finding;
 use crate::id;
@@ -15,6 +16,9 @@ pub struct Graph {
     pub findings: Vec<Finding>,
     /// Position of the first node with each ID, so lookups do not scan.
     by_id: HashMap<String, usize>,
+    /// What [`crate::check::check`] found, shared by clones of this graph so a
+    /// long-running process runs the checks once per version of the files.
+    pub(crate) checked: Arc<OnceLock<Vec<Finding>>>,
 }
 
 impl Graph {
@@ -29,6 +33,7 @@ impl Graph {
             nodes,
             findings,
             by_id,
+            checked: Arc::default(),
         }
     }
 
