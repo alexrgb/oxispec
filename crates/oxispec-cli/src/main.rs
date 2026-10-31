@@ -548,7 +548,10 @@ fn main() -> ExitCode {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let text = info.to_string();
-        if text.contains("Broken pipe") || text.contains("os error 32") {
+        // Unix says "Broken pipe" (32). Windows says "The pipe is being closed" (232)
+        // or "The pipe has been ended" (109).
+        let closed = ["Broken pipe", "os error 32", "os error 232", "os error 109"];
+        if closed.iter().any(|c| text.contains(c)) {
             std::process::exit(0);
         }
         default_hook(info);

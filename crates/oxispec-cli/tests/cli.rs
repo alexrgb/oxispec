@@ -4075,7 +4075,7 @@ fn hostile_files_never_make_a_command_panic() {
         ("dashes.md", b"---\n"),
         ("nothing.md", b"---\n---\n"),
         ("binary.md", b"\xff\xfe\x00bad"),
-        ("nul.md", b"---\nid: REQ-H-0006\ntype: requirement\n---\nNUL \x00 here ### Requirement: x\n"),
+        ("nulbyte.md", b"---\nid: REQ-H-0006\ntype: requirement\n---\nNUL \x00 here ### Requirement: x\n"),
         ("bom.md", b"\xef\xbb\xbf---\nid: REQ-H-0002\ntype: requirement\n---\n### Requirement: Bom\nThe system SHALL.\n"),
         ("nested.md", b"---\nid: REQ-H-0004\ntype: requirement\nlinks:\n  satisfies:\n    - a: {b: [c]}\n---\ntext\n"),
         ("self.md", b"---\nid: REQ-H-0005\ntype: requirement\nlinks:\n  supersedes: REQ-H-0005\n  refines: REQ-H-0005\n---\n### Requirement: Self\nThe system SHALL.\n\n#### Scenario: S\n- a\n"),
