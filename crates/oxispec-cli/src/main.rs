@@ -28,6 +28,7 @@ mod releases;
 mod rollback;
 mod search;
 mod site;
+mod status;
 mod trace;
 
 #[derive(Parser)]
@@ -113,6 +114,14 @@ enum Command {
     Agents {
         #[command(subcommand)]
         action: AgentsAction,
+    },
+    /// A summary of the project: what is in it and what needs attention
+    Status {
+        /// Read the specs as they were at a git revision
+        #[arg(long)]
+        at: Option<String>,
+        #[arg(long)]
+        json: bool,
     },
     /// Add the MCP server to the config files of AI clients (claude, cursor, gemini, copilot)
     Connect {
@@ -640,6 +649,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let cfg = config::load(&root)?;
             require_module(&cfg, "mcp")?;
             mcp::serve(&root, read_only)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Status { at, json } => {
+            let root = project_root(cli.root.as_deref())?;
+            status::status_command(&root, at.as_deref(), json, cache)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Connect {

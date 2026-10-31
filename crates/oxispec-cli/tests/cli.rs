@@ -4334,3 +4334,24 @@ fn connect_refuses_unknown_clients_and_files_it_cannot_merge() {
         "{ // mine\n}"
     );
 }
+
+#[test]
+fn status_summarizes_the_project_in_text_and_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+
+    let text = run(p, &["status"]);
+    assert_eq!(text.code, 0, "{}", text.stderr);
+    assert!(text.stdout.contains("3 nodes"), "{}", text.stdout);
+    assert!(text.stdout.contains("requirement"), "{}", text.stdout);
+
+    let json = run(p, &["status", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&json.stdout).unwrap();
+    assert_eq!(v["schema_version"], 1);
+    assert_eq!(v["nodes"], 3);
+    assert_eq!(v["types"]["requirement"], 2);
+
+    let outside = tempfile::tempdir().unwrap();
+    assert_eq!(run(outside.path(), &["status"]).code, 2);
+}

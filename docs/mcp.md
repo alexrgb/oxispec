@@ -37,6 +37,7 @@ Add `"--read-only"` to `args` to leave out the one tool that writes.
 | `spec_neighbors` | Nodes within 1 to 4 link hops, both directions, optionally only some link kinds | |
 | `spec_context` | A context pack (below) | `context` |
 | `spec_check` | The structural checks, optionally `at` a revision | `check --json` |
+| `spec_status` | A summary: nodes by type and status, findings by code, change sets in flight, the latest release, optionally `at` a revision | `status --json` |
 | `spec_history` | How a node changed | `history --json` |
 | `spec_diff` | How the specs differ between two revisions | `diff --json` |
 | `spec_trace` | Code and tests for a node (needs `tests`) | `trace --json` |
