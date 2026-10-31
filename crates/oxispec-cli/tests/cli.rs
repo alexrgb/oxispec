@@ -4491,3 +4491,46 @@ fn a_running_mcp_server_sees_edits_made_after_it_cached_the_graph() {
     drop(stdin);
     assert!(child.wait().unwrap().success());
 }
+
+#[test]
+fn mcp_resources_come_in_pages_that_cover_every_node_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let folder = p.join("specs/requirements/bulk");
+    fs::create_dir_all(&folder).unwrap();
+    for n in 1..=530 {
+        let id = format!("REQ-BULK-{n:04}");
+        fs::write(
+            folder.join(format!("{id}.md")),
+            format!("---\nid: {id}\ntype: requirement\nstatus: draft\n---\n\n# {id}: Item {n}\n"),
+        )
+        .unwrap();
+    }
+    let replies = mcp(
+        p,
+        &[],
+        &[
+            rpc(1, "resources/list", serde_json::json!({})),
+            rpc(2, "resources/list", serde_json::json!({"cursor": "500"})),
+            rpc(3, "resources/list", serde_json::json!({"cursor": "5000"})),
+        ],
+    );
+    let by = |n: u64| replies.iter().find(|r| r["id"] == n).unwrap();
+    let first = by(1)["result"]["resources"].as_array().unwrap();
+    assert_eq!(first.len(), 500);
+    assert_eq!(by(1)["result"]["nextCursor"], "500");
+    let second = by(2)["result"]["resources"].as_array().unwrap();
+    assert_eq!(second.len(), 30);
+    assert!(by(2)["result"].get("nextCursor").is_none());
+    let mut uris: Vec<_> = first
+        .iter()
+        .chain(second)
+        .map(|r| r["uri"].clone())
+        .collect();
+    uris.sort_by_key(|u| u.to_string());
+    uris.dedup();
+    assert_eq!(uris.len(), 530);
+    // A cursor past the end is an empty last page, not an error.
+    assert_eq!(by(3)["result"]["resources"].as_array().unwrap().len(), 0);
+}
