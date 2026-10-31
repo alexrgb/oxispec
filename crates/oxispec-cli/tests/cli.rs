@@ -4435,3 +4435,59 @@ fn mcp_offers_nodes_as_resources_and_a_few_prompts() {
     assert!(by(10).get("error").is_some());
     assert!(by(11).get("error").is_some());
 }
+
+#[test]
+fn a_running_mcp_server_sees_edits_made_after_it_cached_the_graph() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::Stdio;
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    let id = created_id(&run(p, &["new", "requirement", "auth", "Original title"]));
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_oxispec"))
+        .arg("mcp")
+        .current_dir(p)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut n = 0;
+    let mut ask = |tool: &str, args: serde_json::Value| -> String {
+        n += 1;
+        let request = rpc(
+            n,
+            "tools/call",
+            serde_json::json!({"name": tool, "arguments": args}),
+        );
+        writeln!(stdin, "{request}").unwrap();
+        let mut line = String::new();
+        stdout.read_line(&mut line).unwrap();
+        let reply: serde_json::Value = serde_json::from_str(&line).unwrap();
+        reply["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+
+    // Files older than the two-second window are what the server keeps in memory.
+    std::thread::sleep(std::time::Duration::from_millis(2300));
+    assert!(ask("spec_status", serde_json::json!({})).contains("\"nodes\": 4"));
+    assert!(ask("spec_get", serde_json::json!({"id": id})).contains("Original title"));
+    assert!(ask("spec_get", serde_json::json!({"id": id})).contains("Original title"));
+
+    // An edit, and a new file, are seen by the next call.
+    let shown: serde_json::Value =
+        serde_json::from_str(&run(p, &["show", &id, "--json"]).stdout).unwrap();
+    let path = p.join(shown["node"]["path"].as_str().unwrap());
+    let text = fs::read_to_string(&path).unwrap();
+    fs::write(&path, text.replace("Original title", "Edited title")).unwrap();
+    assert_eq!(run(p, &["new", "adr", "Another"]).code, 0);
+    assert!(ask("spec_get", serde_json::json!({"id": id})).contains("Edited title"));
+    assert!(ask("spec_status", serde_json::json!({})).contains("\"nodes\": 5"));
+
+    drop(stdin);
+    assert!(child.wait().unwrap().success());
+}

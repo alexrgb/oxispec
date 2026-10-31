@@ -108,19 +108,19 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
             "warnings": warnings,
             "failed": report.failed(),
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
     } else {
-        println!("comparing with {base}");
+        outln!("comparing with {base}");
         for f in &diff.new_findings {
-            println!("{}", crate::finding_line(f));
+            outln!("{}", crate::finding_line(f));
             if let Some(path) = &f.path {
                 match f.line {
-                    Some(line) => println!("  --> {}:{line}", path.display()),
-                    None => println!("  --> {}", path.display()),
+                    Some(line) => outln!("  --> {}:{line}", path.display()),
+                    None => outln!("  --> {}", path.display()),
                 }
             }
         }
-        println!(
+        outln!(
             "{} nodes changed, {} touched: {errors} new errors, {warnings} new warnings, {} fixed, {} existing not shown",
             diff.added.len() + diff.removed.len() + diff.changed.len(),
             report.touched.len(),

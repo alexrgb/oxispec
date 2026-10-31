@@ -6,7 +6,6 @@
 
 use std::io::{BufRead, Write};
 use std::path::Path;
-use std::process::Command;
 
 use anyhow::{Context, Result};
 use oxispec_core::config::Config;
@@ -86,6 +85,8 @@ struct Server<'a> {
 
 pub fn serve(root: &Path, read_only: bool) -> Result<()> {
     let cfg = config::load(root)?;
+    // Calls come one after another in this process, so the graph can stay loaded.
+    index::keep_graph_in_memory();
     let server = Server {
         root,
         cfg,
@@ -506,21 +507,26 @@ impl Server<'_> {
         Ok(json!({"contents": [{"uri": uri, "mimeType": "text/markdown", "text": text}]}))
     }
 
+    /// Runs an `oxispec` command in this process and returns what it printed.
+    ///
+    /// The arguments are parsed like a command line, so a tool and the command
+    /// it stands for cannot drift apart, and no process is started.
     fn cli(&self, args: &[&str]) -> Result<String> {
-        let exe = std::env::current_exe().context("cannot find the oxispec program")?;
-        let out = Command::new(exe)
-            .arg("--root")
-            .arg(self.root)
-            .args(args)
-            .output()
-            .context("cannot run oxispec")?;
-        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
-        match out.status.code() {
-            Some(0 | 1) if !stdout.trim().is_empty() => Ok(stdout),
-            _ => {
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                anyhow::bail!("{}", stderr.trim().trim_start_matches("error: "))
-            }
+        use clap::Parser;
+        let line = ["oxispec", "--root"]
+            .into_iter()
+            .map(String::from)
+            .chain([self.root.display().to_string()])
+            .chain(args.iter().map(|a| a.to_string()));
+        let cli = crate::Cli::try_parse_from(line).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let (text, outcome) = crate::output::capture(|| {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::run(cli)))
+        });
+        match outcome {
+            Ok(Ok(_)) if !text.trim().is_empty() => Ok(text),
+            Ok(Ok(_)) => anyhow::bail!("the command printed nothing"),
+            Ok(Err(e)) => Err(e),
+            Err(_) => anyhow::bail!("the command stopped unexpectedly"),
         }
     }
 

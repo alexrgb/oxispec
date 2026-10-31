@@ -151,27 +151,27 @@ pub fn history_command(
             "truncated": truncated,
             "entries": entries,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
 
-    println!("{}  {}", node.id, node.path.display());
+    outln!("{}  {}", node.id, node.path.display());
     if entries.is_empty() {
-        println!("  no commits yet for this file");
+        outln!("  no commits yet for this file");
     }
     for entry in &entries {
         match &entry.commit {
-            Some(c) => println!("  {}  {}  {}  {}", c.short, c.date, c.author, c.subject),
-            None => println!("  uncommitted"),
+            Some(c) => outln!("  {}  {}  {}  {}", c.short, c.date, c.author, c.subject),
+            None => outln!("  uncommitted"),
         }
         let what = match (&entry.commit, &entry.event) {
             (None, Event::Created) => "created (not committed)".to_string(),
             _ => entry.event.describe(),
         };
-        println!("      {what}");
+        outln!("      {what}");
     }
     if truncated {
-        println!("  more history exists; show it with --limit");
+        outln!("  more history exists; show it with --limit");
     }
     Ok(())
 }
@@ -204,39 +204,39 @@ pub fn diff_command(
             "new_findings": diff.new_findings,
             "fixed_findings": diff.fixed_findings,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
 
     let target = to_rev
         .as_ref()
         .map_or("the working tree".to_string(), |r| r.to_string());
-    println!("from {from_rev} to {target}");
+    outln!("from {from_rev} to {target}");
     for n in &diff.added {
-        println!("+ {}  {}", n.id, n.path.display());
+        outln!("+ {}  {}", n.id, n.path.display());
     }
     for n in &diff.removed {
-        println!("- {}  {}", n.id, n.path.display());
+        outln!("- {}  {}", n.id, n.path.display());
     }
     for n in &diff.changed {
-        println!("~ {}  {}", n.id, n.path.display());
+        outln!("~ {}  {}", n.id, n.path.display());
         for change in &n.changes {
-            println!("    {}", change.describe());
+            outln!("    {}", change.describe());
         }
     }
     if diff.added.is_empty() && diff.removed.is_empty() && diff.changed.is_empty() {
-        println!("no changes to any node");
+        outln!("no changes to any node");
     }
-    println!(
+    outln!(
         "findings: {} new, {} fixed",
         diff.new_findings.len(),
         diff.fixed_findings.len()
     );
     for f in &diff.new_findings {
-        println!("  new {}", crate::finding_line(f));
+        outln!("  new {}", crate::finding_line(f));
     }
     for f in &diff.fixed_findings {
-        println!("  fixed {}", crate::finding_line(f));
+        outln!("  fixed {}", crate::finding_line(f));
     }
     Ok(())
 }
@@ -263,12 +263,12 @@ pub fn tag_command(
                 .map(|t| json!({"name": t.name, "tag": t.tag, "commit": t.commit, "date": t.date, "message": t.message}))
                 .collect();
             let out = json!({"schema_version": OUTPUT_SCHEMA_VERSION, "tags": list});
-            println!("{}", serde_json::to_string_pretty(&out)?);
+            outln!("{}", serde_json::to_string_pretty(&out)?);
         } else if tags.is_empty() {
-            println!("no spec tags yet; create one with `oxispec tag <name>`");
+            outln!("no spec tags yet; create one with `oxispec tag <name>`");
         } else {
             for t in &tags {
-                println!("{:<16} {}  {}  {}", t.name, t.commit, t.date, t.message);
+                outln!("{:<16} {}  {}  {}", t.name, t.commit, t.date, t.message);
             }
         }
         return Ok(());
@@ -295,11 +295,11 @@ pub fn tag_command(
             "commit": revision.oid,
             "uncommitted_spec_files": loose,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
     } else {
-        println!("tagged {revision} as {tag}; use it with --at {name}");
+        outln!("tagged {revision} as {tag}; use it with --at {name}");
         if loose > 0 {
-            println!(
+            outln!(
                 "note: {loose} spec file(s) have changes that are not committed, so the tag does not include them"
             );
         }

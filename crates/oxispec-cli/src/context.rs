@@ -93,9 +93,9 @@ pub fn context_command(
     if json {
         let mut value = serde_json::to_value(&pack)?;
         value["schema_version"] = OUTPUT_SCHEMA_VERSION.into();
-        println!("{}", serde_json::to_string_pretty(&value)?);
+        outln!("{}", serde_json::to_string_pretty(&value)?);
     } else {
-        print!("{}", markdown(&pack));
+        out!("{}", markdown(&pack));
     }
     Ok(())
 }

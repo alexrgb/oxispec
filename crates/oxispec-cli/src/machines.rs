@@ -71,7 +71,7 @@ pub fn machine_command(
     }
 
     if diagram && let [machine] = shown.as_slice() {
-        print!("{}", machines::diagram(machine));
+        out!("{}", machines::diagram(machine));
         return Ok(ExitCode::SUCCESS);
     }
     if tests && let [machine] = shown.as_slice() {
@@ -80,7 +80,7 @@ pub fn machine_command(
         let total = cases.total();
         let shown_count = limit.map_or(total, |l| l.min(total));
         if json {
-            println!(
+            outln!(
                 "{{\"schema_version\": {OUTPUT_SCHEMA_VERSION}, \"machine\": {}, \"total\": {total}, \"truncated\": {}, \"tests\": [",
                 serde_json::to_string(&machine.node)?,
                 shown_count < total
@@ -91,21 +91,21 @@ pub fn machine_command(
                     "steps": steps_json(&c.steps),
                     "implements": c.implements,
                 });
-                println!("{}{item}", if n == 0 { "  " } else { ", " });
+                outln!("{}{item}", if n == 0 { "  " } else { ", " });
             }
-            println!("]}}");
+            outln!("]}}");
         } else {
             for case in cases.take(shown_count) {
-                println!("{}", case.name);
-                println!("  {}", machines::render_path(&machine.initial, &case.steps));
+                outln!("{}", case.name);
+                outln!("  {}", machines::render_path(&machine.initial, &case.steps));
                 if !case.implements.is_empty() {
-                    println!("  covers {}", case.implements.join(", "));
+                    outln!("  covers {}", case.implements.join(", "));
                 }
             }
             if shown_count < total {
-                println!("{shown_count} of {total} tests shown; `--limit` sets how many",);
+                outln!("{shown_count} of {total} tests shown; `--limit` sets how many",);
             } else {
-                println!("{total} tests, one for each transition that can be reached");
+                outln!("{total} tests, one for each transition that can be reached");
             }
         }
         return Ok(ExitCode::SUCCESS);
@@ -157,15 +157,15 @@ pub fn machine_command(
             "at": revision.as_ref().map(crate::revision_json),
             "machines": list,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(ExitCode::SUCCESS);
     }
 
     if let Some(rev) = &revision {
-        println!("reading {rev}");
+        outln!("reading {rev}");
     }
     if shown.is_empty() {
-        println!(
+        outln!(
             "no state machines yet: write a `statemachine` block (`oxispec new machine \"Name\"`)"
         );
         return Ok(ExitCode::SUCCESS);
@@ -174,7 +174,7 @@ pub fn machine_command(
     for (machine, found) in shown.iter().zip(&results) {
         let broken = found.iter().flatten().count();
         if !single {
-            println!(
+            outln!(
                 "{:<14} {} states, {} transitions, {} properties{}",
                 machine.node,
                 machine.states.len(),
@@ -188,8 +188,8 @@ pub fn machine_command(
             );
             continue;
         }
-        println!("{} ({})", machine.node, machine.path.display());
-        println!(
+        outln!("{} ({})", machine.node, machine.path.display());
+        outln!(
             "  starts in {}; final: {}",
             machine.initial,
             if machine.finals.is_empty() {
@@ -203,17 +203,17 @@ pub fn machine_command(
                 .guard
                 .as_ref()
                 .map_or(String::new(), |g| format!("  [{g}]"));
-            println!("  {} -{}-> {}{guard}", t.from, t.event, t.to);
+            outln!("  {} -{}-> {}{guard}", t.from, t.event, t.to);
         }
         for (p, v) in machine.properties.iter().zip(found) {
             match v {
-                None => println!("  holds     {}", p.text),
-                Some(c) => println!("  violated  {}: {}", p.text, example_text(machine, c)),
+                None => outln!("  holds     {}", p.text),
+                Some(c) => outln!("  violated  {}: {}", p.text, example_text(machine, c)),
             }
         }
     }
     if !single {
-        println!("`oxispec machine ID` shows one, `oxispec check` reports problems");
+        outln!("`oxispec machine ID` shows one, `oxispec check` reports problems");
     }
     Ok(ExitCode::SUCCESS)
 }

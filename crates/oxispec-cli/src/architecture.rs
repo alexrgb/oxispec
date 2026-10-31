@@ -98,14 +98,14 @@ pub fn list(root: &Path, at: Option<&str>, json: bool, cache: bool) -> Result<Ex
             "environments": environments,
             "rules": rules,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(ExitCode::SUCCESS);
     }
     if let Some(rev) = &revision {
-        println!("reading {rev}");
+        outln!("reading {rev}");
     }
     if model.elements.is_empty() && model.environments.is_empty() {
-        println!(
+        outln!(
             "no architecture yet: `oxispec new architecture system \"Name\"` writes the first element"
         );
         return Ok(ExitCode::SUCCESS);
@@ -119,10 +119,10 @@ pub fn list(root: &Path, at: Option<&str>, json: bool, cache: bool) -> Result<Ex
             .parent
             .as_ref()
             .map_or(String::new(), |p| format!(" in {p}"));
-        println!("{:<10} {:<12} {}{tech}{parent}", e.ty, e.id, e.name);
+        outln!("{:<10} {:<12} {}{tech}{parent}", e.ty, e.id, e.name);
     }
     for env in &model.environments {
-        println!(
+        outln!(
             "{:<10} {:<12} {} ({} nodes)",
             "environment",
             env.id,
@@ -130,7 +130,7 @@ pub fn list(root: &Path, at: Option<&str>, json: bool, cache: bool) -> Result<Ex
             env.nodes.len()
         );
     }
-    println!(
+    outln!(
         "{} rules; `oxispec architecture view` draws a view, `oxispec check` reports problems",
         model.rules.len()
     );
@@ -164,9 +164,9 @@ pub fn view(
             })).collect::<Vec<_>>(),
             "mermaid": architecture::mermaid(&built),
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
     } else {
-        print!("{}", architecture::mermaid(&built));
+        out!("{}", architecture::mermaid(&built));
     }
     Ok(ExitCode::SUCCESS)
 }

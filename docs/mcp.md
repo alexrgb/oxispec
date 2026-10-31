@@ -52,6 +52,8 @@ Tool names use underscores, not dots, because some clients do not accept dots. T
 
 **Arguments are checked.** IDs must be valid IDs, revisions cannot start with `-`, and numbers have limits, so an argument cannot be read as an option by git or by `oxispec`.
 
+**No process per call.** Tools run in the server's own process, with the same code as the commands. The server keeps the last graph in memory and reuses it while no markdown file has been added, removed, resized or modified; a file changed in the last two seconds is read again, so an edit is never missed. Edits made while the server runs show up on the next call.
+
 **An error is a result.** A tool that fails returns `isError: true` and a message the agent can read. A malformed message gets a JSON-RPC error.
 
 ## Resources and prompts

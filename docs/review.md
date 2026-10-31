@@ -35,7 +35,7 @@ Fixed in the pull requests that added this review and the stress tool:
 Not fixed, and worth knowing:
 
 - **A state machine block has a size limit.** The YAML parser stops at 250,000 nodes, about 30,000 transitions in one block, and the block is reported as unreadable.
-- **Each MCP read call starts a process.** A call costs tens of milliseconds even on a small project. Fine for an agent, wrong for a server. Server mode will need the graph in memory.
+- **Each MCP read call started a process. Fixed in iteration 18.** Tools now run in the server's own process, and the server keeps the last graph in memory until a markdown file changes. On the 2,000-requirement project (8 clients, a busy laptop) that took the load from about 80 to about 180 requests per second and the median from 73 to 36 ms. Each call still walks the project to see whether a file changed, so the cost grows with the number of files. A file changed within the last two seconds is always read again.
 - **`site` is the slowest command.** About 1.5 ms per page: 9 to 15 seconds for 12,000 nodes.
 - **The search lock serializes all persistent searches.** Under 8 parallel readers on a small project the median search took 0.4 s. A shared lock for readers would fix it if it matters.
 
@@ -56,4 +56,4 @@ MCP load, 8 clients on 2,000 requirements: about 100 requests per second, p95 ar
 ## What to do next
 
 1. Tighten the budgets further. The first run on a CI machine (large preset, Linux) was well inside them. The budgets for cold `check`, `index` and `site` on `large` are now 3 s, 3 s and 5 s, and the others are still about four times a laptop measurement.
-2. Before server mode, hold the graph in memory so a request does not start a process.
+2. For server mode, watch files instead of walking them on every call.

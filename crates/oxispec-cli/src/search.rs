@@ -38,7 +38,7 @@ pub fn search_command(root: &Path, options: &SearchOptions) -> Result<()> {
             "index": stats,
             "hits": hits,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
     if stats.changed() > 0 {
@@ -48,19 +48,19 @@ pub fn search_command(root: &Path, options: &SearchOptions) -> Result<()> {
         );
     }
     if hits.is_empty() {
-        println!("no matches");
+        outln!("no matches");
     }
     for hit in &hits {
-        println!(
+        outln!(
             "{}  {}  {}  {}",
             hit.id,
             hit.ty,
             hit.status.as_deref().unwrap_or("-"),
             hit.title.as_deref().unwrap_or("")
         );
-        println!("  {}", hit.path.display());
+        outln!("  {}", hit.path.display());
         if let Some(snippet) = &hit.snippet {
-            println!("  {snippet}");
+            outln!("  {snippet}");
         }
     }
     Ok(())

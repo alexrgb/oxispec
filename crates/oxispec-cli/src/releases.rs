@@ -190,25 +190,25 @@ pub fn prepare(
             "summary": summary,
             "change_sets": change_sets.iter().map(|n| json!({"id": n.id, "status": n.status})).collect::<Vec<_>>(),
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
     match base_version {
-        Some(b) => println!("since {b}: a {:?} change", summary.bump()),
-        None => println!("no earlier release"),
+        Some(b) => outln!("since {b}: a {:?} change", summary.bump()),
+        None => outln!("no earlier release"),
     }
     if let Some(s) = &suggested {
-        println!("suggested version: {s}");
+        outln!("suggested version: {s}");
     }
     if let Some(w) = &warning {
-        println!("warning: {w}");
+        outln!("warning: {w}");
     }
     if dry_run {
-        println!("\n{text}");
-        println!("(dry run: nothing written)");
+        outln!("\n{text}");
+        outln!("(dry run: nothing written)");
     } else {
-        println!("wrote {id} ({})", path.display());
-        println!(
+        outln!("wrote {id} ({})", path.display());
+        outln!(
             "review the notes, commit the file, then run `oxispec release check {version}` and `oxispec release publish {version}`"
         );
     }
@@ -320,13 +320,13 @@ fn print_gates(evaluation: &Evaluation, json_output: bool) -> Result<()> {
             "can_release": ok,
             "gates": evaluation.gates,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
     } else {
-        println!("release {}", evaluation.version);
+        outln!("release {}", evaluation.version);
         for gate in &evaluation.gates {
-            println!("{}", gate_line(gate));
+            outln!("{}", gate_line(gate));
         }
-        println!(
+        outln!(
             "{}",
             if ok {
                 "ready to publish"
@@ -385,12 +385,12 @@ pub fn publish(root: &Path, version: &str, json_output: bool) -> Result<bool> {
             "commit": head.oid,
             "uncommitted_spec_files": loose,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
     } else {
-        println!("released {version}: tagged {head} as {tag}");
-        println!("push it with `git push origin {tag}`");
+        outln!("released {version}: tagged {head} as {tag}");
+        outln!("push it with `git push origin {tag}`");
         if loose > 0 {
-            println!(
+            outln!(
                 "note: {loose} spec file(s) have changes that are not committed, so the release does not include them"
             );
         }
@@ -431,15 +431,15 @@ pub fn list(root: &Path, json_output: bool, cache: bool) -> Result<()> {
             })
             .collect();
         let out = json!({"schema_version": OUTPUT_SCHEMA_VERSION, "releases": list});
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
     if rows.is_empty() {
-        println!("no releases yet; start one with `oxispec release prepare`");
+        outln!("no releases yet; start one with `oxispec release prepare`");
     }
     for (version, node) in rows {
         match describe(&version) {
-            Some(r) => println!(
+            Some(r) => outln!(
                 "{:<14} {:<10} released {} ({})  {}",
                 version.to_string(),
                 node.id,
@@ -447,7 +447,7 @@ pub fn list(root: &Path, json_output: bool, cache: bool) -> Result<()> {
                 r.tag.commit,
                 r.tag.tag
             ),
-            None => println!(
+            None => outln!(
                 "{:<14} {:<10} candidate  {}",
                 version.to_string(),
                 node.id,

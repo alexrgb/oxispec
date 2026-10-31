@@ -39,7 +39,7 @@ pub fn connect_command(
             (Outcome::Created, false) => "created",
             (Outcome::Updated, false) => "updated",
         };
-        println!("{verb} {} ({})", target.file, target.name);
+        outln!("{verb} {} ({})", target.file, target.name);
         if dry_run || *outcome == Outcome::Unchanged {
             continue;
         }

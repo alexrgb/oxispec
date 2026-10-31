@@ -114,14 +114,14 @@ fn apply(root: &Path, plan: &[Planned], force: bool, dry_run: bool) -> Result<Ta
             State::Current => tally.unchanged += 1,
             State::Edited if !force => {
                 tally.skipped += 1;
-                println!("skipped {path} (edited by hand; `--force` replaces it)");
+                outln!("skipped {path} (edited by hand; `--force` replaces it)");
             }
             _ => {
                 if dry_run {
-                    println!("would write {path}");
+                    outln!("would write {path}");
                 } else {
                     write_file(root, p)?;
-                    println!("wrote {path}");
+                    outln!("wrote {path}");
                 }
                 tally.written += 1;
             }
@@ -139,7 +139,7 @@ pub fn write_after_init(root: &Path, cfg: &Config) -> Result<()> {
     let clients = resolve_clients(&cfg.agents, cfg)?;
     let plan = agents::plan(root, &clients, &cfg.modules);
     let tally = apply(root, &plan, false, false)?;
-    println!(
+    outln!(
         "agent skills: {} files for {}",
         tally.written,
         clients
@@ -158,9 +158,11 @@ pub fn update(root: &Path, asked: &[String], force: bool, dry_run: bool) -> Resu
     let plan = agents::plan(root, &clients, &cfg.modules);
     let tally = apply(root, &plan, force, dry_run)?;
     let verb = if dry_run { "would write" } else { "written" };
-    println!(
+    outln!(
         "{} {verb}, {} unchanged, {} skipped",
-        tally.written, tally.unchanged, tally.skipped
+        tally.written,
+        tally.unchanged,
+        tally.skipped
     );
     Ok(if tally.skipped > 0 {
         ExitCode::from(1)
@@ -192,7 +194,7 @@ pub fn check(root: &Path, asked: &[String], json: bool) -> Result<ExitCode> {
             "ok": drift == 0,
             "files": files,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
     } else {
         for p in plan.iter().filter(|p| p.state != State::Current) {
             let why = match p.state {
@@ -200,12 +202,12 @@ pub fn check(root: &Path, asked: &[String], json: bool) -> Result<ExitCode> {
                 State::Outdated => "out of date",
                 _ => "edited by hand, or not written by oxispec",
             };
-            println!("{}: {why}", shown(&p.path));
+            outln!("{}: {why}", shown(&p.path));
         }
         if drift == 0 {
-            println!("{} skill files are up to date", plan.len());
+            outln!("{} skill files are up to date", plan.len());
         } else {
-            println!(
+            outln!(
                 "{drift} of {} skill files differ; run `oxispec agents update`",
                 plan.len()
             );
@@ -250,25 +252,25 @@ pub fn list(root: &Path, json: bool) -> Result<()> {
             "clients": clients,
             "skills": skills,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
     if !cfg.has("agents") {
-        println!("module `agents` is not enabled; run `oxispec modules add agents`");
+        outln!("module `agents` is not enabled; run `oxispec modules add agents`");
     }
-    println!("clients:");
+    outln!("clients:");
     for c in CLIENTS {
         let mark = if chosen.contains(&c) { "*" } else { " " };
-        println!("  {mark} {:<8} {:<42} {}", c.id, c.name, c.dir);
+        outln!("  {mark} {:<8} {:<42} {}", c.id, c.name, c.dir);
     }
-    println!("skills:");
+    outln!("skills:");
     for s in SKILLS {
         let note = if enabled.iter().any(|e| e.name == s.name) {
             String::new()
         } else {
             format!("  (needs module {})", s.requires.join(", "))
         };
-        println!("  {}{note}", s.name);
+        outln!("  {}{note}", s.name);
     }
     Ok(())
 }
@@ -291,6 +293,6 @@ pub fn export(root: Option<&Path>, to: ExportTarget, out: &Path, all: bool) -> R
         fs::write(&file, agents::render(skill, &notes))
             .with_context(|| format!("cannot write {}", file.display()))?;
     }
-    println!("wrote {} skills to {}", skills.len(), base.display());
+    outln!("wrote {} skills to {}", skills.len(), base.display());
     Ok(())
 }

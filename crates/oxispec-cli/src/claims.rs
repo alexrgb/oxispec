@@ -85,15 +85,15 @@ pub fn claims_command(
             "requirements_with_claims": with_claims,
             "claims_percent": percent,
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(ExitCode::SUCCESS);
     }
 
     if let Some(rev) = &revision {
-        println!("reading {rev}");
+        outln!("reading {rev}");
     }
     if analysis.vocabulary.variables.is_empty() {
-        println!(
+        outln!(
             "no variables yet: declare them in a `vocabulary` block (`oxispec new vocabulary \"Name\"`)"
         );
     }
@@ -105,20 +105,20 @@ pub fn claims_command(
                 } else {
                     format!(": {}", var.values.join(", "))
                 };
-                println!(
+                outln!(
                     "{name} ({}{values}), declared in {}",
                     var.kind.name(),
                     var.node
                 );
             }
-            None => println!("{name}"),
+            None => outln!("{name}"),
         }
         if list.is_empty() {
-            println!("  no claims");
+            outln!("  no claims");
         }
         for claim in list {
             let note = if claim.active { "" } else { "  (not counted)" };
-            println!(
+            outln!(
                 "  {:<14} {:<10} {}{note}",
                 claim.node,
                 claim.modality.name(),
@@ -126,7 +126,7 @@ pub fn claims_command(
             );
         }
     }
-    println!(
+    outln!(
         "{with_claims} of {requirements} requirements have claims ({percent}%); `oxispec check` reports conflicts"
     );
     Ok(ExitCode::SUCCESS)
