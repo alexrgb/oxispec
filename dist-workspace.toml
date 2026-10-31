@@ -1,0 +1,24 @@
+[workspace]
+members = ["cargo:."]
+
+# Config for 'dist'
+[dist]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.32.0"
+# CI backends to support
+ci = "github"
+# The installers to generate for each app
+installers = ["shell", "powershell", "homebrew", "npm"]
+# The Homebrew tap that receives the formula
+tap = "alexrgb/homebrew-tap"
+# Run after the GitHub Release exists. `publish-crates` is .github/workflows/publish-crates.yml
+publish-jobs = ["homebrew", "npm", "./publish-crates"]
+# Sign the archives with GitHub build provenance
+github-attestations = true
+# Install to $CARGO_HOME/bin, and leave updating to the package manager
+install-path = "CARGO_HOME"
+install-updater = false
+# Target platforms to build apps for (Rust target-triple syntax)
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+# The crates.io job checks out the code, so it needs to read the repository
+github-custom-job-permissions = { "publish-crates" = { contents = "read" } }

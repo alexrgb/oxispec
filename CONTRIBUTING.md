@@ -32,7 +32,7 @@ cargo test --workspace
 3. Add tests for new behavior. Fix the test first for a bug fix when you can.
 4. Update the docs when behavior changes. If a design decision changes, update `docs/design.md` in the same pull request.
 5. Open a pull request. The **title must follow [Conventional Commits](https://www.conventionalcommits.org)**, for example `feat(cli): add oxispec link`, because pull requests are squash merged and the title becomes the commit message. See [docs/versioning.md](docs/versioning.md).
-6. Do not change version numbers or `CHANGELOG.md`. Release pull requests do that.
+6. Do not change version numbers or `CHANGELOG.md`. Release pull requests do that, see [docs/releasing.md](docs/releasing.md).
 7. If you change a skill in `crates/oxispec-core/skills/`, regenerate the published folder with `cargo run -- agents export --to skills-repo --all`, and commit it. A test fails when `skills/` is out of date. A skill may only name commands and flags that exist: a test checks that too.
 
 CI must pass before a pull request is merged.

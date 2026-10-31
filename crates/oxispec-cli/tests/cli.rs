@@ -3993,3 +3993,16 @@ fn mcp_offers_the_architecture_tool_with_its_module() {
     ));
     assert!(!names.contains(&"spec_architecture".to_string()));
 }
+
+#[test]
+fn the_library_dependency_version_matches_the_release_version() {
+    let manifest =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml")).unwrap();
+    let want = format!("version = \"={}\"", env!("CARGO_PKG_VERSION"));
+    assert!(
+        manifest
+            .lines()
+            .any(|l| l.starts_with("oxispec-core") && l.contains(&want)),
+        "`oxispec-core` in [workspace.dependencies] must say {want}; see docs/releasing.md"
+    );
+}
