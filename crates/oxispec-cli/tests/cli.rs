@@ -4549,3 +4549,400 @@ fn mcp_resources_come_in_pages_that_cover_every_node_once() {
     // A cursor past the end is an empty last page, not an error.
     assert_eq!(by(3)["result"]["resources"].as_array().unwrap().len(), 0);
 }
+
+// ---- oxispec serve and oxispec token ----
+
+struct HttpServer {
+    child: std::process::Child,
+    addr: String,
+}
+
+impl Drop for HttpServer {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+fn start_server(p: &Path, extra: &[&str]) -> HttpServer {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_oxispec"))
+        .args(["serve", "--listen", "127.0.0.1:0"])
+        .args(extra)
+        .current_dir(p)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut line = String::new();
+    BufReader::new(child.stderr.take().unwrap())
+        .read_line(&mut line)
+        .unwrap();
+    let addr = line
+        .split("http://")
+        .nth(1)
+        .and_then(|rest| rest.split("/mcp").next())
+        .unwrap_or_else(|| panic!("no address in {line:?}"))
+        .to_string();
+    HttpServer { child, addr }
+}
+
+/// One HTTP/1.1 request. Returns the status and the body.
+fn http(
+    server: &HttpServer,
+    method: &str,
+    path: &str,
+    headers: &[(&str, &str)],
+    body: &str,
+) -> (u16, String) {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect(&server.addr).unwrap();
+    let mut request = format!("{method} {path} HTTP/1.1\r\nConnection: close\r\n");
+    if !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("host")) {
+        request += &format!("Host: {}\r\n", server.addr);
+    }
+    for (k, v) in headers {
+        request += &format!("{k}: {v}\r\n");
+    }
+    request += &format!("Content-Length: {}\r\n\r\n{body}", body.len());
+    stream.write_all(request.as_bytes()).unwrap();
+    let mut reply = String::new();
+    stream.read_to_string(&mut reply).unwrap();
+    let status = reply.split(' ').nth(1).unwrap().parse().unwrap();
+    let body = reply.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
+    (status, body)
+}
+
+/// A JSON-RPC call to `/mcp` with a token. Returns the status and the parsed answer.
+fn mcp_http(
+    server: &HttpServer,
+    token: &str,
+    method: &str,
+    params: serde_json::Value,
+) -> (u16, serde_json::Value) {
+    let auth = format!("Bearer {token}");
+    let (status, body) = http(
+        server,
+        "POST",
+        "/mcp",
+        &[
+            ("Authorization", &auth),
+            ("Content-Type", "application/json"),
+        ],
+        &rpc(1, method, params).to_string(),
+    );
+    (status, serde_json::from_str(&body).unwrap_or_default())
+}
+
+fn make_token(p: &Path, name: &str, types: Option<&str>) -> String {
+    let mut args = vec!["token", "add", name];
+    if let Some(types) = types {
+        args.extend(["--types", types]);
+    }
+    let out = run(p, &args);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    out.stdout.trim().to_string()
+}
+
+#[test]
+fn tokens_are_created_listed_and_revoked_without_keeping_the_secret() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    let secret = make_token(p, "ci", None);
+    assert!(secret.starts_with("oxs_"));
+    make_token(p, "docs", Some("adr,requirement"));
+    assert_eq!(run(p, &["token", "add", "ci"]).code, 2, "names are unique");
+
+    let list = run(p, &["token", "list"]).stdout;
+    assert!(list.contains("ci  everything"), "{list}");
+    assert!(list.contains("docs  only adr, requirement"), "{list}");
+    assert!(!list.contains(&secret));
+
+    let file = fs::read_to_string(p.join(".oxispec/server/tokens.json")).unwrap();
+    assert!(!file.contains(&secret), "only a hash is kept");
+    let ignore = fs::read_to_string(p.join(".oxispec/.gitignore")).unwrap();
+    assert!(ignore.lines().any(|l| l == "server/"), "{ignore}");
+
+    assert_eq!(run(p, &["token", "revoke", "ci"]).code, 0);
+    assert_eq!(run(p, &["token", "revoke", "ci"]).code, 2);
+    assert!(!run(p, &["token", "list"]).stdout.contains("ci  "));
+}
+
+#[test]
+fn serve_refuses_to_start_without_tokens_or_on_an_open_address() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    let out = run(p, &["serve", "--listen", "127.0.0.1:0"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("no tokens"), "{}", out.stderr);
+
+    make_token(p, "ci", None);
+    let out = run(p, &["serve", "--listen", "0.0.0.0:0"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("--behind-tls-proxy"), "{}", out.stderr);
+}
+
+#[test]
+fn the_http_server_needs_a_token_and_answers_the_protocol() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    let token = make_token(p, "ci", None);
+    let server = start_server(p, &[]);
+
+    assert_eq!(http(&server, "GET", "/health", &[], "").0, 200);
+    assert_eq!(http(&server, "GET", "/elsewhere", &[], "").0, 404);
+    assert_eq!(http(&server, "GET", "/mcp", &[], "").0, 405);
+    let body = rpc(1, "ping", serde_json::json!({})).to_string();
+    assert_eq!(http(&server, "POST", "/mcp", &[], &body).0, 401, "no token");
+    let wrong = [("Authorization", "Bearer oxs_wrong")];
+    assert_eq!(http(&server, "POST", "/mcp", &wrong, &body).0, 401);
+    let rebinding = [
+        ("Host", "evil.example"),
+        ("Authorization", &format!("Bearer {token}")),
+    ];
+    assert_eq!(http(&server, "POST", "/mcp", &rebinding, &body).0, 403);
+
+    let (status, reply) = mcp_http(&server, &token, "initialize", serde_json::json!({}));
+    assert_eq!(status, 200);
+    assert_eq!(reply["result"]["serverInfo"]["name"], "oxispec");
+
+    let (_, tools) = mcp_http(&server, &token, "tools/list", serde_json::json!({}));
+    let names: Vec<&str> = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"spec_check") && names.contains(&"spec_get"));
+    assert!(
+        !names.contains(&"spec_propose_change"),
+        "the server is read-only"
+    );
+
+    let (_, got) = mcp_http(
+        &server,
+        &token,
+        "tools/call",
+        serde_json::json!({"name": "spec_get", "arguments": {"id": "REQ-AUTH-0001"}}),
+    );
+    assert!(
+        got["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Admin session timeout")
+    );
+
+    // A notification gets no body, and a batch is refused.
+    let auth = format!("Bearer {token}");
+    let headers = [("Authorization", auth.as_str())];
+    let note = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
+    assert_eq!(http(&server, "POST", "/mcp", &headers, note).0, 202);
+    let (_, batch) = http(&server, "POST", "/mcp", &headers, "[]");
+    assert!(batch.contains("batches are not supported"), "{batch}");
+    let big = "x".repeat(1024 * 1024 + 10);
+    assert_eq!(http(&server, "POST", "/mcp", &headers, &big).0, 413);
+}
+
+#[test]
+fn a_limited_token_sees_only_its_types_and_nothing_that_reveals_the_rest() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    assert_eq!(
+        run(p, &["link", "REQ-AUTH-0001", "decided-by", "ADR-0001"]).code,
+        0
+    );
+    let adr_only = make_token(p, "adr-only", Some("adr"));
+    let req_only = make_token(p, "req-only", Some("requirement"));
+    let server = start_server(p, &[]);
+    let call = |token: &str, name: &str, args: serde_json::Value| -> (bool, String) {
+        let (_, reply) = mcp_http(
+            &server,
+            token,
+            "tools/call",
+            serde_json::json!({"name": name, "arguments": args}),
+        );
+        match reply["result"]["content"][0]["text"].as_str() {
+            Some(text) => (reply["result"]["isError"] == true, text.to_string()),
+            None => (
+                true,
+                reply["error"]["message"].as_str().unwrap_or("").to_string(),
+            ),
+        }
+    };
+
+    // Only two tools are offered, and the others look like they do not exist.
+    let (_, tools) = mcp_http(&server, &adr_only, "tools/list", serde_json::json!({}));
+    let names: Vec<&str> = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["spec_search", "spec_get"]);
+    let (failed, text) = call(&adr_only, "spec_check", serde_json::json!({}));
+    assert!(failed && text.contains("unknown tool"), "{text}");
+    let (failed, _) = call(&adr_only, "spec_status", serde_json::json!({}));
+    assert!(failed);
+
+    // Search is narrowed in the index: no hidden hits, and no counts of the whole index.
+    let (_, hits) = call(
+        &adr_only,
+        "spec_search",
+        serde_json::json!({"query": "session"}),
+    );
+    let hits: serde_json::Value = serde_json::from_str(&hits).unwrap();
+    assert_eq!(hits["hits"].as_array().unwrap().len(), 0, "{hits}");
+    assert!(hits.get("index").is_none(), "{hits}");
+    let (_, hits) = call(
+        &adr_only,
+        "spec_search",
+        serde_json::json!({"query": "Postgres"}),
+    );
+    assert!(hits.contains("ADR-0001"));
+    // Asking for a type it may not see finds nothing, not an error that confirms the type exists.
+    let (failed, hits) = call(
+        &adr_only,
+        "spec_search",
+        serde_json::json!({"query": "session", "type": "requirement"}),
+    );
+    assert!(
+        !failed && hits.contains("\"hits\": []") || hits.contains("\"hits\":[]"),
+        "{hits}"
+    );
+    let (_, hits) = call(
+        &req_only,
+        "spec_search",
+        serde_json::json!({"query": "Postgres"}),
+    );
+    assert!(!hits.contains("ADR-0001"), "{hits}");
+
+    // A hidden node answers like one that does not exist.
+    let (failed, text) = call(
+        &adr_only,
+        "spec_get",
+        serde_json::json!({"id": "REQ-AUTH-0001"}),
+    );
+    let (_, missing) = call(
+        &adr_only,
+        "spec_get",
+        serde_json::json!({"id": "REQ-NOPE-0001"}),
+    );
+    assert!(failed);
+    assert_eq!(
+        text.replace("REQ-AUTH-0001", "X"),
+        missing.replace("REQ-NOPE-0001", "X")
+    );
+
+    // Links to hidden nodes show as stubs, in both directions.
+    let (_, adr) = call(&adr_only, "spec_get", serde_json::json!({"id": "ADR-0001"}));
+    assert!(adr.contains("[restricted node]"), "{adr}");
+    assert!(
+        !adr.contains("REQ-AUTH-0001") && !adr.contains("Admin session"),
+        "{adr}"
+    );
+    let (_, req) = call(
+        &req_only,
+        "spec_get",
+        serde_json::json!({"id": "REQ-AUTH-0001"}),
+    );
+    assert!(req.contains("[restricted node]"), "{req}");
+    assert!(!req.contains("\"ADR-0001\""), "{req}");
+
+    // Resources follow the same rule.
+    let (_, listed) = mcp_http(&server, &adr_only, "resources/list", serde_json::json!({}));
+    let uris: Vec<&str> = listed["result"]["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["uri"].as_str().unwrap())
+        .collect();
+    assert_eq!(uris, ["oxispec://node/ADR-0001"]);
+    let (_, read) = mcp_http(
+        &server,
+        &adr_only,
+        "resources/read",
+        serde_json::json!({"uri": "oxispec://node/REQ-AUTH-0001"}),
+    );
+    assert!(
+        read["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("no node with id"),
+        "{read}"
+    );
+}
+
+#[test]
+fn a_revoked_token_stops_working_and_every_request_is_audited() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    let token = make_token(p, "ci", None);
+    let limited = make_token(p, "docs", Some("adr"));
+    let server = start_server(p, &[]);
+
+    let ask = |token: &str, name: &str, args: serde_json::Value| {
+        mcp_http(
+            &server,
+            token,
+            "tools/call",
+            serde_json::json!({"name": name, "arguments": args}),
+        )
+    };
+    ask(
+        &token,
+        "spec_get",
+        serde_json::json!({"id": "REQ-AUTH-0001"}),
+    );
+    ask(
+        &token,
+        "spec_search",
+        serde_json::json!({"query": "secretword"}),
+    );
+    ask(&limited, "spec_check", serde_json::json!({}));
+    assert_eq!(
+        mcp_http(&server, "oxs_nope", "ping", serde_json::json!({})).0,
+        401
+    );
+
+    assert_eq!(run(p, &["token", "revoke", "ci"]).code, 0);
+    assert_eq!(
+        mcp_http(&server, &token, "ping", serde_json::json!({})).0,
+        401
+    );
+    assert_eq!(
+        mcp_http(&server, &limited, "ping", serde_json::json!({})).0,
+        200
+    );
+
+    let log = fs::read_to_string(p.join(".oxispec/server/audit.jsonl")).unwrap();
+    let entries: Vec<serde_json::Value> = log
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let find = |principal: &str, tool: &str| {
+        entries
+            .iter()
+            .find(|e| e["principal"] == principal && e["tool"] == tool)
+            .unwrap_or_else(|| panic!("no entry for {principal} {tool}: {log}"))
+            .clone()
+    };
+    assert_eq!(find("ci", "spec_get")["node"], "REQ-AUTH-0001");
+    assert_eq!(find("ci", "spec_get")["outcome"], "ok");
+    assert_eq!(find("docs", "spec_check")["outcome"], "denied");
+    assert!(
+        entries
+            .iter()
+            .any(|e| e["outcome"] == "unauthenticated" && e["principal"].is_null())
+    );
+    assert!(!log.contains("secretword"), "search words are not recorded");
+    assert!(
+        !log.contains(&token) && !log.contains(&limited),
+        "no secrets in the log"
+    );
+}

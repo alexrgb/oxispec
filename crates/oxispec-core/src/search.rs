@@ -53,8 +53,9 @@ impl From<tantivy::TantivyError> for Error {
 #[derive(Debug, Clone)]
 pub struct SearchQuery {
     pub text: String,
-    /// Only nodes of this type, for example `requirement`.
-    pub ty: Option<String>,
+    /// Only nodes of one of these types, for example `requirement`. Empty: any.
+    /// This narrows the index query itself, so nothing else is ranked or counted.
+    pub types: Vec<String>,
     pub status: Option<String>,
     pub limit: usize,
 }
@@ -387,14 +388,25 @@ fn run(
     let (parsed, _problems) = parser.parse_query_lenient(&query.text);
 
     let mut clauses: Vec<(Occur, Box<dyn Query>)> = vec![(Occur::Must, parsed)];
-    for (field, value) in [(fields.ty, &query.ty), (fields.status, &query.status)] {
-        if let Some(value) = value {
-            let term = Term::from_field_text(field, value);
-            clauses.push((
-                Occur::Must,
-                Box::new(TermQuery::new(term, IndexRecordOption::Basic)),
-            ));
-        }
+    if !query.types.is_empty() {
+        let any_type: Vec<(Occur, Box<dyn Query>)> = query
+            .types
+            .iter()
+            .map(|ty| {
+                let term = Term::from_field_text(fields.ty, ty);
+                let query: Box<dyn Query> =
+                    Box::new(TermQuery::new(term, IndexRecordOption::Basic));
+                (Occur::Should, query)
+            })
+            .collect();
+        clauses.push((Occur::Must, Box::new(BooleanQuery::new(any_type))));
+    }
+    if let Some(value) = &query.status {
+        let term = Term::from_field_text(fields.status, value);
+        clauses.push((
+            Occur::Must,
+            Box::new(TermQuery::new(term, IndexRecordOption::Basic)),
+        ));
     }
     let combined = BooleanQuery::new(clauses);
     let found = searcher.search(
@@ -456,7 +468,7 @@ mod tests {
     fn query(text: &str) -> SearchQuery {
         SearchQuery {
             text: text.to_string(),
-            ty: None,
+            types: Vec::new(),
             status: None,
             limit: 10,
         }
@@ -560,7 +572,7 @@ mod tests {
         let graph = Graph::load(dir.path());
         let ask = |ty: Option<&str>, status: Option<&str>| {
             let q = SearchQuery {
-                ty: ty.map(String::from),
+                types: ty.map(String::from).into_iter().collect(),
                 status: status.map(String::from),
                 ..query("system")
             };

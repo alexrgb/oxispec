@@ -58,6 +58,35 @@ Two fallbacks keep it correct. If the watcher cannot start (for example, the sys
 
 **An error is a result.** A tool that fails returns `isError: true` and a message the agent can read. A malformed message gets a JSON-RPC error.
 
+## Serving many clients over HTTP
+
+`oxispec mcp` starts one process per client. For a team, or an agent that opens many sessions, run one server instead:
+
+```bash
+oxispec token add ci                         # prints a token once; the project keeps a hash
+oxispec token add docs-bot --types adr,requirement
+oxispec serve                                # http://127.0.0.1:7878/mcp, read-only
+```
+
+One process holds the graph in memory and answers every client. A client sends each JSON-RPC message as a `POST` to `/mcp` with `Authorization: Bearer <token>` and gets one JSON answer; a notification gets `202`. There is no event stream and no session. The server is always read-only: it offers no `spec_propose_change`. `GET /health` answers `ok` without a token.
+
+**Tokens.** `oxispec token add NAME` makes a token that starts with `oxs_`. Only its BLAKE3 hash is stored, in `.oxispec/server/tokens.json` (readable by the owner only, and added to `.oxispec/.gitignore`). `token list` shows names and scopes, never secrets. `token revoke NAME` takes effect on the next request, with no restart. The server will not start without a token.
+
+**Limited tokens.** `--types adr,requirement` limits a token to nodes of those types, and to `spec_search` and `spec_get`. The other tools look at the whole project, so a limited token cannot call them; they look like tools that do not exist. A limited token follows these rules:
+
+- Search narrows the index query itself, so hidden nodes are not ranked, and the index statistics are left out of the answer.
+- A node of another type answers exactly like a node that does not exist.
+- A link to a node of another type, in either direction, shows as `[restricted node]`.
+- `resources/list` and `resources/read` show only the allowed types.
+
+The text of an allowed node is shown as written, so a hidden ID quoted in its prose is not hidden. Only the node type is a limit for now; status, owner and classification are not.
+
+**Audit log.** Every request is appended as one JSON line to `.oxispec/server/audit.jsonl` (or `--audit-log FILE`): time, token name, method, tool, node ID, and `ok`, `error`, `denied` or `unauthenticated`. Search words and other arguments are not recorded, and neither are tokens.
+
+**Network.** The server listens on `127.0.0.1:7878` and accepts only requests addressed to `localhost`, which stops a web page from reaching it through a DNS name that points at your machine. It does not speak TLS, so it refuses any other address unless you pass `--behind-tls-proxy`, which says that a proxy in front encrypts the traffic and sets the `Host` header. Requests are limited to 1 MiB, and there is no rate limit yet.
+
+Not built yet: logins through an identity provider (OIDC), policies beyond node types, and writes through the server. See the [design](design.md#17-access-control-rbac-plus-abac).
+
 ## Resources and prompts
 
 **Resources.** Every node is a resource with the URI `oxispec://node/<ID>` and the MIME type `text/markdown`. `resources/list` returns them sorted by ID, 500 to a page with a `nextCursor`; `resources/templates/list` gives the template `oxispec://node/{id}`; `resources/read` returns the file as it is in the working tree. Clients that let a person attach a resource can attach a node this way. Only `oxispec://node/` URIs are read, and the ID is validated first. There are no subscriptions: the list is read when asked.
