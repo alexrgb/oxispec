@@ -39,7 +39,8 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | 16 | `feat/16-status` | `oxispec status` and the MCP tool `spec_status`: counts by type and status, findings by code, changes in flight, latest release | A person or an agent sees what needs attention in one call. **Merged** (#34). |
 | 17 | `feat/17-mcp-resources` | MCP resources (one per node) and three prompts | A client can list and read nodes as resources and get the prompts. **Merged** (#36). |
 | 18 | `perf/18-mcp-in-process` | MCP tools run in the server's process, and the graph stays in memory between calls | Load of 8 clients at least doubles on the medium project, and an edit is seen by the next call. **Merged** (#37). |
-| 19 | `perf/20-watch-and-memo` | A file watcher for the MCP server, and the check results kept with the graph | One server answers cached reads in about 10 ms on 12,000 files, and an edit is seen by the next call. **In review.** |
+| 19 | `perf/20-watch-and-memo` | A file watcher for the MCP server, and the check results kept with the graph | One server answers cached reads in about 10 ms on 12,000 files, and an edit is seen by the next call. **Merged** (#39). |
+| 20 | `perf/live-search` | The MCP server keeps its search index open while the graph is unchanged | A repeated search on 12,000 files takes about 10 ms instead of 30, and a search after an edit finds the edit. **In review.** |
 | 20+ | later | Server mode, RBAC and ABAC, natural language layer, workspaces and federation | See design sections 10, 14 and 19 |
 
 The plan changes as we learn. Change it in a pull request, like anything else.
@@ -72,5 +73,6 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 16** (#34): `oxispec status`.
 - **Iteration 17** (#36): MCP resources and prompts. See [mcp.md](mcp.md#resources-and-prompts).
 - **Iteration 18** (#37): MCP in process.
-- **Iteration 19**: a file watcher for the MCP server. See [mcp.md](mcp.md). See [review.md](review.md).
+- **Iteration 19** (#39): a file watcher for the MCP server. See [mcp.md](mcp.md).
+- **Iteration 20**: the MCP server keeps its search index open.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

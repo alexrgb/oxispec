@@ -8,6 +8,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 use tantivy::collector::TopDocs;
@@ -20,8 +21,9 @@ use tantivy::snippet::SnippetGenerator;
 use tantivy::tokenizer::{
     Language, LowerCaser, RemoveLongFilter, SimpleTokenizer, Stemmer, TextAnalyzer,
 };
-use tantivy::{Index, IndexWriter, Term, doc};
+use tantivy::{Index, IndexReader, IndexWriter, Term, doc};
 
+use crate::finding::Finding;
 use crate::graph::Graph;
 use crate::node::Node;
 use crate::parse::split_frontmatter;
@@ -85,6 +87,7 @@ impl SyncStats {
     }
 }
 
+#[derive(Clone, Copy)]
 struct Fields {
     path: Field,
     id: Field,
@@ -285,6 +288,22 @@ fn sync(
     Ok((stats, files))
 }
 
+/// An open index that matches one memoized graph. While the graph is the
+/// same, a search needs no lock, no sync and no reopening of the files.
+struct Live {
+    root: PathBuf,
+    graph: Arc<OnceLock<Vec<Finding>>>,
+    index: Index,
+    reader: IndexReader,
+    fields: Fields,
+}
+
+static LIVE: Mutex<Option<Live>> = Mutex::new(None);
+
+fn live_lock() -> std::sync::MutexGuard<'static, Option<Live>> {
+    LIVE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Searches the nodes of `graph`. With `persist` the index is kept under
 /// `.oxispec/cache/search` and updated in place, otherwise it is built in
 /// memory for this one search. `rebuild` throws a stored index away first.
@@ -295,6 +314,16 @@ pub fn search(
     rebuild: bool,
     query: &SearchQuery,
 ) -> Result<(Vec<Hit>, SyncStats), Error> {
+    if persist && !rebuild && crate::index::keeps_graph() {
+        let live = live_lock();
+        if let Some(l) = live.as_ref()
+            && l.root == root
+            && Arc::ptr_eq(&l.graph, &graph.checked)
+        {
+            let hits = run(&l.index, &l.reader, &l.fields, query)?;
+            return Ok((hits, SyncStats::default()));
+        }
+    }
     let (schema, fields) = schema();
     let dir = root.join(SEARCH_DIR);
     // Two processes must not build or update the stored index at once: one would
@@ -322,7 +351,17 @@ pub fn search(
     if persist && (stats.changed() > 0 || !dir.join(MANIFEST).exists()) {
         write_manifest(&dir, &Manifest::current(files))?;
     }
-    let hits = run(&index, &fields, query)?;
+    let reader = index.reader()?;
+    let hits = run(&index, &reader, &fields, query)?;
+    if persist && crate::index::keeps_graph() {
+        *live_lock() = Some(Live {
+            root: root.to_path_buf(),
+            graph: graph.checked.clone(),
+            index,
+            reader,
+            fields,
+        });
+    }
     Ok((hits, stats))
 }
 
@@ -333,8 +372,12 @@ fn text(document: &TantivyDocument, field: Field) -> Option<String> {
         .map(str::to_string)
 }
 
-fn run(index: &Index, fields: &Fields, query: &SearchQuery) -> Result<Vec<Hit>, Error> {
-    let reader = index.reader()?;
+fn run(
+    index: &Index,
+    reader: &IndexReader,
+    fields: &Fields,
+    query: &SearchQuery,
+) -> Result<Vec<Hit>, Error> {
     let searcher = reader.searcher();
     let mut parser = QueryParser::for_index(index, vec![fields.ids, fields.title, fields.body]);
     parser.set_conjunction_by_default();
