@@ -8,6 +8,7 @@ use std::io::{BufRead, Write};
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use oxispec_core::access::{Policy, REDACTED};
 use oxispec_core::config::Config;
 use oxispec_core::{Graph, config, id, index};
 use serde_json::{Value, json};
@@ -77,21 +78,27 @@ fn prompt_get(params: &Value) -> Result<Value> {
     }))
 }
 
-struct Server<'a> {
+pub(crate) struct Server<'a> {
     root: &'a Path,
     cfg: Config,
     read_only: bool,
 }
 
+impl<'a> Server<'a> {
+    /// A server for the project at `root`. It keeps the graph in memory between calls.
+    pub(crate) fn new(root: &'a Path, read_only: bool) -> Result<Server<'a>> {
+        let cfg = config::load(root)?;
+        index::keep_graph_in_memory(root);
+        Ok(Server {
+            root,
+            cfg,
+            read_only,
+        })
+    }
+}
+
 pub fn serve(root: &Path, read_only: bool) -> Result<()> {
-    let cfg = config::load(root)?;
-    // Calls come one after another in this process, so the graph can stay loaded.
-    index::keep_graph_in_memory(root);
-    let server = Server {
-        root,
-        cfg,
-        read_only,
-    };
+    let server = Server::new(root, read_only)?;
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout().lock();
     for line in stdin.lock().lines() {
@@ -100,7 +107,7 @@ pub fn serve(root: &Path, read_only: bool) -> Result<()> {
             continue;
         }
         let reply = match serde_json::from_str::<Value>(&line) {
-            Ok(message) => server.handle(&message),
+            Ok(message) => server.handle(&message, &Policy::full()),
             Err(e) => Some(error(Value::Null, -32700, &format!("parse error: {e}"))),
         };
         if let Some(reply) = reply {
@@ -111,11 +118,11 @@ pub fn serve(root: &Path, read_only: bool) -> Result<()> {
     Ok(())
 }
 
-fn result(id: &Value, value: Value) -> Value {
+pub(crate) fn result(id: &Value, value: Value) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "result": value})
 }
 
-fn error(id: Value, code: i32, message: &str) -> Value {
+pub(crate) fn error(id: Value, code: i32, message: &str) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
 }
 
@@ -135,7 +142,8 @@ fn tool(
 }
 
 impl Server<'_> {
-    fn handle(&self, message: &Value) -> Option<Value> {
+    /// Answers one message for a caller who may see what `policy` allows.
+    pub(crate) fn handle(&self, message: &Value, policy: &Policy) -> Option<Value> {
         let id = message.get("id")?.clone();
         let Some(method) = message.get("method").and_then(Value::as_str) else {
             // A response to something we never asked.
@@ -164,8 +172,15 @@ impl Server<'_> {
                 )
             }
             "ping" => result(&id, json!({})),
-            "tools/list" => result(&id, json!({"tools": self.tools()})),
-            "resources/list" => match self.resources(&params) {
+            "tools/list" => {
+                let tools: Vec<Value> = self
+                    .tools()
+                    .into_iter()
+                    .filter(|t| t["name"].as_str().is_some_and(|n| policy.allows_tool(n)))
+                    .collect();
+                result(&id, json!({"tools": tools}))
+            }
+            "resources/list" => match self.resources(&params, policy) {
                 Ok(value) => result(&id, value),
                 Err(e) => error(id, -32602, &format!("{e:#}")),
             },
@@ -179,7 +194,7 @@ impl Server<'_> {
                     "mimeType": "text/markdown",
                 }]}),
             ),
-            "resources/read" => match self.read_resource(&params) {
+            "resources/read" => match self.read_resource(&params, policy) {
                 Ok(value) => result(&id, value),
                 Err(e) => error(id, -32002, &format!("{e:#}")),
             },
@@ -191,10 +206,11 @@ impl Server<'_> {
             "tools/call" => {
                 let name = params.get("name").and_then(Value::as_str).unwrap_or("");
                 let args = params.get("arguments").cloned().unwrap_or(json!({}));
-                if !self.tools().iter().any(|t| t["name"] == name) {
+                // A tool the caller may not use looks like a tool that does not exist.
+                if !policy.allows_tool(name) || !self.tools().iter().any(|t| t["name"] == name) {
                     return Some(error(id, -32602, &format!("unknown tool `{name}`")));
                 }
-                let (text, is_error) = match self.call(name, &args) {
+                let (text, is_error) = match self.call(name, &args, policy) {
                     Ok(text) => (text, false),
                     Err(e) => (format!("{e:#}"), true),
                 };
@@ -343,14 +359,26 @@ impl Server<'_> {
         tools
     }
 
-    fn call(&self, name: &str, args: &Value) -> Result<String> {
+    fn call(&self, name: &str, args: &Value, policy: &Policy) -> Result<String> {
         match name {
             "spec_search" => {
                 let query = text_arg(args, "query")?;
                 let limit = number_arg(args, "limit", 10, 1, 50)?.to_string();
                 let mut cmd = vec!["search", "--json", "--limit", &limit];
                 let (ty, status);
-                if let Some(t) = optional_word(args, "type")? {
+                let asked = optional_word(args, "type")?;
+                if policy.is_limited() {
+                    // The index query itself is narrowed to the types the caller may see.
+                    match &asked {
+                        Some(t) if !policy.allows_type(t) => return Ok(no_hits(&query)),
+                        Some(t) => cmd.extend(["--type", t.as_str()]),
+                        None => {
+                            for t in policy.types() {
+                                cmd.extend(["--type", t]);
+                            }
+                        }
+                    }
+                } else if let Some(t) = asked {
                     ty = t;
                     cmd.extend(["--type", &ty]);
                 }
@@ -359,9 +387,18 @@ impl Server<'_> {
                     cmd.extend(["--status", &status]);
                 }
                 cmd.extend(["--", &query]);
-                self.cli(&cmd)
+                let out = self.cli(&cmd)?;
+                // How many nodes the index holds would say how many are hidden.
+                if policy.is_limited() {
+                    return without_index_counts(&out);
+                }
+                Ok(out)
             }
-            "spec_get" => self.get(&node_id(args, "id")?, optional_rev(args, "at")?.as_deref()),
+            "spec_get" => self.get(
+                &node_id(args, "id")?,
+                optional_rev(args, "at")?.as_deref(),
+                policy,
+            ),
             "spec_neighbors" => self.neighbors(args),
             "spec_context" => {
                 let ids = id_list(args, "ids", 20)?;
@@ -459,13 +496,13 @@ impl Server<'_> {
 
     /// Runs this same program with `--json`. Exit code 1 means findings, which is an answer.
     /// One page of node resources, `RESOURCE_PAGE` at a time. The cursor is an offset.
-    fn resources(&self, params: &Value) -> Result<Value> {
+    fn resources(&self, params: &Value, policy: &Policy) -> Result<Value> {
         let start = match params.get("cursor").and_then(Value::as_str) {
             None => 0,
             Some(c) => c.parse::<usize>().context("bad cursor")?,
         };
         let graph = self.graph(None)?;
-        let mut nodes: Vec<_> = graph.nodes.iter().collect();
+        let mut nodes: Vec<_> = graph.nodes.iter().filter(|n| policy.allows(n)).collect();
         nodes.sort_by(|a, b| a.id.cmp(&b.id));
         let page: Vec<Value> = nodes
             .iter()
@@ -489,7 +526,7 @@ impl Server<'_> {
         Ok(out)
     }
 
-    fn read_resource(&self, params: &Value) -> Result<Value> {
+    fn read_resource(&self, params: &Value, policy: &Policy) -> Result<Value> {
         let uri = params
             .get("uri")
             .and_then(Value::as_str)
@@ -501,6 +538,7 @@ impl Server<'_> {
         let graph = self.graph(None)?;
         let node = graph
             .get(node_id)
+            .filter(|n| policy.allows(n))
             .with_context(|| format!("no node with id {node_id}"))?;
         let text = std::fs::read_to_string(self.root.join(&node.path))
             .with_context(|| format!("cannot read {}", node.path.display()))?;
@@ -540,10 +578,11 @@ impl Server<'_> {
         }
     }
 
-    fn get(&self, node_id: &str, at: Option<&str>) -> Result<String> {
+    fn get(&self, node_id: &str, at: Option<&str>, policy: &Policy) -> Result<String> {
         let graph = self.graph(at)?;
         let node = graph
             .get(node_id)
+            .filter(|n| policy.allows(n))
             .with_context(|| format!("no node with id {node_id}"))?;
         let text = match at {
             Some(spec) => {
@@ -556,10 +595,20 @@ impl Server<'_> {
         let incoming: Vec<Value> = graph
             .incoming(&node.id)
             .iter()
-            .map(|(n, kind)| json!({"id": n.id, "kind": kind, "type": n.ty, "title": n.title}))
+            .map(|(n, kind)| {
+                if policy.allows(n) {
+                    json!({"id": n.id, "kind": kind, "type": n.ty, "title": n.title})
+                } else {
+                    json!({"id": REDACTED, "kind": kind})
+                }
+            })
             .collect();
+        let mut shown = serde_json::to_value(node)?;
+        if policy.is_limited() {
+            redact_links(&mut shown, &graph, policy);
+        }
         Ok(serde_json::to_string_pretty(&json!({
-            "node": node,
+            "node": shown,
             "incoming": incoming,
             "text": text,
         }))?)
@@ -659,6 +708,47 @@ impl Server<'_> {
             "changes": linked,
             "next": "Edit the nodes it changes, run spec_check, then ask a person to review and approve the change set.",
         }))?)
+    }
+}
+
+/// The answer to a search that cannot match anything the caller may see.
+fn no_hits(query: &str) -> String {
+    json!({
+        "schema_version": oxispec_core::OUTPUT_SCHEMA_VERSION,
+        "query": query,
+        "hits": [],
+    })
+    .to_string()
+}
+
+/// A search answer without the index statistics.
+fn without_index_counts(out: &str) -> Result<String> {
+    let mut value: Value = serde_json::from_str(out).context("the search answer is not JSON")?;
+    if let Some(object) = value.as_object_mut() {
+        object.remove("index");
+    }
+    Ok(serde_json::to_string_pretty(&value)?)
+}
+
+/// Replaces each link target the caller may not see with a stub. A target is
+/// an ID, or an ID and a scenario such as `REQ-AUTH-0001.S1`.
+fn redact_links(node: &mut Value, graph: &Graph, policy: &Policy) {
+    let Some(links) = node.get_mut("links").and_then(Value::as_object_mut) else {
+        return;
+    };
+    for targets in links.values_mut().filter_map(Value::as_array_mut) {
+        for target in targets {
+            let hidden = target.as_str().is_some_and(|t| {
+                let base = t.split('.').next().unwrap_or(t);
+                graph
+                    .get(t)
+                    .or_else(|| graph.get(base))
+                    .is_some_and(|n| !policy.allows(n))
+            });
+            if hidden {
+                *target = json!(REDACTED);
+            }
+        }
     }
 }
 

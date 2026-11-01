@@ -41,8 +41,9 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | 18 | `perf/18-mcp-in-process` | MCP tools run in the server's process, and the graph stays in memory between calls | Load of 8 clients at least doubles on the medium project, and an edit is seen by the next call. **Merged** (#37). |
 | 19 | `perf/20-watch-and-memo` | A file watcher for the MCP server, and the check results kept with the graph | One server answers cached reads in about 10 ms on 12,000 files, and an edit is seen by the next call. **Merged** (#39). |
 | 20 | `perf/live-search` | The MCP server keeps its search index open while the graph is unchanged | A repeated search on 12,000 files takes about 10 ms instead of 30, and a search after an edit finds the edit. **Merged** (#40). |
-| 21 | `perf/memo-analyses` | The claims, state machine and architecture analyses are kept with the graph | On 12,000 files `spec_claims` takes about 85 ms instead of 129, `spec_machine` 43 instead of 71, `spec_architecture` 30 instead of 63. **In review.** |
-| 20+ | later | Server mode, RBAC and ABAC, natural language layer, workspaces and federation | See design sections 10, 14 and 19 |
+| 21 | `perf/memo-analyses` | The claims, state machine and architecture analyses are kept with the graph | On 12,000 files `spec_claims` takes about 85 ms instead of 129, `spec_machine` 43 instead of 71, `spec_architecture` 30 instead of 63. **Merged** (#41). |
+| 22 | `feat/serve-http` | `oxispec serve`: one read-only MCP server over HTTP, bearer tokens that can be limited to node types, an audit log | A limited token cannot see or count what it may not read, a revoked token stops at once, and 16 clients share one process. **In review.** |
+| 22+ | later | OIDC and richer policies for server mode, natural language layer, workspaces and federation | See design sections 10, 14 and 19 |
 
 The plan changes as we learn. Change it in a pull request, like anything else.
 
@@ -76,5 +77,6 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 18** (#37): MCP in process.
 - **Iteration 19** (#39): a file watcher for the MCP server. See [mcp.md](mcp.md).
 - **Iteration 20** (#40): the MCP server keeps its search index open.
-- **Iteration 21**: analyses kept with the graph.
+- **Iteration 21** (#41): analyses kept with the graph.
+- **Iteration 22**: `oxispec serve` and `oxispec token`. See [mcp.md](mcp.md#serving-many-clients-over-http).
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

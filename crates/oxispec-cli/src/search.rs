@@ -9,7 +9,7 @@ use serde_json::json;
 
 pub struct SearchOptions {
     pub query: String,
-    pub ty: Option<String>,
+    pub ty: Vec<String>,
     pub status: Option<String>,
     pub limit: usize,
     pub rebuild: bool,
@@ -25,7 +25,7 @@ pub fn search_command(root: &Path, options: &SearchOptions) -> Result<()> {
     let graph = index::load(root, options.cache).0;
     let query = SearchQuery {
         text: options.query.clone(),
-        ty: options.ty.clone(),
+        types: options.ty.clone(),
         status: options.status.clone(),
         limit: options.limit,
     };

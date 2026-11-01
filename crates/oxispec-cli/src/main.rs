@@ -30,6 +30,7 @@ mod mcp;
 mod releases;
 mod rollback;
 mod search;
+mod server;
 mod site;
 mod status;
 mod trace;
@@ -200,6 +201,23 @@ enum Command {
         #[arg(long)]
         read_only: bool,
     },
+    /// Serve the specs to many AI clients over HTTP, read-only, with one bearer token per client
+    Serve {
+        /// Address to listen on
+        #[arg(long, default_value = "127.0.0.1:7878", value_name = "ADDRESS")]
+        listen: String,
+        /// Allow a non-local address because a TLS proxy in front encrypts the traffic
+        #[arg(long)]
+        behind_tls_proxy: bool,
+        /// Where to append one JSON line per request. Default: .oxispec/server/audit.jsonl
+        #[arg(long, value_name = "FILE")]
+        audit_log: Option<PathBuf>,
+    },
+    /// Create, list and revoke the tokens that `serve` accepts
+    Token {
+        #[command(subcommand)]
+        action: TokenAction,
+    },
     /// Add a typed link from one node to another, for example: link REQ-AUTH-0001 decided-by ADR-0001
     Link {
         /// The node that holds the link
@@ -321,9 +339,9 @@ enum Command {
         /// The words to look for. All of them have to match. Quotes make a phrase
         #[arg(required = true)]
         query: Vec<String>,
-        /// Only nodes of this type
+        /// Only nodes of this type. Repeat for several types
         #[arg(long = "type", value_name = "TYPE")]
-        ty: Option<String>,
+        ty: Vec<String>,
         /// Only nodes with this status
         #[arg(long)]
         status: Option<String>,
@@ -404,6 +422,28 @@ enum Command {
         #[arg(long)]
         at: Option<String>,
     },
+}
+
+#[derive(Subcommand)]
+enum TokenAction {
+    /// Create a token and print it once. The project keeps only a hash
+    Add {
+        /// A name for the client, such as `ci` or `docs-bot`
+        name: String,
+        /// Limit the token to these node types, for example `requirement,adr`. It then
+        /// reads only those nodes, with spec_search and spec_get. Without it, it reads everything
+        #[arg(long, value_delimiter = ',', value_name = "TYPES")]
+        types: Vec<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// List token names and what each may read. Secrets are never shown
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop accepting a token
+    Revoke { name: String },
 }
 
 #[derive(Subcommand)]
@@ -583,14 +623,26 @@ fn main() -> ExitCode {
         }
         default_hook(info);
     }));
-    match run(Cli::parse()) {
-        Ok(code) => code,
-        Err(e) => {
-            eprintln!("error: {e:#}");
-            ExitCode::from(2)
-        }
-    }
+    let cli = Cli::parse();
+    // `run` is a large function and the MCP servers call it again for each tool,
+    // so the main thread's stack (1 MiB on Windows) is not enough. A thread of our own has room.
+    let program = std::thread::Builder::new()
+        .name("oxispec".into())
+        .stack_size(STACK_BYTES)
+        .spawn(move || match run(cli) {
+            Ok(code) => code,
+            Err(e) => {
+                eprintln!("error: {e:#}");
+                ExitCode::from(2)
+            }
+        })
+        .expect("a thread can be started");
+    // A panic has already been reported by the hook above.
+    program.join().unwrap_or(ExitCode::from(101))
 }
+
+/// The stack of the thread that runs a command.
+const STACK_BYTES: usize = 32 * 1024 * 1024;
 
 fn run(cli: Cli) -> Result<ExitCode> {
     let cache = !cli.no_cache;
@@ -652,6 +704,35 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let cfg = config::load(&root)?;
             require_module(&cfg, "mcp")?;
             mcp::serve(&root, read_only)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Serve {
+            listen,
+            behind_tls_proxy,
+            audit_log,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            let cfg = config::load(&root)?;
+            require_module(&cfg, "mcp")?;
+            server::serve(
+                &root,
+                &server::ServeOptions {
+                    listen,
+                    behind_tls_proxy,
+                    audit_log,
+                },
+            )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Token { action } => {
+            let root = project_root(cli.root.as_deref())?;
+            match action {
+                TokenAction::Add { name, types, json } => {
+                    server::token_add(&root, &name, types, json)?
+                }
+                TokenAction::List { json } => server::token_list(&root, json)?,
+                TokenAction::Revoke { name } => server::token_revoke(&root, &name)?,
+            }
             Ok(ExitCode::SUCCESS)
         }
         Command::Status { at, json } => {
