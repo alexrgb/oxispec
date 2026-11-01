@@ -5,12 +5,12 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use oxispec_core::config;
-use oxispec_core::connect::{self, Outcome, TARGETS, Target};
+use oxispec_core::connect::{self, Outcome, TARGETS, Target, Transport};
 
 pub fn connect_command(
     root: &Path,
     asked: &[String],
-    read_only: bool,
+    transport: Transport,
     dry_run: bool,
 ) -> Result<()> {
     let cfg = config::load(root)?;
@@ -27,7 +27,7 @@ pub fn connect_command(
             Err(e) => return Err(e).with_context(|| format!("reading {}", target.file)),
         };
         let (text, outcome) =
-            connect::merge(existing.as_deref(), target, read_only).map_err(anyhow::Error::msg)?;
+            connect::merge(existing.as_deref(), target, transport).map_err(anyhow::Error::msg)?;
         plan.push((target, text, outcome));
     }
 
@@ -48,6 +48,17 @@ pub fn connect_command(
             fs::create_dir_all(dir)?;
         }
         fs::write(&path, text).with_context(|| format!("writing {}", target.file))?;
+    }
+    if let Transport::Http { url } = transport {
+        eprintln!(
+            "the entries read the token from ${} (VS Code asks for it); create one with `oxispec token add NAME` on the server",
+            connect::TOKEN_ENV
+        );
+        if connect::is_cleartext_remote(url) {
+            eprintln!(
+                "warning: {url} is plain http to another machine, so the token is sent unencrypted; use https"
+            );
+        }
     }
     Ok(())
 }

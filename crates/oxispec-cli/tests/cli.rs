@@ -4946,3 +4946,46 @@ fn a_revoked_token_stops_working_and_every_request_is_audited() {
         "no secrets in the log"
     );
 }
+
+#[test]
+fn connect_can_point_clients_at_a_running_server_without_writing_a_token() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init"]).code, 0);
+    let url = "https://specs.example.com/mcp";
+    let out = run(p, &["connect", "claude", "copilot", "--url", url]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stderr.contains("OXISPEC_TOKEN"), "{}", out.stderr);
+
+    let claude = fs::read_to_string(p.join(".mcp.json")).unwrap();
+    assert!(claude.contains(url) && claude.contains("Bearer ${OXISPEC_TOKEN}"));
+    assert!(!claude.contains("\"command\""));
+    let vscode = fs::read_to_string(p.join(".vscode/mcp.json")).unwrap();
+    assert!(vscode.contains("${input:oxispec-token}") && vscode.contains("promptString"));
+
+    // Again changes nothing; a local entry can take its place.
+    assert!(
+        run(p, &["connect", "claude", "--url", url])
+            .stdout
+            .contains("unchanged")
+    );
+    assert_eq!(run(p, &["connect", "claude"]).code, 0);
+    assert!(
+        fs::read_to_string(p.join(".mcp.json"))
+            .unwrap()
+            .contains("\"command\"")
+    );
+
+    // A URL that carries a secret, or plain http to another machine, is not accepted quietly.
+    let bad = run(p, &["connect", "claude", "--url", "https://u:pw@host/mcp"]);
+    assert_eq!(bad.code, 2);
+    assert!(bad.stderr.contains("user or password"), "{}", bad.stderr);
+    let open = run(
+        p,
+        &["connect", "cursor", "--url", "http://specs.example.com/mcp"],
+    );
+    assert_eq!(open.code, 0);
+    assert!(open.stderr.contains("unencrypted"), "{}", open.stderr);
+    let both = run(p, &["connect", "--url", url, "--read-only"]);
+    assert_eq!(both.code, 2);
+}

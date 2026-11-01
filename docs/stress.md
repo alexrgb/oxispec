@@ -44,6 +44,7 @@ A command over its budget (seconds and megabytes, per preset, in `crates/oxispec
 ## `load`: many at once
 
 - **`--mode mcp`** starts `--clients` MCP servers and sends each `--requests` calls, one after another, in the mix an agent makes: searches, reads of one node, context packs, neighbours, and now and then a whole-project check. It reports calls, errors and p50, p95, p99 and max latency per tool, and requests per second. `--max-p95-ms` and `--max-errors` set the pass line.
+- **`--mode http`** starts one `oxispec serve` on a free local port, with a token made for the run, and connects `--clients` clients to it, each with one connection kept open. It sends the same mix as `mcp` and reports the same figures. Compare the two on one project to see what sharing one server process costs and saves.
 - **`--mode cli`** runs `--clients` processes that each run `check`, `search`, `trace`, `coverage` and `claims` in turn on one project, so they share its cache and search index. With `--writers N`, that many processes add requirements at the same time, and afterwards no two may share an ID.
 
 ## What it found
@@ -55,7 +56,7 @@ The first runs found, and the tests now cover:
 
 ## In CI
 
-The `stress` workflow runs every Monday and on request (Actions, `stress`, choose a size). It builds in release mode, runs `run` against the budgets, an MCP load, a command line load with writers, and the pathological shapes. Results are uploaded as JSON.
+The `stress` workflow runs every Monday and on request (Actions, `stress`, choose a size). It builds in release mode, runs `run` against the budgets, an MCP load, an HTTP load on one shared server, a command line load with writers, and the pathological shapes. Results are uploaded as JSON.
 
 Tests of the tool itself run with `cargo test`: a `tiny` run with the oracle, a short MCP load, and a command line load with writers.
 
@@ -63,4 +64,4 @@ Tests of the tool itself run with `cargo test`: a `tiny` run with the oracle, a 
 
 - A state machine block is read with a YAML parser budget of about 250,000 nodes, which is roughly 30,000 transitions in one block. Beyond that the block is reported as unreadable (E020).
 - A cold start reads files on up to 8 threads. On the `large` preset a cold `check` takes under a second on a CI runner and a few seconds on a slow disk, and a warm one well under a second.
-- Each MCP read tool starts the `oxispec` program once per call, so a call costs tens of milliseconds even for a small project. That is fine for an agent and would not be for a service. Server mode will need the graph held in memory.
+- Each `mcp` client is a process with its own copy of the graph. Many clients on a large project are slow on a small runner for that reason; `--mode http` shares one process instead.

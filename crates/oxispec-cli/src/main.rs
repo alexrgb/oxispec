@@ -132,8 +132,12 @@ enum Command {
         /// The clients to write for (default: the project's `agents`, else all four)
         clients: Vec<String>,
         /// Start the server with `--read-only`
-        #[arg(long)]
+        #[arg(long, conflicts_with = "url")]
         read_only: bool,
+        /// Point the clients at a running `oxispec serve`, for example https://specs.example.com/mcp.
+        /// The token is read from the OXISPEC_TOKEN environment variable, and is never written to a file
+        #[arg(long, value_name = "URL")]
+        url: Option<String>,
         /// Show what would be written, and write nothing
         #[arg(long)]
         dry_run: bool,
@@ -743,10 +747,15 @@ fn run(cli: Cli) -> Result<ExitCode> {
         Command::Connect {
             clients,
             read_only,
+            url,
             dry_run,
         } => {
             let root = project_root(cli.root.as_deref())?;
-            connect::connect_command(&root, &clients, read_only, dry_run)?;
+            let transport = match &url {
+                Some(url) => oxispec_core::connect::Transport::Http { url },
+                None => oxispec_core::connect::Transport::Stdio { read_only },
+            };
+            connect::connect_command(&root, &clients, transport, dry_run)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Agents { action } => match action {
