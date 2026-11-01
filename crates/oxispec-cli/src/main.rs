@@ -134,7 +134,7 @@ enum Command {
         /// Start the server with `--read-only`
         #[arg(long, conflicts_with = "url")]
         read_only: bool,
-        /// Point the clients at a running `oxispec serve`, for example https://specs.example.com/mcp.
+        /// Point the clients at a running `oxispec serve`, for example `https://specs.example.com/mcp`.
         /// The token is read from the OXISPEC_TOKEN environment variable, and is never written to a file
         #[arg(long, value_name = "URL")]
         url: Option<String>,
