@@ -273,7 +273,15 @@ fn read_machine(node: &Node, out: &mut Vec<Finding>) -> Option<Machine> {
     })
 }
 
-pub fn analyze(graph: &Graph) -> Analysis {
+pub fn analyze(graph: &Graph) -> std::sync::Arc<Analysis> {
+    graph
+        .analyses
+        .machines
+        .get_or_init(|| std::sync::Arc::new(compute(graph)))
+        .clone()
+}
+
+fn compute(graph: &Graph) -> Analysis {
     let mut analysis = Analysis::default();
     for node in graph.nodes.iter().filter(|n| !n.machines.is_empty()) {
         if let Some(machine) = read_machine(node, &mut analysis.findings) {
@@ -684,7 +692,7 @@ fn properties(machine: &Machine, out: &mut Vec<Finding>) {
 
 pub fn check(graph: &Graph) -> Vec<Finding> {
     let analysis = analyze(graph);
-    let mut findings = analysis.findings;
+    let mut findings = analysis.findings.clone();
     for machine in analysis.machines.iter().filter(|m| m.active) {
         unknown_states(machine, &mut findings);
         nondeterminism(machine, &mut findings);
@@ -828,7 +836,7 @@ transitions:
         let g = graph(block);
         let a = analyze(&g);
         assert!(a.findings.is_empty(), "{:?}", a.findings);
-        a.machines.into_iter().next().expect("a machine")
+        a.machines.first().cloned().expect("a machine")
     }
 
     fn codes(findings: &[Finding]) -> Vec<&'static str> {

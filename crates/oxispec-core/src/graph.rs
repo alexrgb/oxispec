@@ -19,6 +19,17 @@ pub struct Graph {
     /// What [`crate::check::check`] found, shared by clones of this graph so a
     /// long-running process runs the checks once per version of the files.
     pub(crate) checked: Arc<OnceLock<Vec<Finding>>>,
+    /// The results of the claims, state machine and architecture analyses,
+    /// kept the same way.
+    pub(crate) analyses: Arc<Analyses>,
+}
+
+/// Analyses that are costly to repeat, each made once per version of the files.
+#[derive(Debug, Default)]
+pub(crate) struct Analyses {
+    pub(crate) claims: OnceLock<Arc<crate::claims::Analysis>>,
+    pub(crate) machines: OnceLock<Arc<crate::machines::Analysis>>,
+    pub(crate) architecture: OnceLock<Arc<crate::architecture::Analysis>>,
 }
 
 impl Graph {
@@ -34,6 +45,7 @@ impl Graph {
             findings,
             by_id,
             checked: Arc::default(),
+            analyses: Arc::default(),
         }
     }
 
@@ -88,5 +100,29 @@ impl Graph {
             }
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests_of_memoized_analyses {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn clones_of_a_graph_share_one_analysis_of_each_kind() {
+        let graph = Graph::new(Vec::new(), Vec::new());
+        let copy = graph.clone();
+        assert!(Arc::ptr_eq(
+            &crate::claims::analyze(&graph),
+            &crate::claims::analyze(&copy)
+        ));
+        assert!(Arc::ptr_eq(
+            &crate::machines::analyze(&graph),
+            &crate::machines::analyze(&copy)
+        ));
+        assert!(Arc::ptr_eq(
+            &crate::architecture::analyze(&graph),
+            &crate::architecture::analyze(&copy)
+        ));
     }
 }

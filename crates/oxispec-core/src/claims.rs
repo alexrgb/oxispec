@@ -918,7 +918,15 @@ pub(crate) fn is_inactive(status: Option<&str>) -> bool {
     status.is_some_and(|s| INACTIVE_STATUSES.contains(&s.to_ascii_lowercase().as_str()))
 }
 
-pub fn analyze(graph: &Graph) -> Analysis {
+pub fn analyze(graph: &Graph) -> std::sync::Arc<Analysis> {
+    graph
+        .analyses
+        .claims
+        .get_or_init(|| std::sync::Arc::new(compute(graph)))
+        .clone()
+}
+
+fn compute(graph: &Graph) -> Analysis {
     let mut analysis = Analysis::default();
     if !graph
         .nodes
