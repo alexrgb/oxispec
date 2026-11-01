@@ -4477,16 +4477,31 @@ fn a_running_mcp_server_sees_edits_made_after_it_cached_the_graph() {
     assert!(ask("spec_status", serde_json::json!({})).contains("\"nodes\": 4"));
     assert!(ask("spec_get", serde_json::json!({"id": id})).contains("Original title"));
     assert!(ask("spec_get", serde_json::json!({"id": id})).contains("Original title"));
+    // The second search reuses the open index and still answers the same.
+    for _ in 0..2 {
+        assert!(ask("spec_search", serde_json::json!({"query": "Original"})).contains(&id));
+    }
 
-    // An edit, and a new file, are seen by the next call.
+    // An edit, and a new file, are seen once the system reports them, which takes
+    // a few milliseconds: a call made in that gap still sees the old files.
     let shown: serde_json::Value =
         serde_json::from_str(&run(p, &["show", &id, "--json"]).stdout).unwrap();
     let path = p.join(shown["node"]["path"].as_str().unwrap());
     let text = fs::read_to_string(&path).unwrap();
     fs::write(&path, text.replace("Original title", "Edited title")).unwrap();
     assert_eq!(run(p, &["new", "adr", "Another"]).code, 0);
-    assert!(ask("spec_get", serde_json::json!({"id": id})).contains("Edited title"));
-    assert!(ask("spec_status", serde_json::json!({})).contains("\"nodes\": 5"));
+    let mut eventually = |tool: &str, args: serde_json::Value, wanted: &str| {
+        for _ in 0..40 {
+            if ask(tool, args.clone()).contains(wanted) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        panic!("{tool} never showed {wanted}");
+    };
+    eventually("spec_get", serde_json::json!({"id": id}), "Edited title");
+    eventually("spec_status", serde_json::json!({}), "\"nodes\": 5");
+    eventually("spec_search", serde_json::json!({"query": "Edited"}), &id);
 
     drop(stdin);
     assert!(child.wait().unwrap().success());

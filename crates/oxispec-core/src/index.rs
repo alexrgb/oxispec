@@ -257,6 +257,11 @@ static DIRTY: AtomicBool = AtomicBool::new(true);
 static WATCHER: Mutex<Option<notify::RecommendedWatcher>> = Mutex::new(None);
 static WATCHING: AtomicBool = AtomicBool::new(false);
 
+/// Whether this process keeps graphs in memory (a running server).
+pub(crate) fn keeps_graph() -> bool {
+    MEMO_ON.load(Ordering::Relaxed)
+}
+
 /// Lets [`load`] keep the last graph in memory and hand it out again while no
 /// markdown file has changed. A long-running process (the MCP server) turns
 /// this on; a command that runs once has nothing to gain.
