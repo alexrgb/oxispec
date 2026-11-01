@@ -1,6 +1,8 @@
-//! Load tests: many MCP clients at once, and many command line processes sharing a project.
+//! Load tests: many MCP clients at once (one server process each, or one shared HTTP
+//! server), and many command line processes sharing a project.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -148,13 +150,48 @@ fn pick(rng: &mut Rng, requirements: usize) -> (&'static str, Value) {
     }
 }
 
+type Sample = (&'static str, Duration, Option<String>);
+
+/// One client's session: an `initialize`, then `requests` calls from the usual mix.
+/// `send` carries one JSON-RPC message to the server and returns its answer.
+fn drive(
+    requests: usize,
+    seed: u64,
+    requirements: usize,
+    send: &mut dyn FnMut(Value) -> Result<Value>,
+) -> Result<Vec<Sample>> {
+    send(
+        json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}}),
+    )?;
+    let mut rng = Rng(seed.max(1));
+    let mut out = Vec::new();
+    for i in 1..=requests {
+        let (tool, args) = pick(&mut rng, requirements);
+        let started = Instant::now();
+        let reply = send(
+            json!({"jsonrpc": "2.0", "id": i, "method": "tools/call", "params": {"name": tool, "arguments": args}}),
+        )?;
+        let failed = reply.get("error").is_some() || reply["result"]["isError"] == true;
+        let why = failed.then(|| {
+            let text = reply["result"]["content"][0]["text"]
+                .as_str()
+                .or_else(|| reply["error"]["message"].as_str())
+                .unwrap_or("an error");
+            format!("{tool}: {}", text.chars().take(200).collect::<String>())
+        });
+        out.push((tool, started.elapsed(), why));
+    }
+    Ok(out)
+}
+
+/// A client with a server process of its own, over stdin and stdout.
 fn client(
     bin: &Path,
     dir: &Path,
     requests: usize,
     seed: u64,
     requirements: usize,
-) -> Result<Vec<(&'static str, Duration, Option<String>)>> {
+) -> Result<Vec<Sample>> {
     let mut child = Command::new(bin)
         .arg("--root")
         .arg(dir)
@@ -167,50 +204,106 @@ fn client(
     let mut stdin = child.stdin.take().unwrap();
     let mut stdout = BufReader::new(child.stdout.take().unwrap());
     let mut line = String::new();
-    let mut send = |value: Value, line: &mut String| -> Result<Value> {
+    let mut send = |value: Value| -> Result<Value> {
         writeln!(stdin, "{value}")?;
         stdin.flush()?;
         line.clear();
-        if stdout.read_line(line)? == 0 {
+        if stdout.read_line(&mut line)? == 0 {
             bail!("the server closed the connection");
         }
         serde_json::from_str(line.trim()).with_context(|| format!("not JSON: {line}"))
     };
-    send(
-        json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}}),
-        &mut line,
-    )?;
-    let mut rng = Rng(seed.max(1));
-    let mut out = Vec::new();
-    for i in 1..=requests {
-        let (tool, args) = pick(&mut rng, requirements);
-        let started = Instant::now();
-        let reply = send(
-            json!({"jsonrpc": "2.0", "id": i, "method": "tools/call", "params": {"name": tool, "arguments": args}}),
-            &mut line,
-        )?;
-        let failed = reply.get("error").is_some() || reply["result"]["isError"] == true;
-        let why = failed.then(|| {
-            let text = reply["result"]["content"][0]["text"]
-                .as_str()
-                .or_else(|| reply["error"]["message"].as_str())
-                .unwrap_or("an error");
-            format!("{tool}: {}", text.chars().take(200).collect::<String>())
-        });
-        out.push((tool, started.elapsed(), why));
-    }
+    let out = drive(requests, seed, requirements, &mut send);
     drop(stdin);
     let _ = child.wait();
-    Ok(out)
+    out
 }
 
-/// `clients` MCP servers at once, each answering `requests` calls one after another.
-pub fn mcp(bin: &Path, dir: &Path, clients: usize, requests: usize, requirements: usize) -> Report {
+/// A client of a shared HTTP server: one connection, kept open, with a token.
+fn http_client(
+    addr: &str,
+    token: &str,
+    requests: usize,
+    seed: u64,
+    requirements: usize,
+) -> Result<Vec<Sample>> {
+    let mut stream = TcpStream::connect(addr).with_context(|| format!("cannot reach {addr}"))?;
+    stream.set_read_timeout(Some(Duration::from_secs(120)))?;
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut send = |value: Value| -> Result<Value> {
+        let body = value.to_string();
+        // One write per request, so the server sees it whole.
+        let request = format!(
+            "POST /mcp HTTP/1.1\r\nHost: {addr}\r\nAuthorization: Bearer {token}\r\n\
+             Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(request.as_bytes())?;
+        stream.flush()?;
+        let mut status = String::new();
+        reader.read_line(&mut status)?;
+        let code: u16 = status
+            .split(' ')
+            .nth(1)
+            .and_then(|c| c.parse().ok())
+            .unwrap_or(0);
+        let (mut length, mut chunked) = (0usize, false);
+        loop {
+            let mut header = String::new();
+            if reader.read_line(&mut header)? == 0 {
+                bail!("the server closed the connection");
+            }
+            if header.trim().is_empty() {
+                break;
+            }
+            if let Some((name, value)) = header.split_once(':') {
+                if name.eq_ignore_ascii_case("content-length") {
+                    length = value.trim().parse().unwrap_or(0);
+                } else if name.eq_ignore_ascii_case("transfer-encoding")
+                    && value.to_ascii_lowercase().contains("chunked")
+                {
+                    chunked = true;
+                }
+            }
+        }
+        let mut answer = Vec::new();
+        if chunked {
+            // Each chunk is its size in hex, a line break, that many bytes, and a line break.
+            loop {
+                let mut size = String::new();
+                reader.read_line(&mut size)?;
+                let size = usize::from_str_radix(size.trim().split(';').next().unwrap_or(""), 16)
+                    .context("a bad chunk size")?;
+                let mut chunk = vec![0u8; size + 2];
+                reader.read_exact(&mut chunk)?;
+                if size == 0 {
+                    break;
+                }
+                answer.extend_from_slice(&chunk[..size]);
+            }
+        } else {
+            answer = vec![0u8; length];
+            reader.read_exact(&mut answer)?;
+        }
+        if code != 200 {
+            bail!("HTTP {code}: {}", String::from_utf8_lossy(&answer));
+        }
+        serde_json::from_slice(&answer).context("the answer is not JSON")
+    };
+    drive(requests, seed, requirements, &mut send)
+}
+
+/// Runs one session per client at once, and gathers their latencies.
+fn gather(
+    clients: usize,
+    session: impl Fn(usize) -> Result<Vec<Sample>> + Send + Sync + 'static,
+) -> Report {
     let started = Instant::now();
+    let session = Arc::new(session);
     let handles: Vec<_> = (0..clients)
         .map(|c| {
-            let (bin, dir) = (bin.to_path_buf(), dir.to_path_buf());
-            thread::spawn(move || client(&bin, &dir, requests, 17 + c as u64 * 7919, requirements))
+            let session = session.clone();
+            thread::spawn(move || session(c))
         })
         .collect();
     let mut by_tool: std::collections::BTreeMap<&'static str, Latency> = Default::default();
@@ -242,6 +335,74 @@ pub fn mcp(bin: &Path, dir: &Path, clients: usize, requests: usize, requirements
         per_tool: by_tool.into_values().collect(),
         failures,
     }
+}
+
+/// `clients` MCP servers at once, each answering `requests` calls one after another.
+pub fn mcp(bin: &Path, dir: &Path, clients: usize, requests: usize, requirements: usize) -> Report {
+    let (bin, dir) = (bin.to_path_buf(), dir.to_path_buf());
+    gather(clients, move |c| {
+        client(&bin, &dir, requests, 17 + c as u64 * 7919, requirements)
+    })
+}
+
+/// A server started by [`serve`]. It stops when this is dropped.
+pub struct HttpServer {
+    child: std::process::Child,
+    pub addr: String,
+    pub token: String,
+}
+
+impl Drop for HttpServer {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// Makes a token for the project and starts `oxispec serve` on a free local port.
+pub fn serve(bin: &Path, dir: &Path) -> Result<HttpServer> {
+    let made = Command::new(bin)
+        .arg("--root")
+        .arg(dir)
+        .args(["token", "add", "stress"])
+        .output()
+        .context("cannot run `token add`")?;
+    if !made.status.success() {
+        bail!(
+            "`token add` failed: {}",
+            String::from_utf8_lossy(&made.stderr)
+        );
+    }
+    let token = String::from_utf8_lossy(&made.stdout).trim().to_string();
+    let mut child = Command::new(bin)
+        .arg("--root")
+        .arg(dir)
+        .args(["serve", "--listen", "127.0.0.1:0"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("cannot start `serve`")?;
+    let mut line = String::new();
+    BufReader::new(child.stderr.take().unwrap()).read_line(&mut line)?;
+    let Some(addr) = line
+        .split("http://")
+        .nth(1)
+        .and_then(|rest| rest.split("/mcp").next())
+        .map(str::to_string)
+    else {
+        let _ = child.kill();
+        bail!("`serve` did not say where it listens: {line:?}");
+    };
+    Ok(HttpServer { child, addr, token })
+}
+
+/// `clients` clients of one HTTP server, each with its own connection.
+pub fn http(server: &HttpServer, clients: usize, requests: usize, requirements: usize) -> Report {
+    let (addr, token) = (server.addr.clone(), server.token.clone());
+    gather(clients, move |c| {
+        http_client(&addr, &token, requests, 17 + c as u64 * 7919, requirements)
+    })
 }
 
 /// Many command line processes at once on one project: readers that must all succeed, and

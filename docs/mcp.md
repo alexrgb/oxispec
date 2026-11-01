@@ -22,9 +22,12 @@ oxispec connect                      # all four clients, or the ones in `agents`
 oxispec connect claude cursor        # only these
 oxispec connect --read-only          # start the server with --read-only
 oxispec connect --dry-run            # say what would change, write nothing
+oxispec connect --url https://specs.example.com/mcp   # point the clients at a shared server
 ```
 
 It adds or replaces only the `oxispec` entry. Other settings and servers stay, and running it twice changes nothing. Keys come back in alphabetical order. A file that is not plain JSON (VS Code allows comments in its file) is never rewritten: the command stops before writing anything and tells you to add the entry by hand. The file names and shapes are from each client's documentation; I have not run each client against the server.
+
+**A server reached by URL.** With `--url`, the entries point at a running [`oxispec serve`](#serving-many-clients-over-http) instead of starting a process. The token is never written to a file. Claude Code, Cursor and Gemini CLI read it from the environment variable `OXISPEC_TOKEN` (each in its own syntax: `${OXISPEC_TOKEN}`, `${env:OXISPEC_TOKEN}`), so set it where the client starts. VS Code gets a hidden prompt for it, declared once under `inputs`. A URL with a user, a password, a query or a fragment is refused, and plain `http://` to another machine prints a warning. `--url` and `--read-only` do not go together; a served project is always read-only. The remote shapes are also from the clients' documentation and have not been run against a client here.
 
 Add `"--read-only"` to `args` to leave out the one tool that writes.
 

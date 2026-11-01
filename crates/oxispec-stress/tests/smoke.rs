@@ -1,5 +1,5 @@
 //! The stress tool works: it makes a project, `check` agrees with the plan, every command
-//! runs, and both load modes finish without a failed request.
+//! runs, and the load modes finish without a failed request.
 
 use std::process::Command;
 
@@ -69,6 +69,22 @@ fn the_mcp_load_finishes_without_failed_requests() {
         "15",
     ]);
     assert!(text.contains("requests per second"), "{text}");
+}
+
+#[test]
+fn the_http_load_finishes_without_failed_requests() {
+    let text = ok(&[
+        "load",
+        "--preset",
+        "tiny",
+        "--mode",
+        "http",
+        "--clients",
+        "4",
+        "--requests",
+        "15",
+    ]);
+    assert!(text.contains("60 requests in"), "{text}");
 }
 
 #[test]

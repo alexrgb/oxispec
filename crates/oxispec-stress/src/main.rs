@@ -106,10 +106,11 @@ enum Command {
         dir: Option<PathBuf>,
         #[command(flatten)]
         shape: ShapeArgs,
-        /// mcp, or cli for processes that share a project and its cache
+        /// mcp (a server process per client), http (clients of one `oxispec serve`), or cli
+        /// for processes that share a project and its cache
         #[arg(long, default_value = "mcp")]
         mode: String,
-        /// Clients (mcp) or reader processes (cli) at the same time
+        /// Clients (mcp, http) or reader processes (cli) at the same time
         #[arg(long, default_value_t = 8)]
         clients: usize,
         /// Requests per client (mcp) or commands per reader (cli)
@@ -276,7 +277,11 @@ fn main() -> Result<ExitCode> {
             let report = match mode.as_str() {
                 "mcp" => load::mcp(&bin, &root, clients, requests, requirements),
                 "cli" => load::cli(&bin, &root, clients, requests, writers),
-                other => bail!("unknown mode `{other}` (mcp, cli)"),
+                "http" => {
+                    let server = load::serve(&bin, &root)?;
+                    load::http(&server, clients, requests, requirements)
+                }
+                other => bail!("unknown mode `{other}` (mcp, http, cli)"),
             };
             report.print();
             let mut failed = report.errors() > max_errors;
