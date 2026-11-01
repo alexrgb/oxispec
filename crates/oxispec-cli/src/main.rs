@@ -623,14 +623,26 @@ fn main() -> ExitCode {
         }
         default_hook(info);
     }));
-    match run(Cli::parse()) {
-        Ok(code) => code,
-        Err(e) => {
-            eprintln!("error: {e:#}");
-            ExitCode::from(2)
-        }
-    }
+    let cli = Cli::parse();
+    // `run` is a large function and the MCP servers call it again for each tool,
+    // so the main thread's stack (1 MiB on Windows) is not enough. A thread of our own has room.
+    let program = std::thread::Builder::new()
+        .name("oxispec".into())
+        .stack_size(STACK_BYTES)
+        .spawn(move || match run(cli) {
+            Ok(code) => code,
+            Err(e) => {
+                eprintln!("error: {e:#}");
+                ExitCode::from(2)
+            }
+        })
+        .expect("a thread can be started");
+    // A panic has already been reported by the hook above.
+    program.join().unwrap_or(ExitCode::from(101))
 }
+
+/// The stack of the thread that runs a command.
+const STACK_BYTES: usize = 32 * 1024 * 1024;
 
 fn run(cli: Cli) -> Result<ExitCode> {
     let cache = !cli.no_cache;

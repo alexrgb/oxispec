@@ -178,11 +178,15 @@ pub fn serve(root: &Path, options: &ServeOptions) -> Result<()> {
     };
     std::thread::scope(|scope| {
         for _ in 0..WORKERS {
-            scope.spawn(|| {
-                for request in http.incoming_requests() {
-                    state.handle(request);
-                }
-            });
+            // Handling a call runs a command, which needs more stack than the default.
+            std::thread::Builder::new()
+                .stack_size(crate::STACK_BYTES)
+                .spawn_scoped(scope, || {
+                    for request in http.incoming_requests() {
+                        state.handle(request);
+                    }
+                })
+                .expect("a thread can be started");
         }
     });
     Ok(())
