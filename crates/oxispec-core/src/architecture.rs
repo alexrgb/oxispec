@@ -105,7 +105,7 @@ pub struct Rule {
     pub line: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Model {
     pub elements: Vec<Element>,
     pub environments: Vec<Environment>,
@@ -313,7 +313,15 @@ fn read_node(node: &Node, model: &mut Model, out: &mut Vec<Finding>) {
     }
 }
 
-pub fn analyze(graph: &Graph) -> Analysis {
+pub fn analyze(graph: &Graph) -> std::sync::Arc<Analysis> {
+    graph
+        .analyses
+        .architecture
+        .get_or_init(|| std::sync::Arc::new(compute(graph)))
+        .clone()
+}
+
+fn compute(graph: &Graph) -> Analysis {
     let mut analysis = Analysis::default();
     for node in graph.nodes.iter().filter(|n| !n.architecture.is_empty()) {
         read_node(node, &mut analysis.model, &mut analysis.findings);
@@ -524,7 +532,7 @@ fn completeness(model: &Model, out: &mut Vec<Finding>) {
 
 pub fn check(graph: &Graph) -> Vec<Finding> {
     let analysis = analyze(graph);
-    let mut findings = analysis.findings;
+    let mut findings = analysis.findings.clone();
     references(&analysis.model, &mut findings);
     rules(&analysis.model, &mut findings);
     completeness(&analysis.model, &mut findings);
@@ -924,7 +932,7 @@ mod tests {
     fn model() -> Model {
         let a = analyze(&graph(shop()));
         assert!(a.findings.is_empty(), "{:?}", a.findings);
-        a.model
+        a.model.clone()
     }
 
     #[test]

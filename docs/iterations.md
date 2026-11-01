@@ -74,5 +74,6 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 17** (#36): MCP resources and prompts. See [mcp.md](mcp.md#resources-and-prompts).
 - **Iteration 18** (#37): MCP in process.
 - **Iteration 19** (#39): a file watcher for the MCP server. See [mcp.md](mcp.md).
-- **Iteration 20**: the MCP server keeps its search index open.
+- **Iteration 20** (#40): the MCP server keeps its search index open.
+- **Iteration 21**: analyses kept with the graph.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

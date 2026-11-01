@@ -43,7 +43,7 @@ fn load(root: &Path, at: Option<&str>, cache: bool) -> Result<(Model, Option<git
         Some(rev) => git::graph_at(root, rev)?,
         None => index::load(root, cache).0,
     };
-    Ok((architecture::analyze(&graph).model, revision))
+    Ok((architecture::analyze(&graph).model.clone(), revision))
 }
 
 pub fn list(root: &Path, at: Option<&str>, json: bool, cache: bool) -> Result<ExitCode> {
