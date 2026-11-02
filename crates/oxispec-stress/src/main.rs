@@ -125,6 +125,11 @@ enum Command {
         /// Fail when more than this many requests fail
         #[arg(long, default_value_t = 0)]
         max_errors: usize,
+        /// Run the load this many times and report the median of each figure. The noise
+        /// between runs is large, so a single run says little about a small change
+        #[arg(long, default_value_t = 1)]
+        repeat: usize,
+        /// With --repeat, the report of the last run is written
         #[arg(long)]
         json: Option<PathBuf>,
     },
@@ -271,20 +276,49 @@ fn main() -> Result<ExitCode> {
             writers,
             max_p95_ms,
             max_errors,
+            repeat,
             json,
         } => {
             let (root, _guard, requirements) = project(&bin, &dir, &shape)?;
-            let report = match mode.as_str() {
-                "mcp" => load::mcp(&bin, &root, clients, requests, requirements),
-                "cli" => load::cli(&bin, &root, clients, requests, writers),
-                "http" => {
-                    let server = load::serve(&bin, &root)?;
-                    load::http(&server, clients, requests, requirements)
-                }
-                other => bail!("unknown mode `{other}` (mcp, http, cli)"),
+            let once = || -> Result<load::Report> {
+                Ok(match mode.as_str() {
+                    "mcp" => load::mcp(&bin, &root, clients, requests, requirements),
+                    "cli" => load::cli(&bin, &root, clients, requests, writers),
+                    "http" => {
+                        let server = load::serve(&bin, &root)?;
+                        load::http(&server, clients, requests, requirements)
+                    }
+                    other => bail!("unknown mode `{other}` (mcp, http, cli)"),
+                })
             };
-            report.print();
-            let mut failed = report.errors() > max_errors;
+            let mut report = once()?;
+            let mut errors = report.errors();
+            if repeat > 1 {
+                let mut runs = vec![report.summary()];
+                for _ in 1..repeat {
+                    report = once()?;
+                    errors = errors.max(report.errors());
+                    runs.push(report.summary());
+                }
+                for (n, r) in runs.iter().enumerate() {
+                    println!(
+                        "run {}: p50 {:.1} ms, p95 {:.1} ms, p99 {:.1} ms, {:.1} requests per second",
+                        n + 1,
+                        r[0],
+                        r[1],
+                        r[2],
+                        r[3]
+                    );
+                }
+                let m = load::median_summary(&runs);
+                println!(
+                    "median of {repeat}: p50 {:.1} ms, p95 {:.1} ms, p99 {:.1} ms, {:.1} requests per second",
+                    m[0], m[1], m[2], m[3]
+                );
+            } else {
+                report.print();
+            }
+            let mut failed = errors > max_errors;
             if writers > 0 {
                 let dup = load::duplicate_ids(&bin, &root).context("cannot check afterwards")?;
                 println!("{dup} requirements share an ID after {writers} concurrent writers");

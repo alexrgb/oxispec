@@ -3,7 +3,7 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -93,6 +93,17 @@ impl Report {
         for f in self.failures.iter().take(10) {
             println!("failure: {f}");
         }
+    }
+
+    /// p50, p95 and p99 in milliseconds, and requests per second.
+    pub fn summary(&self) -> [f64; 4] {
+        let all = self.all_sorted();
+        [
+            percentile(&all, 0.5),
+            percentile(&all, 0.95),
+            percentile(&all, 0.99),
+            all.len() as f64 / self.wall.as_secs_f64().max(f64::EPSILON),
+        ]
     }
 
     pub fn json(&self) -> Value {
@@ -345,17 +356,27 @@ pub fn mcp(bin: &Path, dir: &Path, clients: usize, requests: usize, requirements
     })
 }
 
+const TOKEN_NAME: &str = "stress";
+
 /// A server started by [`serve`]. It stops when this is dropped.
 pub struct HttpServer {
     child: std::process::Child,
     pub addr: String,
     pub token: String,
+    bin: PathBuf,
+    dir: PathBuf,
 }
 
 impl Drop for HttpServer {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+        // The project may be one the caller keeps, so do not leave the token in it.
+        let _ = Command::new(&self.bin)
+            .arg("--root")
+            .arg(&self.dir)
+            .args(["token", "revoke", TOKEN_NAME])
+            .output();
     }
 }
 
@@ -364,7 +385,7 @@ pub fn serve(bin: &Path, dir: &Path) -> Result<HttpServer> {
     let made = Command::new(bin)
         .arg("--root")
         .arg(dir)
-        .args(["token", "add", "stress"])
+        .args(["token", "add", TOKEN_NAME])
         .output()
         .context("cannot run `token add`")?;
     if !made.status.success() {
@@ -394,7 +415,13 @@ pub fn serve(bin: &Path, dir: &Path) -> Result<HttpServer> {
         let _ = child.kill();
         bail!("`serve` did not say where it listens: {line:?}");
     };
-    Ok(HttpServer { child, addr, token })
+    Ok(HttpServer {
+        child,
+        addr,
+        token,
+        bin: bin.to_path_buf(),
+        dir: dir.to_path_buf(),
+    })
 }
 
 /// `clients` clients of one HTTP server, each with its own connection.
@@ -500,4 +527,30 @@ pub fn duplicate_ids(bin: &Path, dir: &Path) -> Result<usize> {
         .as_array()
         .map(|f| f.iter().filter(|f| f["code"] == "E001").count())
         .unwrap_or(0))
+}
+
+/// The median of each figure in [`Report::summary`] over several runs.
+pub fn median_summary(runs: &[[f64; 4]]) -> [f64; 4] {
+    let mut medians = [0.0; 4];
+    for (i, slot) in medians.iter_mut().enumerate() {
+        let mut column: Vec<f64> = runs.iter().map(|r| r[i]).collect();
+        column.sort_by(f64::total_cmp);
+        *slot = column[column.len() / 2];
+    }
+    medians
+}
+
+#[cfg(test)]
+mod tests_of_load {
+    use super::*;
+
+    #[test]
+    fn the_median_of_each_figure_is_taken_on_its_own() {
+        let runs = [
+            [5.0, 50.0, 90.0, 100.0],
+            [60.0, 40.0, 80.0, 300.0],
+            [20.0, 60.0, 70.0, 200.0],
+        ];
+        assert_eq!(median_summary(&runs), [20.0, 50.0, 80.0, 200.0]);
+    }
 }

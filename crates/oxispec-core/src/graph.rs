@@ -11,17 +11,33 @@ use crate::parse::parse_file_text;
 
 #[derive(Debug, Default, Clone)]
 pub struct Graph {
-    pub nodes: Vec<Node>,
-    /// Findings from reading files, before any check runs.
-    pub findings: Vec<Finding>,
-    /// Position of the first node with each ID, so lookups do not scan.
-    by_id: HashMap<String, usize>,
+    /// The nodes, the findings and the ID index, shared by clones of a graph so
+    /// that a long-running process hands one to each call without copying it.
+    /// The fields read as if they were the graph's own (`graph.nodes`).
+    data: Arc<Data>,
     /// What [`crate::check::check`] found, shared by clones of this graph so a
     /// long-running process runs the checks once per version of the files.
     pub(crate) checked: Arc<OnceLock<Vec<Finding>>>,
     /// The results of the claims, state machine and architecture analyses,
     /// kept the same way.
     pub(crate) analyses: Arc<Analyses>,
+}
+
+#[derive(Debug, Default)]
+pub struct Data {
+    pub nodes: Vec<Node>,
+    /// Findings from reading files, before any check runs.
+    pub findings: Vec<Finding>,
+    /// Position of the first node with each ID, so lookups do not scan.
+    by_id: HashMap<String, usize>,
+}
+
+impl std::ops::Deref for Graph {
+    type Target = Data;
+
+    fn deref(&self) -> &Data {
+        &self.data
+    }
 }
 
 /// Analyses that are costly to repeat, each made once per version of the files.
@@ -41,9 +57,11 @@ impl Graph {
             by_id.entry(node.id.clone()).or_insert(position);
         }
         Graph {
-            nodes,
-            findings,
-            by_id,
+            data: Arc::new(Data {
+                nodes,
+                findings,
+                by_id,
+            }),
             checked: Arc::default(),
             analyses: Arc::default(),
         }
@@ -107,6 +125,17 @@ impl Graph {
 mod tests_of_memoized_analyses {
     use super::*;
     use std::sync::Arc;
+
+    #[test]
+    fn a_clone_shares_the_nodes_and_does_not_copy_them() {
+        let graph = Graph::from_sources([(
+            PathBuf::from("specs/a.md"),
+            b"---\nid: a\ntype: requirement\n---\n# A\n".to_vec(),
+        )]);
+        let copy = graph.clone();
+        assert_eq!(copy.nodes.len(), 1);
+        assert!(std::ptr::eq(graph.nodes.as_ptr(), copy.nodes.as_ptr()));
+    }
 
     #[test]
     fn clones_of_a_graph_share_one_analysis_of_each_kind() {
