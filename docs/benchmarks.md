@@ -29,7 +29,18 @@ Before the change a call took a copy of the whole graph while holding the lock t
 
 ## CI runner
 
-The `stress` workflow (GitHub-hosted Linux runner, 2 vCPU for a private repository) measured, before the change, 19.1 req/s with p50 698 ms for 16 `mcp` clients and 23.7 req/s with p50 507 ms for `http`. Those runs varied by about 20% from one run to the next. Numbers after the change are added below when the workflow has run.
+The `stress` workflow, large preset, 16 clients, 100 requests each, on a GitHub-hosted Linux runner (2 vCPU for a private repository). Since 2026-11-02 the workflow reports the median of 5 runs; the older rows are single runs, which varied by about 20% on the same code.
+
+| Date | Change | Scenario | p50 | p95 | p99 | req/s |
+|---|---|---|---|---|---|---|
+| 2026-11-01 | before (single run) | `http` | 506.7 ms | 610.2 ms | 891.3 ms | 23.7 |
+| | | `mcp`, 16 processes | 698.4 ms | 1267.5 ms | 4687.8 ms | 19.1 |
+| 2026-11-02 | after, median of 5 | `http` | 89.0 ms | 120.0 ms | 154.0 ms | 44.7 |
+| | | `mcp`, 16 processes | 344.5 ms | 586.7 ms | 1792.7 ms | 40.6 |
+
+One of the five `http` runs had p50 299 ms; the other four were between 87 and 103 ms. That is why the median is used.
+
+On this runner the gain is smaller than on the laptop (p50 507 to 89 ms for `http`, against 132 to 10 ms locally). Two cores are shared by 16 clients and the server, so the CPU is the limit and the lock is no longer the main cost.
 
 ## Not measured yet
 
