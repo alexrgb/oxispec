@@ -80,5 +80,6 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 20** (#40): the MCP server keeps its search index open.
 - **Iteration 21** (#41): analyses kept with the graph.
 - **Iteration 22** (#42): `oxispec serve` and `oxispec token`. See [mcp.md](mcp.md#serving-many-clients-over-http).
-- **Iteration 23**: `--mode http` in the stress tool and `connect --url`.
+- **Iteration 23** (#43): `--mode http` in the stress tool and `connect --url`.
+- **Iteration 24**: a graph is shared between calls instead of copied, and `--repeat` in the stress tool. See [benchmarks.md](benchmarks.md).
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

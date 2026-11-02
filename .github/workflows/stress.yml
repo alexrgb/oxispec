@@ -37,11 +37,11 @@ jobs:
       - name: Many MCP clients at once
         run: |
           ./target/release/oxispec-stress load --preset "$PRESET" --mode mcp \
-            --clients 16 --requests 100 --max-p95-ms 5000 --json mcp.json
+            --clients 16 --requests 100 --repeat 5 --max-p95-ms 5000 --json mcp.json
       - name: Many clients of one HTTP server
         run: |
           ./target/release/oxispec-stress load --preset "$PRESET" --mode http \
-            --clients 16 --requests 100 --max-p95-ms 5000 --json http.json
+            --clients 16 --requests 100 --repeat 5 --max-p95-ms 5000 --json http.json
       - name: Many processes sharing one project, with writers
         run: |
           ./target/release/oxispec-stress load --preset small --mode cli \

@@ -45,6 +45,7 @@ A command over its budget (seconds and megabytes, per preset, in `crates/oxispec
 
 - **`--mode mcp`** starts `--clients` MCP servers and sends each `--requests` calls, one after another, in the mix an agent makes: searches, reads of one node, context packs, neighbours, and now and then a whole-project check. It reports calls, errors and p50, p95, p99 and max latency per tool, and requests per second. `--max-p95-ms` and `--max-errors` set the pass line.
 - **`--mode http`** starts one `oxispec serve` on a free local port, with a token made for the run, and connects `--clients` clients to it, each with one connection kept open. It sends the same mix as `mcp` and reports the same figures. Compare the two on one project to see what sharing one server process costs and saves.
+- **`--repeat N`** runs the load N times and prints the median of p50, p95, p99 and requests per second. Runs differ a lot, so compare medians; the figures to compare against are in [benchmarks.md](benchmarks.md).
 - **`--mode cli`** runs `--clients` processes that each run `check`, `search`, `trace`, `coverage` and `claims` in turn on one project, so they share its cache and search index. With `--writers N`, that many processes add requirements at the same time, and afterwards no two may share an ID.
 
 ## What it found
