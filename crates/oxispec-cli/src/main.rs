@@ -708,13 +708,13 @@ fn main() -> ExitCode {
         }
         default_hook(info);
     }));
-    let cli = Cli::parse();
     // `run` is a large function and the MCP servers call it again for each tool,
-    // so the main thread's stack (1 MiB on Windows) is not enough. A thread of our own has room.
+    // and parsing the arguments builds every subcommand, so the main thread's stack
+    // (1 MiB on Windows) is not enough. A thread of our own has room.
     let program = std::thread::Builder::new()
         .name("oxispec".into())
         .stack_size(STACK_BYTES)
-        .spawn(move || match run(cli) {
+        .spawn(|| match run(Cli::parse()) {
             Ok(code) => code,
             Err(e) => {
                 eprintln!("error: {e:#}");
