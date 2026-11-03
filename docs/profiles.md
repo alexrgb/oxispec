@@ -87,6 +87,36 @@ When the chosen profile of a type has the status `superseded`, `check` holds its
 
 "In force" means the successor is not `proposed` or `rejected`: a successor that has not been accepted yet has not replaced anything. A decision that is `deprecated` is left alone. These are warnings, and `--strict` makes them fail. A project whose profile has no `superseded` status sees neither.
 
+## Converting between formats
+
+`oxispec adr convert --to madr` rewrites every ADR in the project in another format. Name decisions to convert only those: `oxispec adr convert ADR-0001 --to nygard`. `--dry-run` shows what would change and writes nothing. Running it again changes nothing.
+
+The front matter stays as it is. The body is cut into sections, and sections that mean the same are matched, whatever the format calls them:
+
+| Meaning | Nygard | MADR |
+|---|---|---|
+| The forces and the question | Context | Context and Problem Statement |
+| The choice | Decision | Decision Outcome |
+| What follows | Consequences | Consequences, under Decision Outcome |
+
+A section the target has no place for is kept word for word after the others, and the command says so. A section the target requires and the record lacks is added with the placeholder of that format (Considered Options in MADR, Statement in a Y-statement), and the command says that too. A section that only holds a placeholder counts as empty and is not carried over, so converting A to B and back gives the original text. A Y-statement is not written from the other formats; it starts as the skeleton, with the old sections below it for the author to condense.
+
+If a status is not one the target allows (`rejected` in Nygard), the command reports it and keeps the status. `convert` does not change the config; it prints the line to set `formats: adr:` when the project checks another format.
+
+## Importing from other tools
+
+`oxispec import adr --from adr-tools` reads the records of another tool and writes them as ADRs in the chosen format (`--format`, default the one the config chooses, else `default`). The source is `adr-tools`, `madr` or `log4brains`; `--dir` names the folder, which otherwise is where the tool keeps them (`doc/adr`, `docs/decisions`, `docs/adr`).
+
+| Source | Reads |
+|---|---|
+| adr-tools | `# 1. Title`, `Date:`, and the `## Status` section with its lines such as `Superceded by [2. Title](0002-title.md)`, `Supercedes`, `Amends`, `Amended by`, `Clarifies` and `Clarified by` (the spelling adr-tools uses is accepted, and so is the correct one) |
+| MADR | Front matter of 4.0 (`status`, `date`, `decision-makers`), or the bullet lines of 2.x and 3.x (`* Status:`, `* Deciders:`, `* Date:`), with `superseded by [ADR-0005](...)` |
+| log4brains | The MADR 2 bullet lines and `Tags:`, in files named by date; ids follow the date order |
+
+The status, date and deciders go to front matter. A link is written once, on the decision that acts: "Superceded by 2" in record 1 and "Supercedes 1" in record 2 both give `supersedes: [ADR-0001]` in record 2, and record 1 becomes `superseded`. The kinds are `supersedes`, `amends` and `clarifies`. Other header lines (`Tags`, `Consulted`, a status line that is none of these) are kept under `## Imported metadata`, so nothing is lost. A link to a record that is not in the folder is reported and left out.
+
+Ids come from the numbers in the file names, plus `--offset`. A project that already has `ADR-0001` refuses the import and says to pass `--offset`. Files whose names do not start with a number (`README.md`, `template.md`) are skipped and listed. Nothing is written if any record cannot be read.
+
 ## Checks
 
 | Code | Meaning |
@@ -101,5 +131,6 @@ A node made by `new` from a profile with required fields starts with those field
 ## Limits
 
 - Profiles are read from the config of the working tree. `--at REVISION` and `history` read old revisions with no profiles, so they report no E028 to E030.
+- Converting and importing work on ADRs. Other types come later (iteration 29).
 - `new` writes templates for ADRs. Requirement templates come with the requirement styles in iteration 28.
 - A running `oxispec mcp` or `oxispec serve` notices a change to the config within a moment, like any other edit.

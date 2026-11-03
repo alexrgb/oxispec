@@ -165,6 +165,8 @@ pub const KNOWN_LINK_KINDS: &[&str] = &[
     "implements",
     "decided-by",
     "supersedes",
+    "amends",
+    "clarifies",
     "refines",
     "governed-by",
     "describes",

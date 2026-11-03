@@ -1,6 +1,7 @@
 //! OxiSpec core: node model, parser, graph and structural checks.
 
 pub mod access;
+pub mod adr;
 pub mod agents;
 pub mod architecture;
 pub mod change;
