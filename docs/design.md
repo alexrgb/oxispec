@@ -993,6 +993,16 @@ The IR and file format stay language-neutral, so a second implementation (for ex
 
 Phases 0 to 4 ship as a CLI plus MCP server with no hosted server (decided). Server mode starts in phase 5.
 
+## 22a. Tech debt and document formats
+
+Two additions to the plan, decided on 2026-11-03.
+
+**Tech debt** is a node type, `debt`, in its own module. It has a status, a severity, a cost or interest, an owner, a due date and links to what it comes from (a requirement, an ADR, a code symbol). It is a node and not a field on other nodes, so a team has a backlog that can be queried, owned and released against, and the graph keeps the history. Checks report an item without an owner, an overdue one and a stale one. A release can be set to fail when debt is above a limit.
+
+**Formats** are profiles. A profile names the sections and front matter fields a node of a type must have, and gives the template `oxispec new` writes. A project chooses a profile per type in the config, and can define its own. Built-in profiles: ADRs as MADR, Nygard and Y-statement; requirements as SHALL with scenarios (today's form), EARS, Gherkin and user stories; compliance profiles that add required traceability and sign-offs. The graph, the links and the checks that work across nodes do not change with the profile. Import from other tools (OpenSpec, Spec Kit, Kiro, plain markdown) maps their files to nodes of the chosen profile.
+
+The order is in [iterations.md](iterations.md), iterations 25 to 30. Profiles come first because ADR formats, requirement styles and compliance all build on them.
+
 ## 23. Risks and open decisions
 
 **Risks**
