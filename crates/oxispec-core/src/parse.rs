@@ -4,7 +4,9 @@ use std::ops::Range;
 use std::path::Path;
 
 use crate::finding::Finding;
-use crate::node::{ClaimLine, Frontmatter, Heading, Node, RequirementBlock, Scenario, TextBlock};
+use crate::node::{
+    ClaimLine, Frontmatter, Heading, Node, OneOrMany, RequirementBlock, Scenario, TextBlock,
+};
 
 /// Where the frontmatter sits in a file.
 pub struct FrontmatterSpan {
@@ -301,6 +303,11 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
         approved_by: fm.approved_by,
         approved_on: fm.approved_on,
         version: fm.version,
+        date: fm.date,
+        decision_makers: fm
+            .decision_makers
+            .map(OneOrMany::into_vec)
+            .unwrap_or_default(),
         title,
         path: path.to_path_buf(),
         links: fm

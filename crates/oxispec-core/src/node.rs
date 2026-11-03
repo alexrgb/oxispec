@@ -17,6 +17,10 @@ pub struct Frontmatter {
     pub approved_on: Option<String>,
     /// The version a release node stands for.
     pub version: Option<String>,
+    /// When a decision was last updated (`YYYY-MM-DD`).
+    pub date: Option<String>,
+    #[serde(rename = "decision-makers")]
+    pub decision_makers: Option<OneOrMany>,
     #[serde(default)]
     pub links: BTreeMap<String, OneOrMany>,
 }
@@ -88,6 +92,12 @@ pub struct Node {
     pub approved_on: Option<String>,
     /// The version of a release node, as written in its frontmatter.
     pub version: Option<String>,
+    /// When a decision was last updated, as written in its frontmatter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date: Option<String>,
+    /// Who made a decision, as written in its frontmatter.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub decision_makers: Vec<String>,
     /// The first `# ` heading, without a leading `ID: `.
     pub title: Option<String>,
     /// Path relative to the project root.

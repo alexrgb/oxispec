@@ -10,6 +10,8 @@
 //! E029 a required front matter field is missing or empty
 //! E030 the status is missing or not one of the profile's statuses
 //! E031 the config names a profile that does not exist or is not valid
+//! W011 a decision is marked superseded, but nothing supersedes it
+//! W012 a decision is superseded by another, but is still marked live
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -22,12 +24,25 @@ use crate::graph::Graph;
 use crate::node::Node;
 
 /// The front matter fields a profile can require.
-pub const FIELDS: &[&str] = &["status", "owner", "approved_by", "approved_on", "version"];
+pub const FIELDS: &[&str] = &[
+    "status",
+    "owner",
+    "approved_by",
+    "approved_on",
+    "version",
+    "date",
+    "decision-makers",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Section {
     pub name: String,
     pub required: bool,
+    /// The heading level in the template: 2 (`##`) or 3 (`###`).
+    pub level: u8,
+    /// Text the template puts under the heading.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub hint: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -40,6 +55,8 @@ pub struct Profile {
     pub sections: Vec<Section>,
     /// Front matter fields that must be set.
     pub fields: Vec<String>,
+    /// Fields the template includes but `check` does not require.
+    pub optional_fields: Vec<String>,
     /// The statuses a node may have. Empty: any.
     pub statuses: Vec<String>,
 }
@@ -59,6 +76,9 @@ pub struct CustomProfile {
     pub optional: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fields: Vec<String>,
+    /// Fields the template includes but that are not required.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub optional_fields: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub statuses: Vec<String>,
 }
@@ -71,22 +91,58 @@ fn sections(required: &[&str], optional: &[&str]) -> Vec<Section> {
         .map(|(name, required)| Section {
             name: (*name).to_string(),
             required,
+            level: 2,
+            hint: String::new(),
         })
         .collect()
 }
 
-/// The profiles that come with oxispec. Choosing one never makes an existing
-/// project fail: they describe what `oxispec new` has always written.
+/// A section for a built-in profile: its heading level and the text under it.
+fn section(name: &str, required: bool, level: u8, hint: &str) -> Section {
+    Section {
+        name: name.into(),
+        required,
+        level,
+        hint: hint.into(),
+    }
+}
+
+const WITH_REJECTED: &[&str] = &[
+    "proposed",
+    "accepted",
+    "rejected",
+    "deprecated",
+    "superseded",
+];
+
+fn strings(items: &[&str]) -> Vec<String> {
+    items.iter().map(|s| (*s).to_string()).collect()
+}
+
+/// The profiles that come with oxispec. Choosing `default` or `shall` never
+/// makes an existing project fail: they describe what `oxispec new` has always
+/// written. The other ADR profiles are formats from outside, kept the same way
+/// for every one of them: the status, date and deciders are front matter, and
+/// who supersedes whom is a `supersedes` link, so a record can be converted
+/// from one format to another without losing them.
 pub fn builtin() -> Vec<Profile> {
+    let adr = |name: &str, description: &str| Profile {
+        name: name.into(),
+        ty: "adr".into(),
+        description: description.into(),
+        builtin: true,
+        sections: Vec::new(),
+        fields: Vec::new(),
+        optional_fields: Vec::new(),
+        statuses: Vec::new(),
+    };
     vec![
         Profile {
-            name: "default".into(),
-            ty: "adr".into(),
-            description: "Context, Decision and Consequences, with nothing required".into(),
-            builtin: true,
             sections: sections(&[], &["Context", "Decision", "Consequences"]),
-            fields: Vec::new(),
-            statuses: Vec::new(),
+            ..adr(
+                "default",
+                "Context, Decision and Consequences, with nothing required",
+            )
         },
         Profile {
             name: "shall".into(),
@@ -96,7 +152,91 @@ pub fn builtin() -> Vec<Profile> {
             builtin: true,
             sections: Vec::new(),
             fields: Vec::new(),
+            optional_fields: Vec::new(),
             statuses: Vec::new(),
+        },
+        Profile {
+            sections: vec![
+                section(
+                    "Context",
+                    true,
+                    2,
+                    "The forces at play, stated as neutral facts.",
+                ),
+                section("Decision", true, 2, "We will ..."),
+                section(
+                    "Consequences",
+                    true,
+                    2,
+                    "What becomes easier or harder, and the risks to manage.",
+                ),
+            ],
+            fields: strings(&["status"]),
+            optional_fields: strings(&["date"]),
+            statuses: strings(&["proposed", "accepted", "deprecated", "superseded"]),
+            ..adr(
+                "nygard",
+                "Michael Nygard's ADR: Context, Decision, Consequences, with a status",
+            )
+        },
+        Profile {
+            sections: vec![
+                section(
+                    "Context and Problem Statement",
+                    true,
+                    2,
+                    "{Describe the context and the problem, perhaps as a question.}",
+                ),
+                section("Decision Drivers", false, 2, "* {decision driver 1}"),
+                section(
+                    "Considered Options",
+                    true,
+                    2,
+                    "* {title of option 1}\n* {title of option 2}",
+                ),
+                section(
+                    "Decision Outcome",
+                    true,
+                    2,
+                    "Chosen option: \"{title of option 1}\", because {justification}.",
+                ),
+                section(
+                    "Consequences",
+                    false,
+                    3,
+                    "* Good, because {positive consequence}\n* Bad, because {negative consequence}",
+                ),
+                section(
+                    "Confirmation",
+                    false,
+                    3,
+                    "{How the implementation of this decision is confirmed.}",
+                ),
+                section("Pros and Cons of the Options", false, 2, ""),
+                section("More Information", false, 2, ""),
+            ],
+            fields: strings(&["status"]),
+            optional_fields: strings(&["date", "decision-makers"]),
+            statuses: strings(WITH_REJECTED),
+            ..adr(
+                "madr",
+                "Markdown Architectural Decision Records 4.0, with considered options",
+            )
+        },
+        Profile {
+            sections: vec![section(
+                "Statement",
+                true,
+                2,
+                "In the context of {use case}, facing {concern}, we decided for {option} and neglected {other options}, to achieve {quality}, accepting {downside}, because {rationale}.",
+            )],
+            fields: strings(&["status"]),
+            optional_fields: strings(&["date"]),
+            statuses: strings(WITH_REJECTED),
+            ..adr(
+                "y-statement",
+                "A decision in one sentence: context, concern, choice, neglected options, quality, downside",
+            )
         },
     ]
 }
@@ -123,6 +263,7 @@ pub fn available(config: &Config) -> (Vec<Profile>, Vec<Finding>) {
             builtin: false,
             sections: sections(&required, &optional),
             fields: custom.fields.clone(),
+            optional_fields: custom.optional_fields.clone(),
             statuses: custom.statuses.clone(),
         });
     }
@@ -153,7 +294,12 @@ fn invalid(name: &str, custom: &CustomProfile, taken: &[Profile]) -> Option<Stri
             return Some(format!("lists the section `{section}` twice"));
         }
     }
-    if let Some(field) = custom.fields.iter().find(|f| !FIELDS.contains(&f.as_str())) {
+    if let Some(field) = custom
+        .fields
+        .iter()
+        .chain(&custom.optional_fields)
+        .find(|f| !FIELDS.contains(&f.as_str()))
+    {
         return Some(format!(
             "requires the field `{field}`; the fields are {}",
             FIELDS.join(", ")
@@ -219,7 +365,7 @@ impl Formats {
 }
 
 impl Profile {
-    /// The text of a new node, with `@ID@` and `@TITLE@` still to fill in.
+    /// The text of a new node, with `@ID@`, `@TITLE@` and `@DATE@` still to fill in.
     pub fn template(&self) -> String {
         let status = self
             .statuses
@@ -230,12 +376,25 @@ impl Profile {
                 _ => "draft",
             });
         let mut text = format!("---\nid: @ID@\ntype: {}\nstatus: {status}\n", self.ty);
-        for field in self.fields.iter().filter(|f| f.as_str() != "status") {
-            text.push_str(&format!("{field}: \n"));
+        for field in self
+            .fields
+            .iter()
+            .chain(&self.optional_fields)
+            .filter(|f| f.as_str() != "status")
+        {
+            if field == "date" {
+                text.push_str("date: @DATE@\n");
+            } else {
+                text.push_str(&format!("{field}: \n"));
+            }
         }
         text.push_str("---\n# @ID@: @TITLE@\n");
         for section in &self.sections {
-            text.push_str(&format!("\n## {}\n", section.name));
+            let marks = "#".repeat(usize::from(section.level));
+            text.push_str(&format!("\n{marks} {}\n", section.name));
+            if !section.hint.is_empty() {
+                text.push_str(&format!("\n{}\n", section.hint));
+            }
         }
         text
     }
@@ -243,6 +402,12 @@ impl Profile {
 
 fn field<'a>(node: &'a Node, name: &str) -> Option<&'a str> {
     match name {
+        "date" => node.date.as_deref(),
+        "decision-makers" => node
+            .decision_makers
+            .iter()
+            .map(String::as_str)
+            .find(|s| !s.trim().is_empty()),
         "status" => node.status.as_deref(),
         "owner" => node.owner.as_deref(),
         "approved_by" => node.approved_by.as_deref(),
@@ -310,7 +475,52 @@ pub fn check(graph: &Graph) -> Vec<Finding> {
             }
         }
     }
+    superseded(graph, &mut out);
     out
+}
+
+/// Decisions whose profile has the `superseded` status are held to it: a
+/// decision is superseded when a decision that is in force links `supersedes`
+/// to it, and not otherwise. A successor that is still proposed or was rejected
+/// has not replaced anything yet.
+fn superseded(graph: &Graph, out: &mut Vec<Finding>) {
+    let uses_it = |node: &Node| {
+        graph
+            .formats
+            .profile_for(&node.ty)
+            .is_some_and(|p| p.statuses.iter().any(|s| s == "superseded"))
+    };
+    let mut replaced_by: BTreeMap<&str, &str> = BTreeMap::new();
+    for node in graph.nodes.iter() {
+        if matches!(node.status.as_deref(), Some("proposed" | "rejected")) {
+            continue;
+        }
+        for target in node.links.get("supersedes").into_iter().flatten() {
+            replaced_by.entry(target.as_str()).or_insert(&node.id);
+        }
+    }
+    for node in graph.nodes.iter().filter(|n| uses_it(n)) {
+        let at = |f: Finding| f.at(&node.path, Some(1)).node(&node.id);
+        let status = node.status.as_deref();
+        match (status, replaced_by.get(node.id.as_str())) {
+            (Some("superseded"), None) => out.push(at(Finding::warning(
+                "W011",
+                format!(
+                    "{} is marked superseded, but no decision in force links `supersedes` to it",
+                    node.ty
+                ),
+            ))),
+            (Some("proposed" | "accepted"), Some(by)) => out.push(at(Finding::warning(
+                "W012",
+                format!(
+                    "{} is superseded by {by}, but its status is {}; set it to superseded",
+                    node.ty,
+                    status.unwrap_or_default()
+                ),
+            ))),
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]
@@ -474,5 +684,155 @@ mod tests_of_formats {
         let back: Config = serde_saphyr::from_str(&text).unwrap();
         assert_eq!(back, cfg);
         let _ = IdScheme::Sequential;
+    }
+
+    fn adr(id: &str, status: &str, links: &str) -> (String, String) {
+        (
+            format!("specs/adr/{id}.md"),
+            format!(
+                "---\nid: {id}\ntype: adr\nstatus: {status}\n{links}---\n# {id}: T\n\n## Context\n\n## Decision\n\n## Consequences\n\n## Context and Problem Statement\n\n## Considered Options\n\n## Decision Outcome\n"
+            ),
+        )
+    }
+
+    fn superseded_codes(chosen: &str, adrs: &[(String, String)]) -> Vec<(&'static str, String)> {
+        let cfg = config(&format!("formats:\n  adr: {chosen}\n"));
+        let files: Vec<(&str, &str)> = adrs.iter().map(|(p, t)| (p.as_str(), t.as_str())).collect();
+        let g = graph(&cfg, &files);
+        check(&g)
+            .into_iter()
+            .map(|f| (f.code, f.id.unwrap_or_default()))
+            .collect()
+    }
+
+    #[test]
+    fn every_built_in_template_meets_its_own_profile() {
+        for profile in builtin().iter().filter(|p| p.ty == "adr") {
+            let text = profile
+                .template()
+                .replace("@ID@", "ADR-0001")
+                .replace("@TITLE@", "T")
+                .replace("@DATE@", "2026-11-03");
+            let cfg = config(&format!("formats:\n  adr: {}\n", profile.name));
+            let g = graph(&cfg, &[("specs/adr/a.md", text.as_str())]);
+            assert!(
+                check(&g).is_empty(),
+                "{}: {:?}\n{text}",
+                profile.name,
+                check(&g)
+            );
+            assert_eq!(
+                g.nodes[0].date.as_deref().is_some(),
+                profile.optional_fields.contains(&"date".into())
+            );
+        }
+    }
+
+    #[test]
+    fn the_three_adr_formats_share_one_status_vocabulary() {
+        let profiles = builtin();
+        let statuses = |name: &str| {
+            profiles
+                .iter()
+                .find(|p| p.name == name)
+                .unwrap()
+                .statuses
+                .clone()
+        };
+        for name in ["nygard", "madr", "y-statement"] {
+            let s = statuses(name);
+            for core in ["proposed", "accepted", "deprecated", "superseded"] {
+                assert!(s.iter().any(|x| x == core), "{name} lacks {core}");
+            }
+        }
+        assert!(statuses("madr").contains(&"rejected".to_string()));
+        assert!(!statuses("nygard").contains(&"rejected".to_string()));
+    }
+
+    #[test]
+    fn madr_needs_its_options_and_outcome_and_nygard_does_not() {
+        let thin = "---\nid: ADR-0001\ntype: adr\nstatus: accepted\n---\n# ADR-0001: T\n\n## Context\n\n## Decision\n\n## Consequences\n";
+        let nygard = config("formats:\n  adr: nygard\n");
+        assert!(check(&graph(&nygard, &[("specs/adr/a.md", thin)])).is_empty());
+        let madr = config("formats:\n  adr: madr\n");
+        let found = check(&graph(&madr, &[("specs/adr/a.md", thin)]));
+        assert_eq!(
+            found.iter().map(|f| f.code).collect::<Vec<_>>(),
+            ["E028"; 3]
+        );
+        assert!(
+            found
+                .iter()
+                .any(|f| f.message.contains("Considered Options"))
+        );
+    }
+
+    #[test]
+    fn a_decision_marked_superseded_needs_a_successor_in_force() {
+        let old = adr("ADR-0001", "superseded", "");
+        assert_eq!(
+            superseded_codes("nygard", std::slice::from_ref(&old)),
+            [("W011", "ADR-0001".into())]
+        );
+        let new = adr("ADR-0002", "accepted", "links:\n  supersedes: ADR-0001\n");
+        assert!(superseded_codes("nygard", &[old, new]).is_empty());
+    }
+
+    #[test]
+    fn a_decision_with_a_successor_in_force_must_say_it_is_superseded() {
+        let old = adr("ADR-0001", "accepted", "");
+        let new = adr("ADR-0002", "accepted", "links:\n  supersedes: ADR-0001\n");
+        assert_eq!(
+            superseded_codes("madr", &[old.clone(), new]),
+            [("W012", "ADR-0001".into())]
+        );
+        // A proposed or rejected successor has replaced nothing yet.
+        for status in ["proposed", "rejected"] {
+            let pending = adr("ADR-0002", status, "links:\n  supersedes: ADR-0001\n");
+            assert!(
+                superseded_codes("madr", &[old.clone(), pending]).is_empty(),
+                "{status}"
+            );
+        }
+        // A decision that is already deprecated is left alone.
+        let deprecated = adr("ADR-0001", "deprecated", "");
+        let new = adr("ADR-0002", "accepted", "links:\n  supersedes: ADR-0001\n");
+        assert!(superseded_codes("madr", &[deprecated, new]).is_empty());
+    }
+
+    #[test]
+    fn projects_without_the_superseded_status_see_no_such_warnings() {
+        let old = adr("ADR-0001", "accepted", "");
+        let new = adr("ADR-0002", "accepted", "links:\n  supersedes: ADR-0001\n");
+        // The built-in `default` profile has no statuses; so does having no profile at all.
+        assert!(superseded_codes("default", &[old.clone(), new.clone()]).is_empty());
+        let none = graph(
+            &config(""),
+            &[("a.md", old.1.as_str()), ("b.md", new.1.as_str())],
+        );
+        assert!(check(&none).is_empty());
+    }
+
+    #[test]
+    fn date_and_decision_makers_are_read_and_can_be_required() {
+        let cfg = config(
+            "formats:\n  adr: strict\nprofiles:\n  strict:\n    type: adr\n    fields: [date, decision-makers]\n",
+        );
+        let ok = "---\nid: ADR-0001\ntype: adr\ndate: 2026-11-03\ndecision-makers: [ana, bo]\n---\n# ADR-0001: T\n";
+        let g = graph(&cfg, &[("a.md", ok)]);
+        assert!(check(&g).is_empty(), "{:?}", check(&g));
+        assert_eq!(g.nodes[0].decision_makers, ["ana", "bo"]);
+        assert_eq!(g.nodes[0].date.as_deref(), Some("2026-11-03"));
+        let one = "---\nid: ADR-0001\ntype: adr\ndate: 2026-11-03\ndecision-makers: ana\n---\n# ADR-0001: T\n";
+        assert_eq!(
+            graph(&cfg, &[("a.md", one)]).nodes[0].decision_makers,
+            ["ana"]
+        );
+        let none = "---\nid: ADR-0001\ntype: adr\ndecision-makers:\n---\n# ADR-0001: T\n";
+        let codes: Vec<_> = check(&graph(&cfg, &[("a.md", none)]))
+            .iter()
+            .map(|f| f.code)
+            .collect();
+        assert_eq!(codes, ["E029", "E029"]);
     }
 }

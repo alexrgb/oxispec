@@ -5175,3 +5175,107 @@ fn a_running_mcp_server_sees_a_change_to_the_format_profiles() {
     assert!(child.wait().unwrap().success());
     assert!(applied, "the server never applied the new profile");
 }
+
+#[test]
+fn the_adr_formats_write_their_templates_and_hold_new_records_to_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+
+    for (n, (format, heading)) in [
+        ("nygard", "## Consequences"),
+        ("madr", "## Considered Options"),
+        ("y-statement", "## Statement"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let out = run(p, &["new", "adr", format, "--format", format]);
+        assert_eq!(out.code, 0, "{}", out.stderr);
+        let file = p.join(format!("specs/adr/{:04}-{format}.md", n + 1));
+        assert!(
+            fs::read_to_string(&file).unwrap().contains(heading),
+            "{format}"
+        );
+    }
+    let madr = fs::read_to_string(p.join("specs/adr/0002-madr.md")).unwrap();
+    assert!(madr.contains("### Confirmation") && madr.contains("## Considered Options"));
+    // The date is today's, in the same shape `change status` writes.
+    let date = madr.lines().find_map(|l| l.strip_prefix("date: ")).unwrap();
+    assert!(
+        date.len() == 10 && date.as_bytes()[4] == b'-' && date.as_bytes()[7] == b'-',
+        "{date}"
+    );
+    assert!(
+        fs::read_to_string(p.join("specs/adr/0003-y-statement.md"))
+            .unwrap()
+            .contains("we decided for {option}")
+    );
+
+    // Not chosen in the config, so nothing holds these records to a format yet.
+    assert_eq!(run(p, &["check"]).code, 0);
+
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}formats:\n  adr: madr\n")).unwrap();
+    let out = run(p, &["check", "--json"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    // The Nygard record has no options or outcome, and the Y-statement has no context.
+    assert!(out.stdout.contains("Considered Options"), "{}", out.stdout);
+
+    let out = run(p, &["formats", "show", "madr"]);
+    assert!(
+        out.stdout.contains("section Decision Outcome (required)"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("statuses: proposed, accepted, rejected, deprecated, superseded")
+    );
+}
+
+#[test]
+fn a_superseded_decision_is_checked_against_its_successor() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}formats:\n  adr: nygard\n")).unwrap();
+
+    assert_eq!(run(p, &["new", "adr", "Use MySQL"]).code, 0);
+    assert_eq!(run(p, &["new", "adr", "Use Postgres"]).code, 0);
+    let first = p.join("specs/adr/0001-use-mysql.md");
+    let second = p.join("specs/adr/0002-use-postgres.md");
+    for file in [&first, &second] {
+        let t = fs::read_to_string(file).unwrap();
+        fs::write(file, t.replace("status: proposed", "status: accepted")).unwrap();
+    }
+    assert_eq!(run(p, &["check"]).code, 0);
+
+    // The successor is in force, so the first record has to say it was superseded.
+    assert_eq!(
+        run(p, &["link", "ADR-0002", "supersedes", "ADR-0001"]).code,
+        0
+    );
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 0, "a warning does not fail: {}", out.stdout);
+    assert!(
+        out.stdout.contains("W012") && out.stdout.contains("ADR-0002"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(run(p, &["check", "--strict"]).code, 1);
+
+    let t = fs::read_to_string(&first).unwrap();
+    fs::write(&first, t.replace("status: accepted", "status: superseded")).unwrap();
+    let out = run(p, &["check", "--strict"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+
+    // Without a successor in force, `superseded` is a claim nothing backs.
+    let t = fs::read_to_string(&second).unwrap();
+    fs::write(&second, t.replace("status: accepted", "status: proposed")).unwrap();
+    let out = run(p, &["check"]);
+    assert!(out.stdout.contains("W011"), "{}", out.stdout);
+}
