@@ -5279,3 +5279,179 @@ fn a_superseded_decision_is_checked_against_its_successor() {
     let out = run(p, &["check"]);
     assert!(out.stdout.contains("W011"), "{}", out.stdout);
 }
+
+const OLD_NYGARD: &str = "---\nid: ADR-0001\ntype: adr\nstatus: accepted\ndate: 2026-01-02\n---\n# ADR-0001: Use Postgres\n\n## Context\n\nWe need transactions.\n\n## Decision\n\nWe will use Postgres.\n\n## Consequences\n\nOps must run it.\n";
+
+#[test]
+fn adr_convert_rewrites_a_decision_and_a_second_run_changes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    fs::write(p.join("specs/adr/0001-use-postgres.md"), OLD_NYGARD).unwrap();
+
+    let out = run(p, &["adr", "convert", "--to", "madr", "--dry-run"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("would convert"), "{}", out.stdout);
+    assert_eq!(
+        fs::read_to_string(p.join("specs/adr/0001-use-postgres.md")).unwrap(),
+        OLD_NYGARD,
+        "a dry run writes nothing"
+    );
+
+    let out = run(p, &["adr", "convert", "ADR-0001", "--to", "madr"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("Considered Options"), "{}", out.stdout);
+    assert!(out.stdout.contains("formats:"), "tells how to choose it");
+    let text = fs::read_to_string(p.join("specs/adr/0001-use-postgres.md")).unwrap();
+    assert!(text.contains("## Context and Problem Statement\n\nWe need transactions."));
+    assert!(text.contains("### Consequences\n\nOps must run it."));
+    assert!(text.starts_with("---\nid: ADR-0001"));
+
+    let out = run(p, &["adr", "convert", "--to", "madr", "--json"]);
+    assert!(out.stdout.contains("\"changed\": false"), "{}", out.stdout);
+
+    // And back: the text of the shared sections returns as it was.
+    assert_eq!(run(p, &["adr", "convert", "--to", "nygard"]).code, 0);
+    assert_eq!(
+        fs::read_to_string(p.join("specs/adr/0001-use-postgres.md")).unwrap(),
+        OLD_NYGARD
+    );
+}
+
+#[test]
+fn adr_convert_refuses_what_is_not_an_adr_or_a_format() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    fs::write(p.join("specs/adr/0001-use-postgres.md"), OLD_NYGARD).unwrap();
+    assert_eq!(run(p, &["new", "requirement", "auth", "Login"]).code, 0);
+
+    let out = run(p, &["adr", "convert", "--to", "nope"]);
+    assert_eq!(out.code, 2, "{}", out.stderr);
+    assert!(out.stderr.contains("no profile named `nope`"));
+    let out = run(p, &["adr", "convert", "REQ-AUTH-0001", "--to", "madr"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("not an ADR"), "{}", out.stderr);
+    let out = run(p, &["adr", "convert", "--to", "shall"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("not ADRs"), "{}", out.stderr);
+}
+
+const TOOLS_ONE: &str = "# 1. Record architecture decisions\n\nDate: 2016-02-12\n\n## Status\n\nSuperceded by [2. Use Rust](0002-use-rust.md)\n\n## Context\n\nWe need to record decisions.\n\n## Decision\n\nWe will record them.\n\n## Consequences\n\nSee the article.\n";
+const TOOLS_TWO: &str = "# 2. Use Rust\n\nDate: 2016-03-01\n\n## Status\n\nAccepted\n\nSupercedes [1. Record architecture decisions](0001-record-architecture-decisions.md)\n\n## Context\n\nSpeed.\n\n## Decision\n\nRust.\n\n## Consequences\n\nSlower builds.\n";
+
+#[test]
+fn import_adr_brings_in_adr_tools_records_that_then_pass_check() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let from = p.join("doc/adr");
+    fs::create_dir_all(&from).unwrap();
+    fs::write(
+        from.join("0001-record-architecture-decisions.md"),
+        TOOLS_ONE,
+    )
+    .unwrap();
+    fs::write(from.join("0002-use-rust.md"), TOOLS_TWO).unwrap();
+    fs::write(from.join("README.md"), "# Records\n").unwrap();
+
+    let out = run(p, &["import", "adr", "--from", "adr-tools", "--dry-run"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("would import"), "{}", out.stdout);
+    assert!(
+        !p.join("specs/adr/0001-record-architecture-decisions.md")
+            .exists()
+    );
+
+    let out = run(
+        p,
+        &["import", "adr", "--from", "adr-tools", "--format", "nygard"],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let one =
+        fs::read_to_string(p.join("specs/adr/0001-record-architecture-decisions.md")).unwrap();
+    assert!(one.contains("status: superseded") && one.contains("date: 2016-02-12"));
+    let two = fs::read_to_string(p.join("specs/adr/0002-use-rust.md")).unwrap();
+    assert!(two.contains("supersedes: [ADR-0001]"), "{two}");
+
+    // Chosen in the config, the imported records are held to the format and pass.
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}formats:\n  adr: nygard\n")).unwrap();
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+
+    // The graph has the link, and a second import refuses to overwrite.
+    let out = run(p, &["show", "ADR-0002", "--json"]);
+    assert!(out.stdout.contains("ADR-0001"), "{}", out.stdout);
+    let out = run(p, &["import", "adr", "--from", "adr-tools"]);
+    assert_eq!(out.code, 2, "{}", out.stdout);
+    assert!(out.stderr.contains("--offset"), "{}", out.stderr);
+    let out = run(
+        p,
+        &["import", "adr", "--from", "adr-tools", "--offset", "10"],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(
+        p.join("specs/adr/0011-record-architecture-decisions.md")
+            .exists()
+    );
+}
+
+#[test]
+fn import_adr_reads_madr_and_log4brains_and_new_link_kinds_are_known() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let madr = p.join("docs/decisions");
+    fs::create_dir_all(&madr).unwrap();
+    fs::write(
+        madr.join("0001-use-markdown.md"),
+        "---\nstatus: accepted\ndate: 2024-09-17\ndecision-makers: Ann, Bo\n---\n# Use Markdown\n\n## Context and Problem Statement\n\nWhy?\n\n## Considered Options\n\n* A\n* B\n\n## Decision Outcome\n\nChosen option: \"A\", because simple.\n",
+    )
+    .unwrap();
+    let out = run(p, &["import", "adr", "--from", "madr", "--format", "madr"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let text = fs::read_to_string(p.join("specs/adr/0001-use-markdown.md")).unwrap();
+    assert!(text.contains("decision-makers: [Ann, Bo]"), "{text}");
+
+    let brains = p.join("docs/adr");
+    fs::create_dir_all(&brains).unwrap();
+    fs::write(
+        brains.join("20200101-use-redis.md"),
+        "# Use Redis\n\n- Status: accepted\n- Date: 2020-01-01\n- Tags: cache\n\n## Context and Problem Statement\n\nSlow reads.\n",
+    )
+    .unwrap();
+    let out = run(
+        p,
+        &[
+            "import",
+            "adr",
+            "--from",
+            "log4brains",
+            "--offset",
+            "1",
+            "--format",
+            "madr",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let redis = fs::read_to_string(p.join("specs/adr/0002-use-redis.md")).unwrap();
+    assert!(redis.contains("- Tags: cache"), "{redis}");
+
+    // `amends` and `clarifies` are links like the others: no warning, and `link` takes them.
+    let out = run(p, &["link", "ADR-0002", "amends", "ADR-0001"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let out = run(p, &["link", "ADR-0002", "clarifies", "ADR-0001"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let out = run(p, &["check", "--json"]);
+    assert!(!out.stdout.contains("W00"), "{}", out.stdout);
+
+    let out = run(p, &["import", "adr", "--from", "nope"]);
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("adr-tools, madr, log4brains"),
+        "{}",
+        out.stderr
+    );
+}

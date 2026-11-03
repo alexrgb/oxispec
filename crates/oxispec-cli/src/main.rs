@@ -16,6 +16,7 @@ use oxispec_core::{Finding, Graph, OUTPUT_SCHEMA_VERSION, Severity, check, id, m
 #[macro_use]
 mod output;
 
+mod adr;
 mod agents;
 mod architecture;
 mod changes;
@@ -218,6 +219,16 @@ enum Command {
         #[arg(long, value_name = "FILE")]
         audit_log: Option<PathBuf>,
     },
+    /// Decision records: convert them between formats
+    Adr {
+        #[command(subcommand)]
+        action: AdrAction,
+    },
+    /// Bring in records written for another tool
+    Import {
+        #[command(subcommand)]
+        kind: ImportKind,
+    },
     /// The format profiles a project can use: what a node of a type must contain
     Formats {
         #[command(subcommand)]
@@ -233,7 +244,7 @@ enum Command {
         /// The node that holds the link
         from: String,
         /// satisfies, verifies, implements, decided-by, supersedes, refines, governed-by,
-        /// describes, overrides, conflicts-with, depends-on, changes or includes
+        /// describes, overrides, conflicts-with, depends-on, changes, includes, amends or clarifies
         kind: String,
         /// A node, or a scenario of a node such as REQ-AUTH-0001.S1
         to: String,
@@ -431,6 +442,50 @@ enum Command {
         /// Show the node as it was at a git revision (a branch, tag, hash or date:YYYY-MM-DD)
         #[arg(long)]
         at: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum AdrAction {
+    /// Rewrite decisions in another format. The front matter stays; sections that mean the
+    /// same are matched, the others are kept as they are. Example: adr convert --to madr ADR-0001
+    Convert {
+        /// The decisions to convert. Default: every ADR in the project
+        ids: Vec<String>,
+        /// The format profile to convert to: nygard, madr, y-statement, or one of your own
+        #[arg(long)]
+        to: String,
+        /// Show what would change and write nothing
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ImportKind {
+    /// Records of adr-tools, MADR or log4brains. Links such as "Superceded by" and "Amended by"
+    /// become `supersedes`, `amends` and `clarifies` links
+    Adr {
+        /// adr-tools, madr or log4brains
+        #[arg(long)]
+        from: String,
+        /// The folder of records. Default: where the tool keeps them (doc/adr, docs/decisions,
+        /// docs/adr)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+        /// The format profile to write them in. Default: the one the config chooses for ADRs
+        #[arg(long)]
+        format: Option<String>,
+        /// Add this to every number, when the project has decisions already
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        /// Show what would be written and write nothing
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -752,6 +807,49 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     audit_log,
                 },
             )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Adr { action } => {
+            let root = project_root(cli.root.as_deref())?;
+            match action {
+                AdrAction::Convert {
+                    ids,
+                    to,
+                    dry_run,
+                    json,
+                } => {
+                    let _lock = lock_project(&root)?;
+                    adr::convert(&root, &ids, &to, dry_run, json, cache)?
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Import { kind } => {
+            let root = project_root(cli.root.as_deref())?;
+            match kind {
+                ImportKind::Adr {
+                    from,
+                    dir,
+                    format,
+                    offset,
+                    dry_run,
+                    json,
+                } => {
+                    let _lock = lock_project(&root)?;
+                    adr::import(
+                        &root,
+                        &adr::ImportOptions {
+                            from: &from,
+                            dir: dir.as_deref(),
+                            format: format.as_deref(),
+                            offset,
+                            dry_run,
+                            json,
+                        },
+                        cache,
+                    )?
+                }
+            }
             Ok(ExitCode::SUCCESS)
         }
         Command::Formats { action } => {

@@ -144,7 +144,7 @@ for role = admin: session.idle_timeout <= 15m
 
 ## 5. Links and trace IDs
 
-Edge types: `satisfies`, `verifies` (test to scenario), `implements` (code to requirement), `decided-by`, `supersedes`, `refines`, `governed-by` (standard), `describes` (diagram), `overrides`, `conflicts-with`, `depends-on`.
+Edge types: `satisfies`, `verifies` (test to scenario), `implements` (code to requirement), `decided-by`, `supersedes`, `refines`, `governed-by` (standard), `describes` (diagram), `overrides`, `conflicts-with`, `depends-on`, `amends`, `clarifies`.
 
 **Trace IDs in code and tests.** Scanners read short annotations:
 

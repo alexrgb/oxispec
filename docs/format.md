@@ -91,6 +91,8 @@ oxispec link REQ-AUTH-0001 decided-by ADR-0001
 | `depends-on` | This node needs that one |
 | `changes` | This change set modifies that node |
 | `includes` | This release includes that change set |
+| `amends` | This decision changes part of that one, which stays in force |
+| `clarifies` | This decision explains that one without changing it |
 
 Other kinds are accepted with a warning, which catches typos.
 
