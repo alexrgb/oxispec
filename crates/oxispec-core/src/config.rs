@@ -1,8 +1,11 @@
 //! Project configuration in `.oxispec/config.yaml`.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+use crate::formats::CustomProfile;
 
 pub const CONFIG_PATH: &str = ".oxispec/config.yaml";
 
@@ -59,6 +62,12 @@ pub struct Config {
     /// The AI clients that get skills, by id. See `agents::CLIENTS`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub agents: Vec<String>,
+    /// The format profile for each node type, by profile name. See `formats`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub formats: BTreeMap<String, String>,
+    /// Profiles this project defines, by name.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub profiles: BTreeMap<String, CustomProfile>,
 }
 
 fn default_format() -> u32 {
@@ -78,6 +87,8 @@ impl Config {
             id_scheme,
             trace: TraceConfig::default(),
             agents: Vec::new(),
+            formats: BTreeMap::new(),
+            profiles: BTreeMap::new(),
         }
     }
 

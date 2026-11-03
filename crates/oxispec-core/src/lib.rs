@@ -12,6 +12,7 @@ pub mod context;
 pub mod diff;
 pub mod edit;
 pub mod finding;
+pub mod formats;
 pub mod graph;
 pub mod id;
 pub mod impact;

@@ -4,7 +4,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use crate::finding::Finding;
-use crate::node::{ClaimLine, Frontmatter, Node, RequirementBlock, Scenario, TextBlock};
+use crate::node::{ClaimLine, Frontmatter, Heading, Node, RequirementBlock, Scenario, TextBlock};
 
 /// Where the frontmatter sits in a file.
 pub struct FrontmatterSpan {
@@ -86,6 +86,33 @@ fn split_anchor(heading: &str) -> (String, Option<String>) {
 
 /// Finds `### Requirement:` blocks and their `#### Scenario:` children.
 /// Lines inside code fences are ignored.
+/// The `##` and `###` headings outside code blocks.
+pub fn parse_headings(body: &str, line_offset: usize) -> Vec<Heading> {
+    let mut headings = Vec::new();
+    let mut in_fence = false;
+    for (i, line) in body.lines().enumerate() {
+        let t = line.trim_start();
+        if t.starts_with("```") || t.starts_with("~~~") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        let level = line.chars().take_while(|&c| c == '#').count();
+        if (2..=3).contains(&level)
+            && let Some(text) = line[level..].strip_prefix(' ')
+        {
+            headings.push(Heading {
+                level: level as u8,
+                text: text.trim().trim_end_matches('#').trim().to_string(),
+                line: line_offset + i + 1,
+            });
+        }
+    }
+    headings
+}
+
 pub fn parse_requirements(body: &str, line_offset: usize) -> Vec<RequirementBlock> {
     let mut blocks: Vec<RequirementBlock> = Vec::new();
     let mut in_fence = false;
@@ -282,6 +309,7 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
             .map(|(k, v)| (k, v.into_vec()))
             .collect(),
         requirements,
+        headings: parse_headings(body, consumed),
         claims,
         vocabulary,
         machines,
@@ -293,6 +321,17 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn headings_of_level_two_and_three_outside_code_are_kept_with_their_lines() {
+        let body = "# T\n\n## Context\n\n```\n## Not a heading\n```\n\n### Detail ##\n#### Deep\n##NoSpace\n";
+        let h = parse_headings(body, 4);
+        let seen: Vec<_> = h
+            .iter()
+            .map(|h| (h.level, h.text.as_str(), h.line))
+            .collect();
+        assert_eq!(seen, [(2, "Context", 7), (3, "Detail", 13)]);
+    }
     use super::*;
 
     const GOOD: &str = "---\nid: REQ-AUTH-0001\ntype: requirement\nlinks:\n  decided-by: [ADR-0001]\n  governed-by: STD-GO-001\n---\n### Requirement: Login\nThe system SHALL issue a token.\n\n#### Scenario: Valid\n- **WHEN** a user logs in\n- **THEN** a token is returned\n";

@@ -23,6 +23,7 @@ mod ci;
 mod claims;
 mod connect;
 mod context;
+mod formats;
 mod git;
 mod history;
 mod machines;
@@ -216,6 +217,11 @@ enum Command {
         /// Where to append one JSON line per request. Default: .oxispec/server/audit.jsonl
         #[arg(long, value_name = "FILE")]
         audit_log: Option<PathBuf>,
+    },
+    /// The format profiles a project can use: what a node of a type must contain
+    Formats {
+        #[command(subcommand)]
+        action: FormatsAction,
     },
     /// Create, list and revoke the tokens that `serve` accepts
     Token {
@@ -429,6 +435,21 @@ enum Command {
 }
 
 #[derive(Subcommand)]
+enum FormatsAction {
+    /// List the profiles, built in and the project's own
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show what a profile requires and the template `new` writes
+    Show {
+        name: String,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum TokenAction {
     /// Create a token and print it once. The project keeps only a hash
     Add {
@@ -486,7 +507,12 @@ enum NewKind {
     /// A requirement with one scenario, for example: new requirement auth "Admin session timeout"
     Requirement { domain: String, title: String },
     /// An architecture decision record
-    Adr { title: String },
+    Adr {
+        title: String,
+        /// The format profile to write it in. Default: the one the config chooses for ADRs
+        #[arg(long)]
+        format: Option<String>,
+    },
     /// A change set: a proposed change to the specs, with a lifecycle
     Change { title: String },
     /// A vocabulary: the typed variables that claims in requirements talk about
@@ -728,6 +754,14 @@ fn run(cli: Cli) -> Result<ExitCode> {
             )?;
             Ok(ExitCode::SUCCESS)
         }
+        Command::Formats { action } => {
+            let root = project_root(cli.root.as_deref())?;
+            match action {
+                FormatsAction::List { json } => formats::list(&root, json)?,
+                FormatsAction::Show { name, json } => formats::show(&root, &name, json)?,
+            }
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Token { action } => {
             let root = project_root(cli.root.as_deref())?;
             match action {
@@ -798,9 +832,9 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     require_module(&cfg, "specs")?;
                     new_requirement(&root, &domain, &title, scheme, cache)?
                 }
-                NewKind::Adr { title } => {
+                NewKind::Adr { title, format } => {
                     require_module(&cfg, "adrs")?;
-                    new_adr(&root, &title, scheme, cache)?
+                    new_adr(&root, &cfg, &title, format.as_deref(), scheme, cache)?
                 }
                 NewKind::Change { title } => {
                     require_module(&cfg, "specs")?;
@@ -1677,11 +1711,28 @@ fn new_requirement(
     Ok((id, rel))
 }
 
-fn new_adr(root: &Path, title: &str, scheme: IdScheme, cache: bool) -> Result<(String, PathBuf)> {
+fn new_adr(
+    root: &Path,
+    cfg: &Config,
+    title: &str,
+    format: Option<&str>,
+    scheme: IdScheme,
+    cache: bool,
+) -> Result<(String, PathBuf)> {
+    let (profiles, _) = oxispec_core::formats::available(cfg);
+    let asked = format.or_else(|| cfg.formats.get("adr").map(String::as_str));
+    let template = match asked {
+        None => ADR_TEMPLATE.to_string(),
+        Some(name) => match profiles.iter().find(|p| p.name == name) {
+            Some(p) if p.ty == "adr" => p.template(),
+            Some(p) => bail!("the profile `{name}` is for {} nodes, not ADRs", p.ty),
+            None => bail!("no profile named `{name}`; see `oxispec formats list`"),
+        },
+    };
     let id = allocate_id(&load_graph(root, cache), "ADR-", scheme)?;
     let suffix = id.strip_prefix("ADR-").unwrap_or(&id);
     let rel = PathBuf::from("specs/adr").join(format!("{suffix}-{}.md", slug(title)?));
-    let body = ADR_TEMPLATE.replace("@ID@", &id).replace("@TITLE@", title);
+    let body = template.replace("@ID@", &id).replace("@TITLE@", title);
     write_new(root, &rel, &body)?;
     Ok((id, rel))
 }

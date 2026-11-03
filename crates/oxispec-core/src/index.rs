@@ -29,7 +29,7 @@ use crate::parse::parse_file_text;
 pub const CACHE_DIR: &str = ".oxispec/cache";
 const CACHE_FILE: &str = "index.json";
 /// Bump when the layout of the cache file changes.
-const CACHE_VERSION: u32 = 7;
+const CACHE_VERSION: u32 = 8;
 /// A different engine version may parse differently, so it never reuses a cache.
 const ENGINE: &str = env!("CARGO_PKG_VERSION");
 /// Files modified within this window before the cache was written are not trusted by size and time.
@@ -278,13 +278,18 @@ pub fn keep_graph_in_memory(root: &Path) {
         .iter()
         .flat_map(|r| [r.join(".oxispec"), r.join(".git")])
         .collect();
+    // The config holds the format profiles, so a change to it counts.
+    let config: Vec<PathBuf> = [root, canonical.as_path()]
+        .iter()
+        .map(|r| r.join(crate::config::CONFIG_PATH))
+        .collect();
     let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
         match event {
             Ok(event) => {
                 if event
                     .paths
                     .iter()
-                    .any(|p| !skip.iter().any(|s| p.starts_with(s)))
+                    .any(|p| config.contains(p) || !skip.iter().any(|s| p.starts_with(s)))
                 {
                     DIRTY.store(true, Ordering::Release);
                 }
@@ -309,7 +314,7 @@ pub fn graph_may_have_changed() {
 /// A number that changes when a markdown file is added, removed, resized or
 /// modified. `None` when a file changed in the last two seconds, because a
 /// second edit in the same clock tick could then go unseen.
-fn fingerprint(found: &[(PathBuf, String)]) -> Option<u64> {
+fn fingerprint(root: &Path, found: &[(PathBuf, String)]) -> Option<u64> {
     let now = now_ns();
     let mut hasher = blake3::Hasher::new();
     for (path, key) in found {
@@ -319,6 +324,15 @@ fn fingerprint(found: &[(PathBuf, String)]) -> Option<u64> {
             return None;
         }
         hasher.update(key.as_bytes());
+        hasher.update(&meta.len().to_le_bytes());
+        hasher.update(&mtime.to_le_bytes());
+    }
+    // The format profiles in the config change what the checks say.
+    if let Ok(meta) = fs::metadata(root.join(crate::config::CONFIG_PATH)) {
+        let mtime = mtime_ns(&meta);
+        if now.saturating_sub(mtime) < RACY_WINDOW_NS {
+            return None;
+        }
         hasher.update(&meta.len().to_le_bytes());
         hasher.update(&mtime.to_le_bytes());
     }
@@ -367,7 +381,11 @@ pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
     // Walking is cheap. Reading, hashing and parsing wait on the disk and the CPU, so they
     // are spread over a few threads. A cold start on a big project is mostly that waiting.
     let found = walk(root);
-    let print = if memo_on { fingerprint(&found) } else { None };
+    let print = if memo_on {
+        fingerprint(root, &found)
+    } else {
+        None
+    };
     if let Some(print) = print
         && let Ok(mut guard) = MEMO.lock()
         && let Some(memo) = guard.as_mut()
@@ -383,6 +401,7 @@ pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
         return (memo.graph.clone(), stats);
     }
     let (graph, stats) = load_files(root, use_cache, found);
+    let graph = graph.with_formats(crate::formats::Formats::load(root));
     if let Some(print) = print
         && let Ok(mut guard) = MEMO.lock()
     {

@@ -21,6 +21,9 @@ pub struct Graph {
     /// The results of the claims, state machine and architecture analyses,
     /// kept the same way.
     pub(crate) analyses: Arc<Analyses>,
+    /// The format profiles of the project, which the checks use. A graph built
+    /// from files that are not a project on disk has none.
+    pub(crate) formats: Arc<crate::formats::Formats>,
 }
 
 #[derive(Debug, Default)]
@@ -64,7 +67,14 @@ impl Graph {
             }),
             checked: Arc::default(),
             analyses: Arc::default(),
+            formats: Arc::default(),
         }
+    }
+
+    /// The same graph, checked against these format profiles.
+    pub fn with_formats(mut self, formats: crate::formats::Formats) -> Graph {
+        self.formats = Arc::new(formats);
+        self
     }
 
     /// Walks `root` for markdown files and parses all of them, without

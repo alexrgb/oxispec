@@ -4989,3 +4989,189 @@ fn connect_can_point_clients_at_a_running_server_without_writing_a_token() {
     let both = run(p, &["connect", "--url", url, "--read-only"]);
     assert_eq!(both.code, 2);
 }
+
+const LIGHT_ADR: &str = "formats:\n  adr: light\nprofiles:\n  light:\n    type: adr\n    description: A short ADR with an owner\n    sections: [Context, Decision]\n    optional: [Consequences]\n    fields: [owner]\n    statuses: [proposed, accepted]\n";
+
+fn project_with_light_adrs(p: &Path) {
+    let out = run(p, &["init", "--preset", "standard"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}{LIGHT_ADR}")).unwrap();
+}
+
+#[test]
+fn a_profile_shapes_new_and_check_enforces_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_light_adrs(p);
+
+    let out = run(p, &["new", "adr", "Use Postgres"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let file = p.join("specs/adr/0001-use-postgres.md");
+    let text = fs::read_to_string(&file).unwrap();
+    assert!(
+        text.contains("owner: \n") && text.contains("## Consequences"),
+        "{text}"
+    );
+
+    // The owner is still empty, so the profile is not met.
+    let out = run(p, &["check", "--json"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(out.stdout.contains("\"E029\""), "{}", out.stdout);
+
+    fs::write(&file, text.replace("owner: \n", "owner: ana\n")).unwrap();
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+
+    // Taking a required section away is reported, with the node.
+    fs::write(
+        &file,
+        fs::read_to_string(&file)
+            .unwrap()
+            .replace("## Decision\n", ""),
+    )
+    .unwrap();
+    let out = run(p, &["check", "--json"]);
+    assert_eq!(out.code, 1);
+    assert!(out.stdout.contains("\"E028\"") && out.stdout.contains("ADR-0001"));
+}
+
+#[test]
+fn formats_list_and_show_describe_the_profiles() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_light_adrs(p);
+
+    let out = run(p, &["formats", "list"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("default") && out.stdout.contains("shall"));
+    let light = out.stdout.lines().find(|l| l.starts_with("light")).unwrap();
+    assert!(
+        light.contains("project") && light.contains("(in use)"),
+        "{light}"
+    );
+
+    let out = run(p, &["formats", "list", "--json"]);
+    let value: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+    assert_eq!(value["schema_version"], 1);
+    let chosen: Vec<_> = value["profiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["chosen"] == true)
+        .map(|p| p["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(chosen, ["light"]);
+
+    let out = run(p, &["formats", "show", "light"]);
+    assert!(
+        out.stdout.contains("section Context (required)"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("statuses: proposed, accepted"));
+    let out = run(p, &["formats", "show", "nope"]);
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("no profile named `nope`"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn new_adr_can_pick_a_profile_and_refuses_one_for_another_type() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    let out = run(p, &["init", "--preset", "standard"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+
+    // Without a profile in the config, `new adr` writes what it always has.
+    let out = run(p, &["new", "adr", "Plain"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let plain = fs::read_to_string(p.join("specs/adr/0001-plain.md")).unwrap();
+    assert!(plain.contains("status: proposed\n---\n# ADR-0001: Plain\n\n## Context"));
+
+    let out = run(p, &["new", "adr", "Named", "--format", "default"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let out = run(p, &["new", "adr", "Wrong", "--format", "shall"]);
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("is for requirement nodes"),
+        "{}",
+        out.stderr
+    );
+    let out = run(p, &["new", "adr", "Missing", "--format", "nope"]);
+    assert_eq!(out.code, 2);
+}
+
+#[test]
+fn a_config_that_names_an_unknown_profile_fails_check_with_e031() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    let out = run(p, &["init", "--preset", "standard"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}formats:\n  adr: nope\n")).unwrap();
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(out.stdout.contains("E031") && out.stdout.contains(".oxispec/config.yaml"));
+}
+
+#[test]
+fn a_running_mcp_server_sees_a_change_to_the_format_profiles() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::Stdio;
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_oxispec"))
+        .arg("mcp")
+        .current_dir(p)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut n = 0;
+    let mut ask = |tool: &str| -> String {
+        n += 1;
+        let request = rpc(
+            n,
+            "tools/call",
+            serde_json::json!({"name": tool, "arguments": {}}),
+        );
+        writeln!(stdin, "{request}").unwrap();
+        let mut line = String::new();
+        stdout.read_line(&mut line).unwrap();
+        let reply: serde_json::Value = serde_json::from_str(&line).unwrap();
+        reply["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+
+    std::thread::sleep(std::time::Duration::from_millis(2300));
+    assert!(!ask("spec_check").contains("E029"));
+    assert!(!ask("spec_check").contains("E029"));
+
+    // The config is under `.oxispec`, which the watcher otherwise skips.
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}{LIGHT_ADR}")).unwrap();
+    let mut applied = false;
+    for _ in 0..60 {
+        if ask("spec_check").contains("E029") {
+            applied = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    drop(stdin);
+    assert!(child.wait().unwrap().success());
+    assert!(applied, "the server never applied the new profile");
+}
