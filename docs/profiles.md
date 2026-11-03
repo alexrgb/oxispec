@@ -41,7 +41,8 @@ profiles:
 | `type` | The node type it is for. Required. |
 | `sections` | Headings the node must have, at level 2 or 3 (`##` or `###`). Compared without regard to case. A heading inside a code block does not count. |
 | `optional` | Sections the template includes but `check` does not require. |
-| `fields` | Front matter fields that must be set and not empty: `status`, `owner`, `approved_by`, `approved_on` or `version`. |
+| `fields` | Front matter fields that must be set and not empty: `status`, `owner`, `approved_by`, `approved_on`, `version`, `date` or `decision-makers`. |
+| `optional_fields` | Fields the template includes but `check` does not require. `date` is written as today's date. |
 | `statuses` | The values `status` may take. The first one is what `new` writes. Empty means any. |
 | `description` | One line for `formats list`. |
 
@@ -53,8 +54,38 @@ The name is letters, digits, `-` and `_`, and cannot be the name of a built-in p
 |---|---|---|
 | `default` | `adr` | Context, Decision and Consequences, with nothing required. It is what `new adr` has always written. |
 | `shall` | `requirement` | A requirement with SHALL or MUST and scenarios, checked by E006 to E008. |
+| `nygard` | `adr` | Michael Nygard's format: Context, Decision, Consequences (all required), and a status. |
+| `madr` | `adr` | [MADR 4.0](https://adr.github.io/madr/): Context and Problem Statement, Considered Options and Decision Outcome are required. Decision Drivers, Consequences, Confirmation, Pros and Cons of the Options and More Information are in the template and optional. `date` and `decision-makers` are in the template. |
+| `y-statement` | `adr` | A decision in one sentence (context, concern, choice, neglected options, quality, downside, rationale), in a `Statement` section. |
 
-Choosing a built-in profile never makes an existing project fail. More profiles (ADR formats such as MADR and Nygard, and requirement styles such as EARS and Gherkin) are planned in [iterations.md](iterations.md), iterations 26 and 28.
+Choosing `default` or `shall` never makes an existing project fail. Choosing one of the others holds every ADR to it, so a project that has ADRs in another shape will see E028 until they are converted (planned in iteration 26b). More profiles (requirement styles such as EARS and Gherkin) are planned in [iterations.md](iterations.md), iteration 28.
+
+## ADR formats side by side
+
+The three ADR formats keep the same facts in the same places, so a record can move from one to another.
+
+- **Status, date and deciders are front matter**, not text in the body: `status`, `date`, `decision-makers`. Nygard's Status section and MADR's `status:` line are the same thing here.
+- **Who replaced whom is a link.** `oxispec link ADR-0002 supersedes ADR-0001` says it. "Superseded by ADR-0002" is worked out from that link whenever it is shown, and never stored.
+- **The status words** are `proposed`, `accepted`, `deprecated` and `superseded`, and `rejected` for MADR and the Y-statement.
+
+| Nygard | MADR | Y-statement |
+|---|---|---|
+| Context | Context and Problem Statement | "In the context of ..., facing ..." |
+| Decision | Decision Outcome ("Chosen option") | "we decided for ..." |
+| Consequences | Consequences, under Decision Outcome | "to achieve ..., accepting ..." |
+| | Considered Options, Pros and Cons | "and neglected ..." |
+| | Decision Drivers | "because ..." |
+
+## Superseded decisions
+
+When the chosen profile of a type has the status `superseded`, `check` holds its nodes to the link:
+
+| Code | Meaning |
+|---|---|
+| W011 | A decision is marked `superseded`, but no decision in force links `supersedes` to it. |
+| W012 | A decision is `proposed` or `accepted`, but a decision in force links `supersedes` to it. |
+
+"In force" means the successor is not `proposed` or `rejected`: a successor that has not been accepted yet has not replaced anything. A decision that is `deprecated` is left alone. These are warnings, and `--strict` makes them fail. A project whose profile has no `superseded` status sees neither.
 
 ## Checks
 

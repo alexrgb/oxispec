@@ -1732,7 +1732,15 @@ fn new_adr(
     let id = allocate_id(&load_graph(root, cache), "ADR-", scheme)?;
     let suffix = id.strip_prefix("ADR-").unwrap_or(&id);
     let rel = PathBuf::from("specs/adr").join(format!("{suffix}-{}.md", slug(title)?));
-    let body = template.replace("@ID@", &id).replace("@TITLE@", title);
+    let today = oxispec_core::change::utc_date(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs()),
+    );
+    let body = template
+        .replace("@ID@", &id)
+        .replace("@TITLE@", title)
+        .replace("@DATE@", &today);
     write_new(root, &rel, &body)?;
     Ok((id, rel))
 }

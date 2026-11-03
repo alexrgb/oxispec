@@ -156,6 +156,14 @@ pub const CODES: &[(&str, &str)] = &[
     ("W008", "A state has no way out and is not final"),
     ("W009", "A container has no owner or no technology"),
     ("W010", "A container runs in no deployment environment"),
+    (
+        "W011",
+        "A decision is marked superseded, but no decision in force supersedes it",
+    ),
+    (
+        "W012",
+        "A decision is superseded by another, but its status still says it is in force",
+    ),
     ("I001", "A link to another project is not checked"),
     (
         "I002",

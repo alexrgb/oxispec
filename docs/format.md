@@ -276,6 +276,8 @@ Codes are stable. A code is never reused.
 | W008 | warning | A state has no way out and is not final |
 | W009 | warning | A container has no owner or no technology |
 | W010 | warning | A container runs in no deployment environment |
+| W011 | warning | A decision is marked superseded, but no decision in force links `supersedes` to it (see [profiles.md](profiles.md)) |
+| W012 | warning | A decision is superseded by another, but its status is still proposed or accepted |
 | I001 | info | A link to another project is not checked. Shown with `--verbose`. |
 | I002 | info | A claim says nothing that another claim does not already say. Shown with `--verbose`. |
 
