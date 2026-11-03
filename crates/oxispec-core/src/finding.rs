@@ -121,6 +121,22 @@ pub const CODES: &[(&str, &str)] = &[
         "E027",
         "An architecture rule is broken, with the path that breaks it",
     ),
+    (
+        "E028",
+        "A section that the node's format profile requires is missing",
+    ),
+    (
+        "E029",
+        "A front matter field that the node's format profile requires is missing",
+    ),
+    (
+        "E030",
+        "A status is missing or not one that the node's format profile allows",
+    ),
+    (
+        "E031",
+        "The config names a format profile that does not exist or is not valid",
+    ),
     ("W001", "Unknown node type"),
     (
         "W002",

@@ -61,6 +61,14 @@ pub struct ClaimLine {
     pub text: String,
 }
 
+/// A `##` or `###` heading, for the checks that need to know what sections a node has.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Heading {
+    pub level: u8,
+    pub text: String,
+    pub line: usize,
+}
+
 /// The text of a fenced `vocabulary` block and the line it starts on.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextBlock {
@@ -99,6 +107,9 @@ pub struct Node {
     /// `architecture` blocks, read by [`crate::architecture`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub architecture: Vec<TextBlock>,
+    /// Headings of level 2 and 3 outside code blocks.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub headings: Vec<Heading>,
     /// BLAKE3 hash of everything after the frontmatter, to see that the text changed.
     #[serde(default)]
     pub body_hash: String,

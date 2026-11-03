@@ -7,6 +7,7 @@
 //! E011 invalid scenario anchor
 //! E012 change set with a missing or unknown status
 //! E013 approved or merged change set without `approved_by`
+//! E028 to E031: format profiles, see `formats`
 //! E017 to E019, W005, W006, I002: claims and the vocabulary, see `claims`
 //! E020 to E024, W007, W008: state machines, see `machines`
 //! E025 to E027, W009, W010: the architecture model, see `architecture`
@@ -38,6 +39,7 @@ fn run_checks(graph: &Graph) -> Vec<Finding> {
         }
     }
     supersede_cycles(graph, &mut findings);
+    findings.extend(crate::formats::check(graph));
     findings.extend(crate::claims::check(graph));
     findings.extend(crate::machines::check(graph));
     findings.extend(crate::architecture::check(graph));
