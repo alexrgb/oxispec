@@ -115,47 +115,131 @@ pub fn parse_headings(body: &str, line_offset: usize) -> Vec<Heading> {
     headings
 }
 
+/// The step keyword a line starts with, if it is a step: `- **WHEN** x`,
+/// `Given x` and `* And x` all are.
+fn step_keyword(line: &str) -> Option<&'static str> {
+    let t = line
+        .trim()
+        .trim_start_matches(['-', '*', '+'])
+        .trim_start()
+        .trim_start_matches("**")
+        .trim_start();
+    let word: String = t
+        .chars()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    ["given", "when", "then", "and", "but"]
+        .into_iter()
+        .find(|k| *k == word)
+}
+
+/// Finds `### Requirement:` blocks and their scenarios: `#### Scenario:`
+/// headings, and `Scenario:` lines in a `gherkin` fence. Other code fences
+/// are ignored.
 pub fn parse_requirements(body: &str, line_offset: usize) -> Vec<RequirementBlock> {
     let mut blocks: Vec<RequirementBlock> = Vec::new();
     let mut in_fence = false;
+    let mut in_gherkin = false;
     let mut in_description = false;
+    let mut in_scenario = false;
+    let mut statement: Vec<&str> = Vec::new();
+    let finish = |blocks: &mut Vec<RequirementBlock>, statement: &mut Vec<&str>| {
+        if let Some(b) = blocks.last_mut()
+            && b.statement.is_empty()
+        {
+            b.statement = statement.join(" ");
+        }
+        statement.clear();
+    };
     for (i, line) in body.lines().enumerate() {
         let n = line_offset + i + 1;
         let t = line.trim_start();
         if t.starts_with("```") || t.starts_with("~~~") {
-            in_fence = !in_fence;
+            if in_fence {
+                if in_gherkin {
+                    in_scenario = false;
+                }
+                in_fence = false;
+                in_gherkin = false;
+            } else {
+                in_fence = true;
+                in_gherkin = t
+                    .trim_start_matches(['`', '~'])
+                    .trim()
+                    .eq_ignore_ascii_case("gherkin");
+            }
             continue;
         }
         if in_fence {
+            if in_gherkin && let Some(b) = blocks.last_mut() {
+                let rest = t
+                    .strip_prefix("Scenario Outline:")
+                    .or_else(|| t.strip_prefix("Scenario:"))
+                    .or_else(|| t.strip_prefix("Example:"));
+                if let Some(heading) = rest {
+                    let (name, anchor) = split_anchor(heading);
+                    b.scenarios.push(Scenario {
+                        name,
+                        anchor,
+                        line: n,
+                        steps: Vec::new(),
+                    });
+                    in_scenario = true;
+                } else if in_scenario
+                    && let Some(k) = step_keyword(line)
+                    && let Some(s) = b.scenarios.last_mut()
+                {
+                    s.steps.push(k.to_string());
+                }
+            }
             continue;
         }
         if let Some(name) = line.strip_prefix("### Requirement:") {
+            finish(&mut blocks, &mut statement);
             blocks.push(RequirementBlock {
                 name: name.trim().to_string(),
                 line: n,
                 has_normative: false,
+                statement: String::new(),
                 scenarios: Vec::new(),
             });
             in_description = true;
+            in_scenario = false;
         } else if let Some(heading) = line.strip_prefix("#### Scenario:") {
+            finish(&mut blocks, &mut statement);
             if let Some(b) = blocks.last_mut() {
                 let (name, anchor) = split_anchor(heading);
                 b.scenarios.push(Scenario {
                     name,
                     anchor,
                     line: n,
+                    steps: Vec::new(),
                 });
             }
             in_description = false;
+            in_scenario = true;
         } else if line.starts_with('#') {
+            finish(&mut blocks, &mut statement);
             in_description = false;
-        } else if in_description
-            && has_normative(line)
-            && let Some(b) = blocks.last_mut()
+            in_scenario = false;
+        } else if in_description {
+            if has_normative(line)
+                && let Some(b) = blocks.last_mut()
+            {
+                b.has_normative = true;
+            }
+            if !line.trim().is_empty() {
+                statement.push(line.trim());
+            }
+        } else if in_scenario
+            && let Some(k) = step_keyword(line)
+            && let Some(s) = blocks.last_mut().and_then(|b| b.scenarios.last_mut())
         {
-            b.has_normative = true;
+            s.steps.push(k.to_string());
         }
     }
+    finish(&mut blocks, &mut statement);
     blocks
 }
 
@@ -344,6 +428,37 @@ mod tests {
         assert_eq!(seen, [(2, "Context", 7), (3, "Detail", 13)]);
     }
     use super::*;
+
+    #[test]
+    fn a_requirement_keeps_its_statement_and_a_scenario_its_steps() {
+        let body = "### Requirement: Stop\nWhen the user presses stop,\nthe player shall pause.\n\n#### Scenario: Pressed {#S1}\n- **GIVEN** a track plays\n- **WHEN** stop is pressed\n* Then it pauses\n\nAnd the clock stops\n";
+        let blocks = parse_requirements(body, 0);
+        assert_eq!(
+            blocks[0].statement,
+            "When the user presses stop, the player shall pause."
+        );
+        assert_eq!(
+            blocks[0].scenarios[0].steps,
+            ["given", "when", "then", "and"]
+        );
+        assert_eq!(blocks[0].scenarios[0].anchor.as_deref(), Some("S1"));
+    }
+
+    #[test]
+    fn scenarios_in_a_gherkin_fence_count_and_other_fences_do_not() {
+        let body = "### Requirement: Login\nThe system SHALL sign in.\n\n```gherkin\nFeature: Login\n  Scenario: Good password {#S1}\n    Given an account\n    When the password is right\n    Then the user is in\n  Scenario Outline: Bad <x>\n    When x\n```\n\n```text\nScenario: not one\n```\n";
+        let blocks = parse_requirements(body, 0);
+        let names: Vec<_> = blocks[0]
+            .scenarios
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
+        assert_eq!(names, ["Good password", "Bad <x>"]);
+        assert_eq!(blocks[0].scenarios[0].anchor.as_deref(), Some("S1"));
+        assert_eq!(blocks[0].scenarios[0].steps, ["given", "when", "then"]);
+        assert_eq!(blocks[0].scenarios[1].steps, ["when"]);
+        assert!(blocks[0].has_normative);
+    }
 
     const GOOD: &str = "---\nid: REQ-AUTH-0001\ntype: requirement\nlinks:\n  decided-by: [ADR-0001]\n  governed-by: STD-GO-001\n---\n### Requirement: Login\nThe system SHALL issue a token.\n\n#### Scenario: Valid\n- **WHEN** a user logs in\n- **THEN** a token is returned\n";
 

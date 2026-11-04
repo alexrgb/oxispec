@@ -5650,3 +5650,185 @@ fn debt_tool_names(p: &Path) -> Vec<String> {
         ],
     ))
 }
+
+fn choose_requirement_style(p: &Path, style: &str) {
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}formats:\n  requirement: {style}\n")).unwrap();
+}
+
+#[test]
+fn each_requirement_style_writes_a_template_that_passes_its_own_check() {
+    for style in ["shall", "ears", "gherkin", "user-story"] {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path();
+        assert_eq!(run(p, &["init", "--preset", "minimal"]).code, 0);
+        choose_requirement_style(p, style);
+        let out = run(p, &["new", "requirement", "auth", "Login"]);
+        assert_eq!(out.code, 0, "{style}: {}", out.stderr);
+        let out = run(p, &["check"]);
+        assert_eq!(out.code, 0, "{style}: {}{}", out.stdout, out.stderr);
+        let text = fs::read_to_string(p.join("specs/requirements/auth/login.md")).unwrap();
+        assert!(text.contains("### Requirement: Login"), "{style}");
+        match style {
+            "ears" => assert!(
+                text.contains("When <trigger>, the <system> shall"),
+                "{text}"
+            ),
+            "user-story" => assert!(text.contains("As a <role>, I want <goal>"), "{text}"),
+            "gherkin" => assert!(text.contains("**GIVEN**"), "{text}"),
+            _ => assert!(text.contains("The system SHALL"), "{text}"),
+        }
+        let out = run(p, &["formats", "show", style]);
+        assert_eq!(out.code, 0, "{}", out.stderr);
+    }
+}
+
+#[test]
+fn format_on_new_requirement_overrides_the_config_and_refuses_other_types() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let out = run(
+        p,
+        &[
+            "new",
+            "requirement",
+            "auth",
+            "Login",
+            "--format",
+            "user-story",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let text = fs::read_to_string(p.join("specs/requirements/auth/login.md")).unwrap();
+    assert!(text.contains("As a <role>"));
+    for bad in ["nygard", "nope"] {
+        let out = run(p, &["new", "requirement", "auth", "Other", "--format", bad]);
+        assert_eq!(out.code, 2, "{bad}");
+    }
+}
+
+fn requirement_file(p: &Path, name: &str, body: &str) {
+    let dir = p.join("specs/requirements/auth");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(
+        dir.join(format!("{name}.md")),
+        format!(
+            "---\nid: REQ-AUTH-{}\ntype: requirement\nstatus: draft\n---\n{body}",
+            name.to_uppercase()
+        ),
+    )
+    .unwrap();
+}
+
+#[test]
+fn ears_holds_a_requirement_to_one_of_its_patterns() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "minimal"]).code, 0);
+    requirement_file(
+        p,
+        "0001",
+        "### Requirement: Lock\nIf three passwords fail, then the system shall lock the account.\n\n#### Scenario: Locked {#S1}\n- **WHEN** x\n- **THEN** y\n",
+    );
+    requirement_file(
+        p,
+        "0002",
+        "### Requirement: Loose\nWhen a user fails to sign in three times the system SHALL lock the account.\n\n#### Scenario: Locked {#S1}\n- **WHEN** x\n- **THEN** y\n",
+    );
+    // Nothing is chosen yet: only SHALL in capitals counts, as it always did.
+    let out = run(p, &["check", "--json"]);
+    assert_eq!(out.stdout.matches("E007").count(), 1, "{}", out.stdout);
+    assert!(!out.stdout.contains("E033"), "{}", out.stdout);
+    choose_requirement_style(p, "ears");
+    let out = run(p, &["check", "--json"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert_eq!(out.stdout.matches("E033").count(), 1, "{}", out.stdout);
+    assert!(!out.stdout.contains("E007"), "EARS checks its own `shall`");
+    assert!(out.stdout.contains("needs a comma"), "{}", out.stdout);
+    assert!(out.stdout.contains("REQ-AUTH-0002"), "{}", out.stdout);
+}
+
+#[test]
+fn a_user_story_needs_no_shall_but_still_needs_acceptance_criteria() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "minimal"]).code, 0);
+    requirement_file(
+        p,
+        "0001",
+        "### Requirement: Export\nAs a user, I want to export my data, so that I can leave.\n\n#### Scenario: Exported {#S1}\n- **WHEN** x\n- **THEN** y\n",
+    );
+    requirement_file(
+        p,
+        "0002",
+        "### Requirement: Import\nAs a user, I want to import my data.\n",
+    );
+    // As a SHALL requirement the first has no SHALL.
+    let out = run(p, &["check", "--json"]);
+    assert!(out.stdout.contains("E007"), "{}", out.stdout);
+    choose_requirement_style(p, "user-story");
+    let out = run(p, &["check", "--json"]);
+    assert!(!out.stdout.contains("E007"), "{}", out.stdout);
+    assert_eq!(out.stdout.matches("E033").count(), 1, "{}", out.stdout);
+    assert!(out.stdout.contains("so that"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("E006"),
+        "no acceptance criterion:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn gherkin_scenarios_in_a_fence_are_covered_and_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "specs-tests"]).code, 0);
+    requirement_file(
+        p,
+        "0001",
+        "### Requirement: Login\nThe system SHALL sign a user in.\n\n```gherkin\nScenario: Right password {#S1}\n  Given an account\n  When the password is right\n  Then the user is signed in\nScenario: Wrong password {#S2}\n  Given an account\n  Then nothing happens\n```\n",
+    );
+    choose_requirement_style(p, "gherkin");
+    let out = run(p, &["check", "--json"]);
+    // The fence gives two scenarios (no E006), and the second lacks a WHEN.
+    assert!(!out.stdout.contains("E006"), "{}", out.stdout);
+    assert_eq!(out.stdout.matches("E034").count(), 1, "{}", out.stdout);
+    assert!(out.stdout.contains("Wrong password"), "{}", out.stdout);
+    // A test can link to the anchor of a scenario in the fence.
+    fs::create_dir_all(p.join("specs/tests")).unwrap();
+    fs::write(
+        p.join("specs/tests/login.md"),
+        "---\nid: TC-AUTH-0001\ntype: test-case\nlinks:\n  verifies: REQ-AUTH-0001.S1\n---\n# TC-AUTH-0001: Login works\n",
+    )
+    .unwrap();
+    let out = run(p, &["check", "--json"]);
+    assert!(!out.stdout.contains("E009"), "{}", out.stdout);
+}
+
+#[test]
+fn a_custom_profile_can_have_a_style_and_a_bad_style_is_e031() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "minimal"]).code, 0);
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(
+        &config,
+        format!("{text}formats:\n  requirement: strict\nprofiles:\n  strict:\n    type: requirement\n    style: ears\n    sections: [Rationale]\n  odd:\n    type: requirement\n    style: haiku\n"),
+    )
+    .unwrap();
+    let out = run(p, &["check", "--json"]);
+    assert!(
+        out.stdout.contains("E031") && out.stdout.contains("haiku"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(run(p, &["new", "requirement", "auth", "Login"]).code, 0);
+    let text = fs::read_to_string(p.join("specs/requirements/auth/login.md")).unwrap();
+    assert!(
+        text.contains("## Rationale") && text.contains("When <trigger>"),
+        "{text}"
+    );
+}

@@ -141,6 +141,14 @@ pub const CODES: &[(&str, &str)] = &[
         "E032",
         "A debt item has a status, severity or date that is not valid",
     ),
+    (
+        "E033",
+        "A requirement is not worded the way its style asks (EARS or user story)",
+    ),
+    (
+        "E034",
+        "A scenario does not have the steps its style asks (Gherkin)",
+    ),
     ("W001", "Unknown node type"),
     (
         "W002",

@@ -70,6 +70,9 @@ pub fn show(root: &Path, name: &str, json: bool) -> Result<()> {
             if s.required { " (required)" } else { "" }
         );
     }
+    if let Some(style) = profile.style {
+        outln!("  style: {}", style.name());
+    }
     if !profile.fields.is_empty() {
         outln!("  required fields: {}", profile.fields.join(", "));
     }

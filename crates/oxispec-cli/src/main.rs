@@ -584,7 +584,14 @@ enum ElementKind {
 #[derive(Subcommand)]
 enum NewKind {
     /// A requirement with one scenario, for example: new requirement auth "Admin session timeout"
-    Requirement { domain: String, title: String },
+    Requirement {
+        domain: String,
+        title: String,
+        /// The format profile to write it in: shall, ears, gherkin, user-story or your own.
+        /// Default: the one the config chooses for requirements, else shall
+        #[arg(long)]
+        format: Option<String>,
+    },
     /// An architecture decision record
     Adr {
         title: String,
@@ -984,9 +991,21 @@ fn run(cli: Cli) -> Result<ExitCode> {
             // command that writes in the same project, or both would pick the same number.
             let _lock = lock_project(&root)?;
             let created = match kind {
-                NewKind::Requirement { domain, title } => {
+                NewKind::Requirement {
+                    domain,
+                    title,
+                    format,
+                } => {
                     require_module(&cfg, "specs")?;
-                    new_requirement(&root, &domain, &title, scheme, cache)?
+                    new_requirement(
+                        &root,
+                        &cfg,
+                        &domain,
+                        &title,
+                        format.as_deref(),
+                        scheme,
+                        cache,
+                    )?
                 }
                 NewKind::Adr { title, format } => {
                     require_module(&cfg, "adrs")?;
@@ -1777,19 +1796,6 @@ fn write_new(root: &Path, rel: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
-const REQUIREMENT_TEMPLATE: &str = "---
-id: @ID@
-type: requirement
-status: draft
----
-### Requirement: @TITLE@
-The system SHALL <describe the behavior>.
-
-#### Scenario: <name> {#S1}
-- **WHEN** <condition>
-- **THEN** <outcome>
-";
-
 const ADR_TEMPLATE: &str = "---
 id: @ID@
 type: adr
@@ -1858,11 +1864,25 @@ properties:
 
 fn new_requirement(
     root: &Path,
+    cfg: &Config,
     domain: &str,
     title: &str,
+    format: Option<&str>,
     scheme: IdScheme,
     cache: bool,
 ) -> Result<(String, PathBuf)> {
+    let (profiles, _) = oxispec_core::formats::available(cfg);
+    let asked = format
+        .or_else(|| cfg.formats.get("requirement").map(String::as_str))
+        .unwrap_or("shall");
+    let template = match profiles.iter().find(|p| p.name == asked) {
+        Some(p) if p.ty == "requirement" => p.template(),
+        Some(p) => bail!(
+            "the profile `{asked}` is for {} nodes, not requirements",
+            p.ty
+        ),
+        None => bail!("no profile named `{asked}`; see `oxispec formats list`"),
+    };
     let domain = domain.to_ascii_uppercase();
     if domain.is_empty() || !domain.chars().all(|c| c.is_ascii_alphanumeric()) {
         bail!("the domain must be letters and digits, for example AUTH");
@@ -1871,9 +1891,11 @@ fn new_requirement(
     let rel = PathBuf::from("specs/requirements")
         .join(domain.to_ascii_lowercase())
         .join(format!("{}.md", slug(title)?));
-    let body = REQUIREMENT_TEMPLATE
+    let today = oxispec_core::debt::today();
+    let body = template
         .replace("@ID@", &id)
-        .replace("@TITLE@", title);
+        .replace("@TITLE@", title)
+        .replace("@DATE@", &today);
     write_new(root, &rel, &body)?;
     Ok((id, rel))
 }

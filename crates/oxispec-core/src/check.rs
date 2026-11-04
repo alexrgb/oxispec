@@ -28,11 +28,17 @@ pub fn check(graph: &Graph) -> Vec<Finding> {
 fn run_checks(graph: &Graph) -> Vec<Finding> {
     let mut findings = graph.findings.clone();
     duplicates(graph, &mut findings);
+    // A user story has no SHALL; the other styles do.
+    let normative = graph
+        .formats
+        .profile_for("requirement")
+        .and_then(|p| p.style)
+        .is_none_or(crate::styles::Style::needs_normative);
     for node in &graph.nodes {
         node_format(node, &mut findings);
         links(graph, node, &mut findings);
         if node.ty == "requirement" {
-            requirements(node, &mut findings);
+            requirements(node, &mut findings, normative);
         }
         if node.ty == "change" {
             change_set(node, &mut findings);
@@ -170,7 +176,7 @@ fn links(graph: &Graph, node: &Node, out: &mut Vec<Finding>) {
     }
 }
 
-fn requirements(node: &Node, out: &mut Vec<Finding>) {
+fn requirements(node: &Node, out: &mut Vec<Finding>, normative: bool) {
     if node.requirements.is_empty() {
         out.push(
             Finding::error("E008", "requirement node has no `### Requirement:` block")
@@ -189,7 +195,7 @@ fn requirements(node: &Node, out: &mut Vec<Finding>) {
                 .node(&node.id),
             );
         }
-        if !r.has_normative {
+        if normative && !r.has_normative {
             out.push(
                 Finding::error(
                     "E007",
