@@ -5832,3 +5832,116 @@ fn a_custom_profile_can_have_a_style_and_a_bad_style_is_e031() {
         "{text}"
     );
 }
+
+const OPENSPEC_AUTH: &str = "# Auth Specification\n\n## Purpose\nLet people in.\n\n## Requirements\n\n### Requirement: Login\nThe system SHALL sign users in.\n\n#### Scenario: Good password\n- **WHEN** a user gives the right password\n- **THEN** a session starts\n";
+
+fn import_project(p: &Path) {
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+}
+
+#[test]
+fn import_specs_brings_in_openspec_and_lists_what_it_leaves_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    let cap = p.join("openspec/specs/auth");
+    fs::create_dir_all(&cap).unwrap();
+    fs::write(cap.join("spec.md"), OPENSPEC_AUTH).unwrap();
+    fs::write(cap.join("design.md"), "# Design\n").unwrap();
+    fs::create_dir_all(p.join("openspec/changes/add-2fa")).unwrap();
+    fs::create_dir_all(p.join("openspec/changes/archive")).unwrap();
+
+    let out = run(p, &["import", "specs", "--from", "openspec", "--dry-run"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("would import"), "{}", out.stdout);
+    assert!(!p.join("specs/requirements/auth/auth.md").exists());
+
+    let out = run(p, &["import", "specs", "--from", "openspec"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("REQ-AUTH-0001"), "{}", out.stdout);
+    assert!(out.stdout.contains("design.md"), "{}", out.stdout);
+    assert!(out.stdout.contains("add-2fa"), "{}", out.stdout);
+    let text = fs::read_to_string(p.join("specs/requirements/auth/auth.md")).unwrap();
+    assert!(text.contains("### Requirement: Login"), "{text}");
+    assert!(
+        text.contains("#### Scenario: Good password {#S1}"),
+        "{text}"
+    );
+    assert!(text.contains("## Purpose"), "{text}");
+    let check = run(p, &["check"]);
+    assert_eq!(check.code, 0, "{}{}", check.stdout, check.stderr);
+
+    // The folder is still there, so a second import clashes and writes nothing more.
+    let again = run(p, &["import", "specs", "--from", "openspec"]);
+    assert_ne!(again.code, 0);
+}
+
+#[test]
+fn import_specs_reads_kiro_and_spec_kit_and_marks_what_needs_filling_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    let kiro = p.join(".kiro/specs/login");
+    fs::create_dir_all(&kiro).unwrap();
+    fs::write(
+        kiro.join("requirements.md"),
+        "## Requirements\n\n### Requirement 1\n\n**User Story:** As a user, I want to log in, so that I can work.\n\n#### Acceptance Criteria\n\n1. WHEN a user gives a password THEN the system SHALL start a session\n",
+    )
+    .unwrap();
+    fs::write(kiro.join("tasks.md"), "- [ ] build it\n").unwrap();
+    let out = run(p, &["import", "specs", "--from", "kiro"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("REQ-LOGIN-0001"), "{}", out.stdout);
+    assert!(out.stdout.contains("tasks.md"), "{}", out.stdout);
+
+    let kit = p.join("kit/001-search");
+    fs::create_dir_all(&kit).unwrap();
+    fs::write(
+        kit.join("spec.md"),
+        "## Requirements\n\n- **FR-001**: System MUST rank by title.\n",
+    )
+    .unwrap();
+    let out = run(
+        p,
+        &[
+            "import", "specs", "--from", "speckit", "--dir", "kit", "--json",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let v: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+    assert_eq!(v["nodes"][0]["id"], "REQ-SEARCH-0001");
+    assert!(
+        v["nodes"][0]["notes"].to_string().contains("placeholder"),
+        "{v}"
+    );
+    let text = fs::read_to_string(p.join("specs/requirements/search/001-search.md")).unwrap();
+    assert!(text.contains("<outcome>"), "{text}");
+}
+
+#[test]
+fn import_specs_takes_plain_markdown_and_refuses_unknown_sources() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    fs::write(
+        p.join("notes.md"),
+        "# Notes\n\n## Retry\nFailed jobs are retried.\n",
+    )
+    .unwrap();
+    let out = run(p, &["import", "specs", "--from", "markdown"]);
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("--dir"), "{}", out.stderr);
+    let out = run(
+        p,
+        &["import", "specs", "--from", "markdown", "--dir", "notes.md"],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let text = fs::read_to_string(p.join("specs/requirements/notes/notes.md")).unwrap();
+    assert!(
+        text.contains("The system SHALL satisfy this requirement: Failed jobs are retried."),
+        "{text}"
+    );
+    let out = run(p, &["import", "specs", "--from", "word"]);
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("unknown source"), "{}", out.stderr);
+}

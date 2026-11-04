@@ -143,7 +143,7 @@ A section the target has no place for is kept word for word after the others, an
 
 If a status is not one the target allows (`rejected` in Nygard), the command reports it and keeps the status. `convert` does not change the config; it prints the line to set `formats: adr:` when the project checks another format.
 
-## Importing from other tools
+## Importing decisions from other tools
 
 `oxispec import adr --from adr-tools` reads the records of another tool and writes them as ADRs in the chosen format (`--format`, default the one the config chooses, else `default`). The source is `adr-tools`, `madr` or `log4brains`; `--dir` names the folder, which otherwise is where the tool keeps them (`doc/adr`, `docs/decisions`, `docs/adr`).
 
@@ -156,6 +156,21 @@ If a status is not one the target allows (`rejected` in Nygard), the command rep
 The status, date and deciders go to front matter. A link is written once, on the decision that acts: "Superceded by 2" in record 1 and "Supercedes 1" in record 2 both give `supersedes: [ADR-0001]` in record 2, and record 1 becomes `superseded`. The kinds are `supersedes`, `amends` and `clarifies`. Other header lines (`Tags`, `Consulted`, a status line that is none of these) are kept under `## Imported metadata`, so nothing is lost. A link to a record that is not in the folder is reported and left out.
 
 Ids come from the numbers in the file names, plus `--offset`. A project that already has `ADR-0001` refuses the import and says to pass `--offset`. Files whose names do not start with a number (`README.md`, `template.md`) are skipped and listed. Nothing is written if any record cannot be read.
+
+## Importing specs from other tools
+
+`oxispec import specs --from <source>` reads the specs of another tool and writes requirement nodes in the chosen profile (`--format`, default the one the config chooses, else `shall`). `--dry-run` shows the result and writes nothing, and `--json` prints it for a script.
+
+| Source | Where it looks | Becomes |
+|---|---|---|
+| `openspec` | `openspec/specs/<capability>/spec.md` | `### Requirement:` blocks and `#### Scenario:` steps as they are. `## Purpose` is kept as the intro |
+| `speckit` | `specs/<feature>/spec.md` | Each `FR-001: ...` line is a block. Each user story is a block, and its Given, When, Then lines are scenarios |
+| `kiro` | `.kiro/specs/<feature>/requirements.md` | Each `### Requirement N` is a block with the user story as its text. Each acceptance criterion is a scenario, split at `THEN` |
+| `markdown` | `--dir` names a file or a folder | The shallowest headings under the title are blocks, with their text |
+
+`--dir` replaces the default folder. Each spec file becomes one node, `REQ-<NAME>-NNNN` in `specs/requirements/<name>/`, where the name is the capability or feature folder (or the file name) in capitals, without a leading number: `001-user-auth` gives `REQ-USERAUTH-0001`. `--id-scheme random` numbers them the other way.
+
+Whatever cannot be mapped is listed, never dropped quietly: design notes, tasks, plans, open OpenSpec changes (start a change set for them), and sections such as Spec Kit's Key Entities. A file that already has an `id` is an OxiSpec node and is skipped. Where the source has no scenario for a requirement, a placeholder scenario is written, and where a statement has no SHALL or MUST the profile needs one, a sentence with SHALL is put before it. Each such step is a note on the node in the report, so `oxispec check` and the notes together show what is left to fill in. The command stops before writing if a target file already exists.
 
 ## Checks
 
