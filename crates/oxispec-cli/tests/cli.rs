@@ -2850,23 +2850,30 @@ fn every_command_a_skill_names_exists() {
         let text = fs::read_to_string(&file).unwrap();
         for command in invocations(&text) {
             let words: Vec<&str> = command.split_whitespace().skip(1).collect();
-            let path: Vec<&str> = words
+            let mut path: Vec<&str> = words
                 .iter()
                 .copied()
                 .take_while(|w| {
                     w.starts_with(|c: char| c.is_ascii_lowercase())
                         && w.chars().all(|c| c.is_ascii_lowercase() || c == '-')
                 })
-                .take(2)
+                .take(3)
                 .collect();
             assert!(
                 !path.is_empty(),
                 "{}: `{command}` names no command",
                 file.display()
             );
-            let mut args = path.clone();
-            args.push("--help");
-            let help = run(dir.path(), &args);
+            // The longest run of words that is a command: the rest are arguments.
+            let help = loop {
+                let mut args = path.clone();
+                args.push("--help");
+                let help = run(dir.path(), &args);
+                if help.code == 0 || path.len() == 1 {
+                    break help;
+                }
+                path.pop();
+            };
             assert_eq!(
                 help.code,
                 0,
@@ -6041,4 +6048,123 @@ fn a_release_is_held_until_the_compliance_rules_are_met() {
     let out = run(p, &["release", "check", "0.1.0"]);
     assert!(out.stdout.contains("compliance-met"), "{}", out.stdout);
     assert_ne!(out.code, 0, "{}", out.stdout);
+}
+
+fn openspec_with_a_change(p: &Path) {
+    let write = |rel: &str, text: &str| {
+        let f = p.join(rel);
+        fs::create_dir_all(f.parent().unwrap()).unwrap();
+        fs::write(f, text).unwrap();
+    };
+    write("openspec/specs/auth/spec.md", OPENSPEC_AUTH);
+    write(
+        "openspec/specs/auth/design.md",
+        "# Design\n\nUse sessions.\n",
+    );
+    write(
+        "openspec/changes/add-2fa/proposal.md",
+        "## Why\nPasswords leak.\n\n## What Changes\n- a second step\n\n## Impact\n- auth\n",
+    );
+    write("openspec/changes/add-2fa/tasks.md", "- [ ] build\n");
+    write(
+        "openspec/changes/add-2fa/specs/auth/spec.md",
+        "## MODIFIED Requirements\n### Requirement: Login\nThe system SHALL sign in with a code.\n",
+    );
+}
+
+#[test]
+fn an_import_plan_is_looked_at_changed_and_only_then_applied() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    openspec_with_a_change(p);
+
+    let out = run(p, &["import", "apply"]);
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("import plan"), "{}", out.stderr);
+
+    let out = run(
+        p,
+        &["import", "plan", "start", "--from", "openspec", "--json"],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let v: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+    let kinds: Vec<_> = v["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["kind"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(kinds, ["requirement", "change", "change"]);
+    assert!(p.join(".oxispec/import-plan.json").is_file());
+    assert_ne!(
+        run(p, &["import", "plan", "start", "--from", "openspec"]).code,
+        0,
+        "a plan that exists is not replaced"
+    );
+
+    // The design notes of the spec are better as a decision.
+    let out = run(p, &["import", "plan", "set", "2", "--kind", "adr"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["import", "plan", "show", "2", "--draft"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("type: adr"), "{}", out.stdout);
+    assert!(out.stdout.contains("Use sessions."), "{}", out.stdout);
+    let out = run(p, &["import", "plan", "show", "3", "--draft"]);
+    assert!(out.stdout.contains("- REQ-AUTH-0001"), "{}", out.stdout);
+    assert!(out.stdout.contains("## Tasks"), "{}", out.stdout);
+
+    let out = run(p, &["import", "plan", "set", "3", "--kind", "bogus"]);
+    assert_ne!(out.code, 0);
+    let out = run(p, &["import", "apply", "--dry-run"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("would write"), "{}", out.stdout);
+    assert!(!p.join("specs/requirements/auth/auth.md").exists());
+    assert!(p.join(".oxispec/import-plan.json").is_file());
+
+    let out = run(p, &["import", "apply"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(!p.join(".oxispec/import-plan.json").exists());
+    assert!(p.join("specs/requirements/auth/auth.md").is_file());
+    let change = fs::read_dir(p.join("specs/changes"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let text = fs::read_to_string(change).unwrap();
+    assert!(text.contains("status: draft"), "{text}");
+    assert!(text.contains("## Why\n\nPasswords leak."), "{text}");
+    assert!(p.join("specs/adr").read_dir().unwrap().count() == 1);
+    let check = run(p, &["check"]);
+    assert!(!check.stdout.contains("E002"), "{}", check.stdout);
+}
+
+#[test]
+fn a_skipped_item_is_not_written_and_an_empty_plan_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    openspec_with_a_change(p);
+    assert_eq!(
+        run(p, &["import", "plan", "start", "--from", "openspec"]).code,
+        0
+    );
+    for n in ["1", "2", "3"] {
+        assert_eq!(
+            run(p, &["import", "plan", "set", n, "--kind", "skip"]).code,
+            0
+        );
+    }
+    let out = run(p, &["import", "apply", "--dry-run"]);
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("nothing to write"), "{}", out.stderr);
+    assert_eq!(
+        run(p, &["import", "plan", "set", "1", "--kind", "requirement"]).code,
+        0
+    );
+    let out = run(p, &["import", "apply"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("skipped item 2"), "{}", out.stdout);
+    assert!(!p.join("specs/changes").read_dir().unwrap().any(|_| true));
 }

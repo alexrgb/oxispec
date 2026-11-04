@@ -13,7 +13,7 @@ use serde_json::json;
 use crate::{load_graph, require_module, write_new};
 
 /// The profile of the ADR format with this name, or the one the config chooses.
-fn adr_profile(cfg: &Config, name: Option<&str>) -> Result<Profile> {
+pub(crate) fn adr_profile(cfg: &Config, name: Option<&str>) -> Result<Profile> {
     let (profiles, _) = formats::available(cfg);
     let name = name
         .or_else(|| cfg.formats.get("adr").map(String::as_str))

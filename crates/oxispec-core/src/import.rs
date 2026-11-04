@@ -126,7 +126,7 @@ fn push_input(found: &mut Found, name: String, path: &Path) -> io::Result<()> {
     if is_node(&text) {
         found.unmapped.push(Unmapped {
             path: path.to_path_buf(),
-            reason: "already an OxiSpec node".into(),
+            reason: ALREADY_NODE.into(),
         });
     } else {
         found.inputs.push(Input {
@@ -217,10 +217,10 @@ pub fn find(dir: &Path, source: Source) -> io::Result<Found> {
     Ok(found)
 }
 
-struct Section {
-    level: usize,
-    title: String,
-    body: Vec<String>,
+pub(crate) struct Section {
+    pub(crate) level: usize,
+    pub(crate) title: String,
+    pub(crate) body: Vec<String>,
 }
 
 fn heading(line: &str) -> Option<(usize, &str)> {
@@ -235,7 +235,7 @@ fn heading(line: &str) -> Option<(usize, &str)> {
 
 /// The lines before the first heading, and the sections. Headings in code
 /// fences are text.
-fn sections(text: &str) -> (Vec<String>, Vec<Section>) {
+pub(crate) fn sections(text: &str) -> (Vec<String>, Vec<Section>) {
     let mut preamble = Vec::new();
     let mut out: Vec<Section> = Vec::new();
     let mut fenced = false;
@@ -258,7 +258,7 @@ fn sections(text: &str) -> (Vec<String>, Vec<Section>) {
     (preamble, out)
 }
 
-fn text_of(lines: &[String]) -> String {
+pub(crate) fn text_of(lines: &[String]) -> String {
     lines.join("\n").trim().to_string()
 }
 
@@ -607,6 +607,24 @@ pub fn draft(input: &Input, source: Source, normative: bool) -> Draft {
         notes,
     }
 }
+
+/// The domain of the IDs for a spec of this name.
+pub fn domain_of(name: &str) -> String {
+    let name = name.trim_start_matches(|c: char| !c.is_ascii_alphabetic());
+    let domain: String = name
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_uppercase())
+        .collect();
+    if domain.is_empty() {
+        "IMPORTED".into()
+    } else {
+        domain
+    }
+}
+
+/// Why a file is not imported when it already is an OxiSpec node.
+pub const ALREADY_NODE: &str = "already an OxiSpec node";
 
 impl Draft {
     /// Letters and digits of the name, in capitals, without a leading number:

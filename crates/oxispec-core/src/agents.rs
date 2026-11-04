@@ -130,6 +130,12 @@ pub const SKILLS: &[Skill] = &[
         body: include_str!("../skills/manage-debt.md"),
     },
     Skill {
+        name: "oxispec-import-specs",
+        description: "Import the specs, open changes and design notes of OpenSpec, Spec Kit, Kiro or plain markdown, deciding with the person what each file becomes, showing drafts and a dry run before writing. Use when asked to move a project to OxiSpec.",
+        requires: &["specs"],
+        body: include_str!("../skills/import-specs.md"),
+    },
+    Skill {
         name: "oxispec-review-change",
         description: "Review a branch or pull request that changes specs or traced code: new findings, graph differences, affected nodes, suspect links. Use when asked to review a change.",
         requires: &["core"],
