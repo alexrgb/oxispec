@@ -54,6 +54,9 @@ pub struct Scenario {
     /// Raw text of a trailing `{#anchor}` on the heading. The checks validate it.
     pub anchor: Option<String>,
     pub line: usize,
+    /// The step keywords in the order written (`given`, `when`, `then`, `and`, `but`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub steps: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +65,9 @@ pub struct RequirementBlock {
     pub line: usize,
     /// The description contains SHALL or MUST.
     pub has_normative: bool,
+    /// The description, on one line. The style checks read it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub statement: String,
     pub scenarios: Vec<Scenario>,
 }
 

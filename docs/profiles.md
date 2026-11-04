@@ -87,6 +87,46 @@ When the chosen profile of a type has the status `superseded`, `check` holds its
 
 "In force" means the successor is not `proposed` or `rejected`: a successor that has not been accepted yet has not replaced anything. A decision that is `deprecated` is left alone. These are warnings, and `--strict` makes them fail. A project whose profile has no `superseded` status sees neither.
 
+## Requirement styles
+
+A requirement profile can word a requirement in a style. The graph does not change with it: a requirement is still a `### Requirement:` block with scenarios, so links and coverage work the same. The style adds a check on the wording. Choose it with `formats:` in the config, as for any profile, and `oxispec new requirement auth "Login" --format ears` writes a requirement in it.
+
+| Profile | What `check` asks for |
+|---|---|
+| `shall` | The default and today's form: SHALL or MUST in the description (E007), and at least one scenario (E006). |
+| `ears` | The description is one of the six EARS patterns (E033). `shall` is read in any case, so E007, which wants capitals, is not raised. |
+| `gherkin` | Every scenario has a WHEN and a THEN step, and may have GIVEN, AND and BUT (E034). E006 and E007 still apply. |
+| `user-story` | The description is `As a <role>, I want <goal>, so that <benefit>` (E033). It needs no SHALL, so E007 is not raised. The scenarios are its acceptance criteria, and E006 still asks for one. |
+
+The EARS patterns, with `shall` or `must`, in any case:
+
+| Pattern | Form |
+|---|---|
+| Ubiquitous | The system shall log every login. |
+| State-driven | While the door is open, the alarm shall stay silent. |
+| Event-driven | When the user presses stop, the player shall pause. |
+| Optional feature | Where a camera is fitted, the app shall offer a scan. |
+| Unwanted behaviour | If the card is declined, then the shop shall ask for another. (`then` may be left out.) |
+| Complex | While in standby, when the lid opens, the laptop shall wake. |
+
+A clause that starts with `while`, `when`, `if` or `where` ends with a comma, then comes the system, then `shall`. The message of E033 says which part is missing.
+
+A step is a line that starts with GIVEN, WHEN, THEN, AND or BUT, with or without a list marker or bold: `- **WHEN** stop is pressed`, `Given a track plays`. A scenario can also be written in a fenced block tagged `gherkin`, under its requirement. Its `Scenario:`, `Scenario Outline:` and `Example:` lines are scenarios for coverage, and a trailing `{#S1}` is the anchor that tests link to:
+
+````markdown
+### Requirement: Login
+The system SHALL sign a user in.
+
+```gherkin
+Scenario: Right password {#S1}
+  Given an account
+  When the password is right
+  Then the user is signed in
+```
+````
+
+A custom profile for requirements can take `style: ears` (or `gherkin`, `user-story`) next to its own sections and fields. A style on any other type is E031.
+
 ## Converting between formats
 
 `oxispec adr convert --to madr` rewrites every ADR in the project in another format. Name decisions to convert only those: `oxispec adr convert ADR-0001 --to nygard`. `--dry-run` shows what would change and writes nothing. Running it again changes nothing.
@@ -132,5 +172,6 @@ A node made by `new` from a profile with required fields starts with those field
 
 - Profiles are read from the config of the working tree. `--at REVISION` and `history` read old revisions with no profiles, so they report no E028 to E030.
 - Converting and importing work on ADRs. Other types come later (iteration 29).
-- `new` writes templates for ADRs. Requirement templates come with the requirement styles in iteration 28.
+- `new` writes templates for ADRs and requirements. Other types have none.
+- A style checks one requirement at a time. It does not judge whether the requirement is a good one.
 - A running `oxispec mcp` or `oxispec serve` notices a change to the config within a moment, like any other edit.

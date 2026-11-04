@@ -22,6 +22,7 @@ use crate::config::{self, CONFIG_PATH, Config};
 use crate::finding::Finding;
 use crate::graph::Graph;
 use crate::node::Node;
+use crate::styles::Style;
 
 /// The front matter fields a profile can require.
 pub const FIELDS: &[&str] = &[
@@ -57,6 +58,9 @@ pub struct Profile {
     pub fields: Vec<String>,
     /// Fields the template includes but `check` does not require.
     pub optional_fields: Vec<String>,
+    /// How a requirement is worded, for requirement profiles.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<Style>,
     /// The statuses a node may have. Empty: any.
     pub statuses: Vec<String>,
 }
@@ -81,6 +85,9 @@ pub struct CustomProfile {
     pub optional_fields: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub statuses: Vec<String>,
+    /// For a requirement profile: `ears`, `gherkin` or `user-story`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub style: Option<String>,
 }
 
 fn sections(required: &[&str], optional: &[&str]) -> Vec<Section> {
@@ -134,6 +141,18 @@ pub fn builtin() -> Vec<Profile> {
         sections: Vec::new(),
         fields: Vec::new(),
         optional_fields: Vec::new(),
+        style: None,
+        statuses: Vec::new(),
+    };
+    let requirement = |name: &str, description: &str, style: Option<Style>| Profile {
+        name: name.into(),
+        ty: "requirement".into(),
+        description: description.into(),
+        builtin: true,
+        sections: Vec::new(),
+        fields: Vec::new(),
+        optional_fields: Vec::new(),
+        style,
         statuses: Vec::new(),
     };
     vec![
@@ -144,17 +163,26 @@ pub fn builtin() -> Vec<Profile> {
                 "Context, Decision and Consequences, with nothing required",
             )
         },
-        Profile {
-            name: "shall".into(),
-            ty: "requirement".into(),
-            description: "A requirement with SHALL or MUST and scenarios (checks E006 to E008)"
-                .into(),
-            builtin: true,
-            sections: Vec::new(),
-            fields: Vec::new(),
-            optional_fields: Vec::new(),
-            statuses: Vec::new(),
-        },
+        requirement(
+            "shall",
+            "A requirement with SHALL or MUST and scenarios (checks E006 to E008)",
+            None,
+        ),
+        requirement(
+            "ears",
+            "A requirement in one of the EARS patterns: ubiquitous, state-driven, event-driven, optional feature, unwanted behaviour or complex",
+            Some(Style::Ears),
+        ),
+        requirement(
+            "gherkin",
+            "A requirement whose scenarios are Gherkin: a WHEN and a THEN step, with GIVEN, AND and BUT",
+            Some(Style::Gherkin),
+        ),
+        requirement(
+            "user-story",
+            "A user story, As a <role> I want <goal> so that <benefit>, with the scenarios as acceptance criteria",
+            Some(Style::UserStory),
+        ),
         Profile {
             sections: vec![
                 section(
@@ -264,6 +292,7 @@ pub fn available(config: &Config) -> (Vec<Profile>, Vec<Finding>) {
             sections: sections(&required, &optional),
             fields: custom.fields.clone(),
             optional_fields: custom.optional_fields.clone(),
+            style: custom.style.as_deref().and_then(Style::parse),
             statuses: custom.statuses.clone(),
         });
     }
@@ -304,6 +333,17 @@ fn invalid(name: &str, custom: &CustomProfile, taken: &[Profile]) -> Option<Stri
             "requires the field `{field}`; the fields are {}",
             FIELDS.join(", ")
         ));
+    }
+    if let Some(style) = &custom.style {
+        if custom.ty != "requirement" {
+            return Some("has a `style`, which only requirement profiles have".into());
+        }
+        if Style::parse(style).is_none() {
+            return Some(format!(
+                "has the style `{style}`; the styles are {}",
+                Style::NAMES.join(", ")
+            ));
+        }
     }
     if custom.statuses.iter().any(|s| s.trim().is_empty()) {
         return Some("has an empty status".into());
@@ -367,6 +407,9 @@ impl Formats {
 impl Profile {
     /// The text of a new node, with `@ID@`, `@TITLE@` and `@DATE@` still to fill in.
     pub fn template(&self) -> String {
+        if self.ty == "requirement" {
+            return self.requirement_template();
+        }
         let status = self
             .statuses
             .first()
@@ -389,6 +432,78 @@ impl Profile {
             }
         }
         text.push_str("---\n# @ID@: @TITLE@\n");
+        for section in &self.sections {
+            let marks = "#".repeat(usize::from(section.level));
+            text.push_str(&format!("\n{marks} {}\n", section.name));
+            if !section.hint.is_empty() {
+                text.push_str(&format!("\n{}\n", section.hint));
+            }
+        }
+        text
+    }
+}
+
+/// What the requirement templates of each style say.
+const SHALL_BODY: &str = "### Requirement: @TITLE@
+The system SHALL <describe the behavior>.
+
+#### Scenario: <name> {#S1}
+- **WHEN** <condition>
+- **THEN** <outcome>
+";
+
+const EARS_BODY: &str = "### Requirement: @TITLE@
+When <trigger>, the <system> shall <response>.
+
+#### Scenario: <name> {#S1}
+- **WHEN** <trigger>
+- **THEN** <response>
+";
+
+const GHERKIN_BODY: &str = "### Requirement: @TITLE@
+The system SHALL <describe the behavior>.
+
+#### Scenario: <name> {#S1}
+- **GIVEN** <context>
+- **WHEN** <action>
+- **THEN** <outcome>
+";
+
+const USER_STORY_BODY: &str = "### Requirement: @TITLE@
+As a <role>, I want <goal>, so that <benefit>.
+
+#### Scenario: <acceptance criterion> {#S1}
+- **GIVEN** <context>
+- **WHEN** <action>
+- **THEN** <outcome>
+";
+
+impl Profile {
+    /// The text of a new requirement: front matter, the requirement in the
+    /// style, and the profile's own sections after it.
+    fn requirement_template(&self) -> String {
+        let mut text = String::from("---\nid: @ID@\ntype: requirement\nstatus: ");
+        text.push_str(self.statuses.first().map_or("draft", String::as_str));
+        text.push('\n');
+        for field in self
+            .fields
+            .iter()
+            .chain(&self.optional_fields)
+            .filter(|f| f.as_str() != "status")
+        {
+            if field == "date" {
+                text.push_str("date: @DATE@\n");
+            } else {
+                text.push_str(&format!("{field}: \n"));
+            }
+        }
+        text.push_str("---\n");
+        text.push_str(match self.style {
+            None => SHALL_BODY,
+            Some(Style::Ears) => EARS_BODY,
+            Some(Style::Gherkin) => GHERKIN_BODY,
+            Some(Style::UserStory) => USER_STORY_BODY,
+        });
         for section in &self.sections {
             let marks = "#".repeat(usize::from(section.level));
             text.push_str(&format!("\n{marks} {}\n", section.name));
@@ -428,6 +543,9 @@ pub fn check(graph: &Graph) -> Vec<Finding> {
             continue;
         };
         let at = |f: Finding| f.at(&node.path, Some(1)).node(&node.id);
+        if let Some(style) = profile.style {
+            out.extend(crate::styles::check(node, style));
+        }
         for section in profile.sections.iter().filter(|s| s.required) {
             if !node
                 .headings
@@ -526,6 +644,71 @@ fn superseded(graph: &Graph, out: &mut Vec<Finding>) {
 #[cfg(test)]
 mod tests_of_formats {
     use super::*;
+
+    #[test]
+    fn the_requirement_profiles_have_a_style_and_a_template_that_passes_its_own_check() {
+        let all = builtin();
+        for (name, style) in [
+            ("shall", None),
+            ("ears", Some(Style::Ears)),
+            ("gherkin", Some(Style::Gherkin)),
+            ("user-story", Some(Style::UserStory)),
+        ] {
+            let p = all.iter().find(|p| p.name == name).unwrap();
+            assert_eq!(p.style, style, "{name}");
+            let text = p
+                .template()
+                .replace("@ID@", "REQ-A-0001")
+                .replace("@TITLE@", "Thing");
+            let (node, _) = crate::parse::parse_file_text(Path::new("r.md"), &text);
+            let node = node.unwrap();
+            if let Some(style) = p.style {
+                assert!(crate::styles::check(&node, style).is_empty(), "{name}");
+            }
+            assert_eq!(node.requirements.len(), 1, "{name}");
+            assert_eq!(node.requirements[0].scenarios.len(), 1, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_custom_requirement_profile_can_name_a_style_and_nothing_else_can() {
+        let mut config = Config::new(vec!["core".into()], config::IdScheme::Sequential);
+        config.profiles.insert(
+            "strict".into(),
+            CustomProfile {
+                ty: "requirement".into(),
+                style: Some("ears".into()),
+                sections: vec!["Rationale".into()],
+                ..CustomProfile::default()
+            },
+        );
+        config.profiles.insert(
+            "odd".into(),
+            CustomProfile {
+                ty: "requirement".into(),
+                style: Some("haiku".into()),
+                ..CustomProfile::default()
+            },
+        );
+        config.profiles.insert(
+            "wrong".into(),
+            CustomProfile {
+                ty: "adr".into(),
+                style: Some("ears".into()),
+                ..CustomProfile::default()
+            },
+        );
+        let (profiles, problems) = available(&config);
+        let strict = profiles.iter().find(|p| p.name == "strict").unwrap();
+        assert_eq!(strict.style, Some(Style::Ears));
+        assert!(strict.template().contains("## Rationale"));
+        assert!(
+            !profiles
+                .iter()
+                .any(|p| p.name == "odd" || p.name == "wrong")
+        );
+        assert_eq!(problems.len(), 2);
+    }
     use crate::config::IdScheme;
     use std::path::PathBuf;
 

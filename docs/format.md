@@ -270,6 +270,8 @@ Codes are stable. A code is never reused.
 | E030 | error | A status is missing or not one that the node's format profile allows |
 | E031 | error | The config names a format profile that does not exist or is not valid |
 | E032 | error | A debt item has a status, severity or date that is not valid (see [debt.md](debt.md)) |
+| E033 | error | A requirement is not worded the way its style asks, EARS or user story (see [profiles.md](profiles.md#requirement-styles)) |
+| E034 | error | A scenario does not have the steps its style asks, a WHEN and a THEN for Gherkin |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |
