@@ -82,6 +82,12 @@ pub const MODULES: &[ModuleInfo] = &[
         implemented: true,
     },
     ModuleInfo {
+        name: "debt",
+        description: "Tech debt backlog with owners, due dates and release limits",
+        needs: &["core"],
+        implemented: true,
+    },
+    ModuleInfo {
         name: "ci",
         description: "`oxispec ci`: graph diff, impact analysis, reports",
         needs: &["core"],
@@ -135,6 +141,7 @@ pub fn preset(name: &str) -> Option<Vec<&'static str>> {
             "architecture",
             "consistency",
             "statemachines",
+            "debt",
             "ci",
             "agents",
             "mcp",

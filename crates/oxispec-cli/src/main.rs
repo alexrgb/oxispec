@@ -24,6 +24,7 @@ mod ci;
 mod claims;
 mod connect;
 mod context;
+mod debt;
 mod formats;
 mod git;
 mod history;
@@ -218,6 +219,23 @@ enum Command {
         /// Where to append one JSON line per request. Default: .oxispec/server/audit.jsonl
         #[arg(long, value_name = "FILE")]
         audit_log: Option<PathBuf>,
+    },
+    /// The tech debt backlog, the most serious and the oldest first
+    #[command(args_conflicts_with_subcommands = true)]
+    Debt {
+        #[command(subcommand)]
+        action: Option<DebtAction>,
+        /// Only items with this status: open, planned, in-progress, resolved or accepted
+        #[arg(long)]
+        status: Option<String>,
+        /// Only items with this severity: low, medium, high or critical
+        #[arg(long)]
+        severity: Option<String>,
+        /// Include items that are resolved or accepted
+        #[arg(long)]
+        all: bool,
+        #[arg(long)]
+        json: bool,
     },
     /// Decision records: convert them between formats
     Adr {
@@ -446,6 +464,12 @@ enum Command {
 }
 
 #[derive(Subcommand)]
+enum DebtAction {
+    /// Move an item to a status, and record today as the day it was reviewed
+    Status { id: String, status: String },
+}
+
+#[derive(Subcommand)]
 enum AdrAction {
     /// Rewrite decisions in another format. The front matter stays; sections that mean the
     /// same are matched, the others are kept as they are. Example: adr convert --to madr ADR-0001
@@ -567,6 +591,16 @@ enum NewKind {
         /// The format profile to write it in. Default: the one the config chooses for ADRs
         #[arg(long)]
         format: Option<String>,
+    },
+    /// A tech debt item, for example: new debt "Retry loop has no backoff" --from REQ-API-0003
+    Debt {
+        title: String,
+        /// low, medium, high or critical
+        #[arg(long, default_value = "medium")]
+        severity: String,
+        /// The node it arises from; becomes an `arises-from` link
+        #[arg(long)]
+        from: Option<String>,
     },
     /// A change set: a proposed change to the specs, with a lifecycle
     Change { title: String },
@@ -809,6 +843,30 @@ fn run(cli: Cli) -> Result<ExitCode> {
             )?;
             Ok(ExitCode::SUCCESS)
         }
+        Command::Debt {
+            action,
+            status,
+            severity,
+            all,
+            json,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            match action {
+                Some(DebtAction::Status { id, status }) => {
+                    let _lock = lock_project(&root)?;
+                    debt::set_status(&root, &id, &status, cache)?
+                }
+                None => debt::list(
+                    &root,
+                    status.as_deref(),
+                    severity.as_deref(),
+                    all,
+                    json,
+                    cache,
+                )?,
+            }
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Adr { action } => {
             let root = project_root(cli.root.as_deref())?;
             match action {
@@ -933,6 +991,14 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 NewKind::Adr { title, format } => {
                     require_module(&cfg, "adrs")?;
                     new_adr(&root, &cfg, &title, format.as_deref(), scheme, cache)?
+                }
+                NewKind::Debt {
+                    title,
+                    severity,
+                    from,
+                } => {
+                    require_module(&cfg, "debt")?;
+                    new_debt(&root, &title, &severity, from.as_deref(), scheme, cache)?
                 }
                 NewKind::Change { title } => {
                     require_module(&cfg, "specs")?;
@@ -1244,6 +1310,9 @@ fn ensure_module_dirs(root: &Path, cfg: &Config) -> Result<()> {
     }
     if cfg.has("statemachines") {
         fs::create_dir_all(root.join("specs/machines"))?;
+    }
+    if cfg.has("debt") {
+        fs::create_dir_all(root.join("specs/debt"))?;
     }
     Ok(())
 }
@@ -1839,6 +1908,41 @@ fn new_adr(
         .replace("@ID@", &id)
         .replace("@TITLE@", title)
         .replace("@DATE@", &today);
+    write_new(root, &rel, &body)?;
+    Ok((id, rel))
+}
+
+fn new_debt(
+    root: &Path,
+    title: &str,
+    severity: &str,
+    from: Option<&str>,
+    scheme: IdScheme,
+    cache: bool,
+) -> Result<(String, PathBuf)> {
+    if !oxispec_core::debt::SEVERITIES.contains(&severity) {
+        bail!(
+            "severity `{severity}` is not one of {}",
+            oxispec_core::debt::SEVERITIES.join(", ")
+        );
+    }
+    let graph = load_graph(root, cache);
+    if let Some(from) = from
+        && graph.get(from).is_none()
+    {
+        bail!("no node {from} to link `arises-from` to");
+    }
+    let id = allocate_id(&graph, "DEBT-", scheme)?;
+    let suffix = id.strip_prefix("DEBT-").unwrap_or(&id);
+    let rel = PathBuf::from("specs/debt").join(format!("{suffix}-{}.md", slug(title)?));
+    let today = oxispec_core::debt::today();
+    let links = from.map_or(String::new(), |f| format!("links:\n  arises-from: {f}\n"));
+    let body = debt::TEMPLATE
+        .replace("@ID@", &id)
+        .replace("@TITLE@", title)
+        .replace("@SEVERITY@", severity)
+        .replace("@DATE@", &today)
+        .replace("@LINKS@", &links);
     write_new(root, &rel, &body)?;
     Ok((id, rel))
 }

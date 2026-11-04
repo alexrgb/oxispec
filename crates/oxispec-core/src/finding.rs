@@ -137,6 +137,10 @@ pub const CODES: &[(&str, &str)] = &[
         "E031",
         "The config names a format profile that does not exist or is not valid",
     ),
+    (
+        "E032",
+        "A debt item has a status, severity or date that is not valid",
+    ),
     ("W001", "Unknown node type"),
     (
         "W002",
@@ -164,6 +168,13 @@ pub const CODES: &[(&str, &str)] = &[
         "W012",
         "A decision is superseded by another, but its status still says it is in force",
     ),
+    ("W013", "A debt item that is still to be paid has no owner"),
+    ("W014", "A debt item is past its due date"),
+    (
+        "W015",
+        "A debt item has not been reviewed for longer than the project allows",
+    ),
+    ("W016", "A debt item does not say what it arises from"),
     ("I001", "A link to another project is not checked"),
     (
         "I002",

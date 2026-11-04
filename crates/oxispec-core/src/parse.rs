@@ -308,6 +308,10 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
             .decision_makers
             .map(OneOrMany::into_vec)
             .unwrap_or_default(),
+        severity: fm.severity,
+        due: fm.due,
+        cost: fm.cost,
+        interest: fm.interest,
         title,
         path: path.to_path_buf(),
         links: fm

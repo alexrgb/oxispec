@@ -24,6 +24,8 @@ pub struct Graph {
     /// The format profiles of the project, which the checks use. A graph built
     /// from files that are not a project on disk has none.
     pub(crate) formats: Arc<crate::formats::Formats>,
+    /// How the project judges tech debt.
+    pub(crate) debt: Arc<crate::config::DebtConfig>,
 }
 
 #[derive(Debug, Default)]
@@ -68,7 +70,19 @@ impl Graph {
             checked: Arc::default(),
             analyses: Arc::default(),
             formats: Arc::default(),
+            debt: Arc::default(),
         }
+    }
+
+    /// The project's rules for tech debt.
+    pub fn debt_config(&self) -> &crate::config::DebtConfig {
+        &self.debt
+    }
+
+    /// The same graph, with the project's rules for tech debt.
+    pub fn with_debt(mut self, debt: crate::config::DebtConfig) -> Graph {
+        self.debt = Arc::new(debt);
+        self
     }
 
     /// The same graph, checked against these format profiles.

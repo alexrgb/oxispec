@@ -15,6 +15,7 @@ Skills tell an AI coding agent how to work with the specs: how to look things up
 | `oxispec-verify` | specs | `check`, `coverage`, test results and suspect links, in order |
 | `oxispec-sync-code` | tests | Deciding which side is right for a suspect link, then confirming |
 | `oxispec-write-adr` | adrs | A decision record with the options that were rejected |
+| `oxispec-manage-debt` | debt | Recording a shortcut as a debt item, keeping the backlog honest and paying items off |
 | `oxispec-review-change` | core | Reviewing a branch with `ci`, `diff` and `suspect` |
 | `oxispec-rollback` | core | Restoring nodes with `--dry-run` first |
 | `oxispec-release` | releases | Preparing, checking and publishing a spec release |

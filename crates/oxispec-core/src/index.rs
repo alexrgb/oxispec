@@ -29,7 +29,7 @@ use crate::parse::parse_file_text;
 pub const CACHE_DIR: &str = ".oxispec/cache";
 const CACHE_FILE: &str = "index.json";
 /// Bump when the layout of the cache file changes.
-const CACHE_VERSION: u32 = 9;
+const CACHE_VERSION: u32 = 10;
 /// A different engine version may parse differently, so it never reuses a cache.
 const ENGINE: &str = env!("CARGO_PKG_VERSION");
 /// Files modified within this window before the cache was written are not trusted by size and time.
@@ -401,7 +401,13 @@ pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
         return (memo.graph.clone(), stats);
     }
     let (graph, stats) = load_files(root, use_cache, found);
-    let graph = graph.with_formats(crate::formats::Formats::load(root));
+    let graph = graph
+        .with_formats(crate::formats::Formats::load(root))
+        .with_debt(
+            crate::config::load(root)
+                .map(|c| c.debt)
+                .unwrap_or_default(),
+        );
     if let Some(print) = print
         && let Ok(mut guard) = MEMO.lock()
     {
