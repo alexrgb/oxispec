@@ -5455,3 +5455,198 @@ fn import_adr_reads_madr_and_log4brains_and_new_link_kinds_are_known() {
         out.stderr
     );
 }
+
+#[test]
+fn debt_is_created_listed_by_severity_and_moved_along() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    assert_eq!(run(p, &["new", "requirement", "api", "Retries"]).code, 0);
+
+    let out = run(
+        p,
+        &[
+            "new",
+            "debt",
+            "No backoff",
+            "--severity",
+            "high",
+            "--from",
+            "REQ-API-0001",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("DEBT-0001"), "{}", out.stdout);
+    assert_eq!(
+        run(p, &["new", "debt", "Old script", "--severity", "low"]).code,
+        0
+    );
+    let text = fs::read_to_string(p.join("specs/debt/0001-no-backoff.md")).unwrap();
+    assert!(text.contains("severity: high") && text.contains("arises-from: REQ-API-0001"));
+
+    // A new item has no owner, so check says so; the one without a source says that too.
+    let out = run(p, &["check", "--json"]);
+    assert!(out.stdout.contains("W013"), "{}", out.stdout);
+    assert!(out.stdout.contains("W016"), "{}", out.stdout);
+
+    let out = run(p, &["debt"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let high = out.stdout.find("DEBT-0001").unwrap();
+    let low = out.stdout.find("DEBT-0002").unwrap();
+    assert!(
+        high < low,
+        "the more serious item comes first:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("2 still to be paid: 1 high, 1 low"),
+        "{}",
+        out.stdout
+    );
+
+    let out = run(p, &["debt", "status", "DEBT-0001", "resolved"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let text = fs::read_to_string(p.join("specs/debt/0001-no-backoff.md")).unwrap();
+    assert!(text.contains("status: resolved"));
+    assert!(!text.contains("date: 20") || text.contains(&format!("date: {}", today_utc())));
+    let out = run(p, &["debt"]);
+    assert!(
+        !out.stdout.contains("DEBT-0001"),
+        "resolved items are left out"
+    );
+    let out = run(p, &["debt", "--all", "--json"]);
+    assert!(out.stdout.contains("DEBT-0001") && out.stdout.contains("\"live\": false"));
+    let out = run(p, &["debt", "--status", "resolved"]);
+    assert!(out.stdout.contains("DEBT-0001"), "{}", out.stdout);
+}
+
+fn today_utc() -> String {
+    let out = Command::new("date")
+        .args(["-u", "+%Y-%m-%d"])
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+#[test]
+fn debt_that_is_late_is_reported_and_bad_input_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    fs::write(
+        p.join("specs/debt/0001-late.md"),
+        "---\nid: DEBT-0001\ntype: debt\nstatus: open\nseverity: critical\nowner: ann\ndate: 2000-01-01\ndue: 2000-06-01\nlinks:\n  arises-from: ADR-0001\n---\n# DEBT-0001: Late\n",
+    )
+    .unwrap();
+    let out = run(p, &["debt"]);
+    assert!(
+        out.stdout.contains("[overdue]") && out.stdout.contains("[stale]"),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["check", "--json"]);
+    assert!(
+        out.stdout.contains("W014") && out.stdout.contains("W015"),
+        "{}",
+        out.stdout
+    );
+
+    for args in [
+        vec!["new", "debt", "X", "--severity", "huge"],
+        vec!["new", "debt", "X", "--from", "REQ-NOPE-0001"],
+        vec!["debt", "--status", "later"],
+        vec!["debt", "status", "DEBT-0001", "later"],
+        vec!["debt", "status", "DEBT-0009", "open"],
+    ] {
+        let out = run(p, &args);
+        assert_eq!(out.code, 2, "{args:?}: {}{}", out.stdout, out.stderr);
+    }
+}
+
+#[test]
+fn a_release_can_be_held_to_a_limit_on_debt() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);
+    assert_eq!(
+        run(p, &["new", "debt", "Hack", "--severity", "critical"]).code,
+        0
+    );
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(
+        &config,
+        format!("{text}debt:\n  limits:\n    critical: 0\n"),
+    )
+    .unwrap();
+    commit_all(p, "debt");
+
+    let out = run(p, &["debt"]);
+    assert!(
+        out.stdout.contains("over the limit: 1 critical"),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["debt", "--json"]);
+    assert!(out.stdout.contains("\"over_limits\""), "{}", out.stdout);
+    assert!(out.stdout.contains("critical"), "{}", out.stdout);
+
+    // The release gate sees it too.
+    let out = run(p, &["release", "prepare", "0.1.0"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["release", "check", "0.1.0"]);
+    assert!(out.stdout.contains("debt-within-limits"), "{}", out.stdout);
+    assert_ne!(out.code, 0, "{}", out.stdout);
+
+    assert_eq!(run(p, &["debt", "status", "DEBT-0001", "accepted"]).code, 0);
+    let out = run(p, &["release", "check", "0.1.0"]);
+    assert!(out.stdout.contains("debt-within-limits"), "{}", out.stdout);
+    assert!(
+        !out.stdout.contains("1 critical debt items"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn debt_needs_its_module_and_an_mcp_client_can_read_the_backlog() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(
+        run(p, &["init", "--preset", "minimal", "--with", "mcp"]).code,
+        0
+    );
+    let out = run(p, &["debt"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("module `debt`"), "{}", out.stderr);
+    let names = debt_tool_names(p);
+    assert!(!names.contains(&"spec_debt".to_string()));
+
+    assert_eq!(run(p, &["modules", "add", "debt"]).code, 0);
+    assert_eq!(
+        run(p, &["new", "debt", "Hack", "--severity", "high"]).code,
+        0
+    );
+    assert!(debt_tool_names(p).contains(&"spec_debt".to_string()));
+    let (is_error, text) = call_tool(p, "spec_debt", serde_json::json!({"severity": "high"}));
+    assert!(!is_error, "{text}");
+    assert!(text.contains("DEBT-0001"), "{text}");
+    let (is_error, _) = call_tool(p, "spec_debt", serde_json::json!({"severity": "Huge!"}));
+    assert!(is_error);
+}
+
+fn debt_tool_names(p: &Path) -> Vec<String> {
+    tool_names(&mcp(
+        p,
+        &[],
+        &[
+            rpc(
+                1,
+                "initialize",
+                serde_json::json!({"protocolVersion": "2025-06-18"}),
+            ),
+            rpc(2, "tools/list", serde_json::json!({})),
+        ],
+    ))
+}

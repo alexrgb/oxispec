@@ -10,6 +10,7 @@ pub mod claims;
 pub mod config;
 pub mod connect;
 pub mod context;
+pub mod debt;
 pub mod diff;
 pub mod edit;
 pub mod finding;

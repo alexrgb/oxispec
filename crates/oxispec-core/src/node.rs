@@ -21,6 +21,13 @@ pub struct Frontmatter {
     pub date: Option<String>,
     #[serde(rename = "decision-makers")]
     pub decision_makers: Option<OneOrMany>,
+    /// How serious a debt item is.
+    pub severity: Option<String>,
+    /// When a debt item is due (`YYYY-MM-DD`).
+    pub due: Option<String>,
+    /// What it takes to pay a debt item off, and what it costs while it stays.
+    pub cost: Option<String>,
+    pub interest: Option<String>,
     #[serde(default)]
     pub links: BTreeMap<String, OneOrMany>,
 }
@@ -98,6 +105,15 @@ pub struct Node {
     /// Who made a decision, as written in its frontmatter.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub decision_makers: Vec<String>,
+    /// For a debt item: how serious it is, when it is due, and what it costs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub severity: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interest: Option<String>,
     /// The first `# ` heading, without a leading `ID: `.
     pub title: Option<String>,
     /// Path relative to the project root.
@@ -155,6 +171,7 @@ pub const KNOWN_TYPES: &[&str] = &[
     "deployment-environment",
     "release",
     "vocabulary",
+    "debt",
 ];
 
 /// Link kinds known to this version (design section 4). Others get a
@@ -175,4 +192,5 @@ pub const KNOWN_LINK_KINDS: &[&str] = &[
     "depends-on",
     "changes",
     "includes",
+    "arises-from",
 ];

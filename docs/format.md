@@ -91,6 +91,7 @@ oxispec link REQ-AUTH-0001 decided-by ADR-0001
 | `depends-on` | This node needs that one |
 | `changes` | This change set modifies that node |
 | `includes` | This release includes that change set |
+| `arises-from` | This debt item is a compromise of that requirement, decision or component |
 | `amends` | This decision changes part of that one, which stays in force |
 | `clarifies` | This decision explains that one without changing it |
 
@@ -268,6 +269,7 @@ Codes are stable. A code is never reused.
 | E029 | error | A front matter field that the node's format profile requires is missing |
 | E030 | error | A status is missing or not one that the node's format profile allows |
 | E031 | error | The config names a format profile that does not exist or is not valid |
+| E032 | error | A debt item has a status, severity or date that is not valid (see [debt.md](debt.md)) |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |
@@ -280,6 +282,10 @@ Codes are stable. A code is never reused.
 | W010 | warning | A container runs in no deployment environment |
 | W011 | warning | A decision is marked superseded, but no decision in force links `supersedes` to it (see [profiles.md](profiles.md)) |
 | W012 | warning | A decision is superseded by another, but its status is still proposed or accepted |
+| W013 | warning | A debt item that is still to be paid has no owner |
+| W014 | warning | A debt item is past its due date |
+| W015 | warning | A debt item has not been reviewed for longer than `debt.stale_days` |
+| W016 | warning | A debt item has no `arises-from` link |
 | I001 | info | A link to another project is not checked. Shown with `--verbose`. |
 | I002 | info | A claim says nothing that another claim does not already say. Shown with `--verbose`. |
 

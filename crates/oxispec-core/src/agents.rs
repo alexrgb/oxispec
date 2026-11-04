@@ -124,6 +124,12 @@ pub const SKILLS: &[Skill] = &[
         body: include_str!("../skills/write-adr.md"),
     },
     Skill {
+        name: "oxispec-manage-debt",
+        description: "Record a tech debt item, keep the backlog honest, and pay items off: owner, severity, due date, what it arises from. Use when you take a shortcut on purpose, find one, or are asked what debt there is.",
+        requires: &["debt"],
+        body: include_str!("../skills/manage-debt.md"),
+    },
+    Skill {
         name: "oxispec-review-change",
         description: "Review a branch or pull request that changes specs or traced code: new findings, graph differences, affected nodes, suspect links. Use when asked to review a change.",
         requires: &["core"],
@@ -320,6 +326,7 @@ mod tests {
             "consistency",
             "statemachines",
             "architecture",
+            "debt",
         ]);
         assert_eq!(all.len(), SKILLS.len());
     }

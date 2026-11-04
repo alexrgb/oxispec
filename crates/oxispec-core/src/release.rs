@@ -477,6 +477,24 @@ pub fn gates(candidate: &Candidate) -> Vec<Gate> {
         }
     }
 
+    if !graph.debt.limits.is_empty() {
+        let over = crate::debt::over_limits(graph);
+        gates.push(Gate::new(
+            "debt-within-limits",
+            over.is_empty(),
+            if over.is_empty() {
+                "the tech debt that is still to be paid is within the limits".to_string()
+            } else {
+                over.iter()
+                    .map(|(severity, live, limit)| {
+                        format!("{live} {severity} debt items, and the limit is {limit}")
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            },
+        ));
+    }
+
     if let Some(suggested) = suggest(*base, summary.bump()) {
         let enough = version.core() >= suggested.core();
         gates.push(

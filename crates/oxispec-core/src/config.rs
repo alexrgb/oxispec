@@ -68,6 +68,40 @@ pub struct Config {
     /// Profiles this project defines, by name.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub profiles: BTreeMap<String, CustomProfile>,
+    /// How tech debt is judged. See `debt`.
+    #[serde(default, skip_serializing_if = "DebtConfig::is_default")]
+    pub debt: DebtConfig,
+}
+
+/// Settings for tech debt items.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DebtConfig {
+    /// A live item that nobody has reviewed for this many days is stale.
+    #[serde(default = "default_stale_days")]
+    pub stale_days: u32,
+    /// The most live items a release may have, by severity. A severity that is
+    /// not listed has no limit.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub limits: BTreeMap<String, u32>,
+}
+
+fn default_stale_days() -> u32 {
+    180
+}
+
+impl Default for DebtConfig {
+    fn default() -> Self {
+        DebtConfig {
+            stale_days: default_stale_days(),
+            limits: BTreeMap::new(),
+        }
+    }
+}
+
+impl DebtConfig {
+    fn is_default(&self) -> bool {
+        *self == DebtConfig::default()
+    }
 }
 
 fn default_format() -> u32 {
@@ -89,6 +123,7 @@ impl Config {
             agents: Vec::new(),
             formats: BTreeMap::new(),
             profiles: BTreeMap::new(),
+            debt: DebtConfig::default(),
         }
     }
 

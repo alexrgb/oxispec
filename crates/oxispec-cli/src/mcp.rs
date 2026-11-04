@@ -331,6 +331,19 @@ impl Server<'_> {
                 false,
             ));
         }
+        if self.cfg.has("debt") {
+            tools.push(tool(
+                "spec_debt",
+                "The tech debt backlog, the most serious and the oldest first: each item's status, severity, owner, due date, age and what it arises from, flags for overdue and stale items, and the limits a release is held to. Problems come from spec_check.",
+                json!({
+                    "status": {"type": "string", "enum": ["open", "planned", "in-progress", "resolved", "accepted"], "description": "Only items with this status"},
+                    "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"], "description": "Only items with this severity"},
+                    "all": {"type": "boolean", "description": "Include resolved and accepted items. Default: false."},
+                }),
+                &[],
+                false,
+            ));
+        }
         if self.cfg.has("statemachines") {
             tools.push(tool(
                 "spec_machine",
@@ -469,6 +482,21 @@ impl Server<'_> {
                     }
                     _ => anyhow::bail!("`view` and `id` go together"),
                 }
+            }
+            "spec_debt" => {
+                let mut cmd = vec!["debt", "--json"];
+                let status = optional_word(args, "status")?;
+                if let Some(status) = &status {
+                    cmd.extend(["--status", status]);
+                }
+                let severity = optional_word(args, "severity")?;
+                if let Some(severity) = &severity {
+                    cmd.extend(["--severity", severity]);
+                }
+                if args.get("all").and_then(Value::as_bool) == Some(true) {
+                    cmd.push("--all");
+                }
+                self.cli(&cmd)
             }
             "spec_machine" => {
                 let mut cmd = vec!["machine"];
