@@ -71,6 +71,26 @@ pub struct Config {
     /// How tech debt is judged. See `debt`.
     #[serde(default, skip_serializing_if = "DebtConfig::is_default")]
     pub debt: DebtConfig,
+    /// Traceability and sign-offs the project must have. See `compliance`.
+    #[serde(default, skip_serializing_if = "ComplianceConfig::is_default")]
+    pub compliance: ComplianceConfig,
+}
+
+/// A standard and level from the built-in list, and rules of the project's own.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ComplianceConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standard: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rules: Vec<crate::compliance::Rule>,
+}
+
+impl ComplianceConfig {
+    fn is_default(&self) -> bool {
+        *self == ComplianceConfig::default()
+    }
 }
 
 /// Settings for tech debt items.
@@ -124,6 +144,7 @@ impl Config {
             formats: BTreeMap::new(),
             profiles: BTreeMap::new(),
             debt: DebtConfig::default(),
+            compliance: ComplianceConfig::default(),
         }
     }
 

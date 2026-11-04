@@ -495,6 +495,28 @@ pub fn gates(candidate: &Candidate) -> Vec<Gate> {
         ));
     }
 
+    let (rules, problems) = crate::compliance::resolve(graph.compliance_config());
+    if !rules.is_empty() || !problems.is_empty() {
+        let gaps: usize = crate::compliance::report(graph)
+            .iter()
+            .map(|r| r.gaps.len())
+            .sum();
+        gates.push(Gate::new(
+            "compliance-met",
+            gaps == 0 && problems.is_empty(),
+            if !problems.is_empty() {
+                format!(
+                    "the compliance settings are not valid: {}",
+                    problems.join("; ")
+                )
+            } else if gaps == 0 {
+                format!("the {} compliance rules are met", rules.len())
+            } else {
+                format!("{gaps} gaps in traceability or sign-offs; see `oxispec compliance`")
+            },
+        ));
+    }
+
     if let Some(suggested) = suggest(*base, summary.bump()) {
         let enough = version.core() >= suggested.core();
         gates.push(

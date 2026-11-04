@@ -22,6 +22,7 @@ mod architecture;
 mod changes;
 mod ci;
 mod claims;
+mod compliance;
 mod connect;
 mod context;
 mod debt;
@@ -235,6 +236,14 @@ enum Command {
         /// Include items that are resolved or accepted
         #[arg(long)]
         all: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Traceability and sign-offs the project's compliance rules ask for. Exits 1 when one is missing
+    #[command(args_conflicts_with_subcommands = true)]
+    Compliance {
+        #[command(subcommand)]
+        action: Option<ComplianceAction>,
         #[arg(long)]
         json: bool,
     },
@@ -642,6 +651,15 @@ enum NewKind {
 }
 
 #[derive(Subcommand)]
+enum ComplianceAction {
+    /// The built-in standards, their levels and the rules each level adds
+    Standards {
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum ChangeAction {
     /// Move a change set along draft, in-review, approved, merged, reverted
     Status {
@@ -896,6 +914,16 @@ fn run(cli: Cli) -> Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
+        Command::Compliance { action, json } => match action {
+            Some(ComplianceAction::Standards { json }) => {
+                compliance::standards(json)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            None => {
+                let root = project_root(cli.root.as_deref())?;
+                compliance::report(&root, json, cache)
+            }
+        },
         Command::Adr { action } => {
             let root = project_root(cli.root.as_deref())?;
             match action {

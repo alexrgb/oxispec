@@ -149,6 +149,18 @@ pub const CODES: &[(&str, &str)] = &[
         "E034",
         "A scenario does not have the steps its style asks (Gherkin)",
     ),
+    (
+        "E035",
+        "A node lacks a link the project's compliance rules ask for",
+    ),
+    (
+        "E036",
+        "A node lacks the sign-off the project's compliance rules ask for",
+    ),
+    (
+        "E037",
+        "The compliance settings in the config are not valid",
+    ),
     ("W001", "Unknown node type"),
     (
         "W002",

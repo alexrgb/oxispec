@@ -26,6 +26,8 @@ pub struct Graph {
     pub(crate) formats: Arc<crate::formats::Formats>,
     /// How the project judges tech debt.
     pub(crate) debt: Arc<crate::config::DebtConfig>,
+    /// The traceability and sign-offs the project asks for.
+    pub(crate) compliance: Arc<crate::config::ComplianceConfig>,
 }
 
 #[derive(Debug, Default)]
@@ -71,12 +73,24 @@ impl Graph {
             analyses: Arc::default(),
             formats: Arc::default(),
             debt: Arc::default(),
+            compliance: Arc::default(),
         }
     }
 
     /// The project's rules for tech debt.
     pub fn debt_config(&self) -> &crate::config::DebtConfig {
         &self.debt
+    }
+
+    /// The project's compliance settings.
+    pub fn compliance_config(&self) -> &crate::config::ComplianceConfig {
+        &self.compliance
+    }
+
+    /// The same graph, with the project's compliance settings.
+    pub fn with_compliance(mut self, compliance: crate::config::ComplianceConfig) -> Graph {
+        self.compliance = Arc::new(compliance);
+        self
     }
 
     /// The same graph, with the project's rules for tech debt.
