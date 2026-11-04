@@ -272,6 +272,9 @@ Codes are stable. A code is never reused.
 | E032 | error | A debt item has a status, severity or date that is not valid (see [debt.md](debt.md)) |
 | E033 | error | A requirement is not worded the way its style asks, EARS or user story (see [profiles.md](profiles.md#requirement-styles)) |
 | E034 | error | A scenario does not have the steps its style asks, a WHEN and a THEN for Gherkin |
+| E035 | error | A node lacks a link the compliance rules ask for (see [compliance.md](compliance.md)) |
+| E036 | error | A node lacks the sign-off the compliance rules ask for |
+| E037 | error | The `compliance:` settings in the config are not valid |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |

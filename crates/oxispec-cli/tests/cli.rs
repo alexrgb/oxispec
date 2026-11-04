@@ -5945,3 +5945,100 @@ fn import_specs_takes_plain_markdown_and_refuses_unknown_sources() {
     assert_ne!(out.code, 0);
     assert!(out.stderr.contains("unknown source"), "{}", out.stderr);
 }
+
+fn project_with_a_standard(p: &Path, standard: &str) {
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);
+    assert_eq!(
+        run(p, &["new", "requirement", "dose", "Limit the dose"]).code,
+        0
+    );
+    let file = p.join("specs/requirements/dose/limit-the-dose.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, text.replace("status: draft", "status: accepted")).unwrap();
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}compliance:\n{standard}")).unwrap();
+}
+
+#[test]
+fn a_standard_asks_for_tests_and_sign_offs_until_they_exist() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_a_standard(p, "  standard: iec-62304\n  level: A\n");
+
+    let out = run(p, &["check"]);
+    assert_ne!(out.code, 0, "{}", out.stdout);
+    assert!(out.stdout.contains("E035"), "{}", out.stdout);
+    assert!(out.stdout.contains("E036"), "{}", out.stdout);
+    let out = run(p, &["compliance"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("GAP"), "{}", out.stdout);
+    assert!(out.stdout.contains("REQ-DOSE-0001"), "{}", out.stdout);
+
+    // A test case that verifies a scenario, and a sign-off, meet the level.
+    fs::create_dir_all(p.join("specs/tests")).unwrap();
+    fs::write(
+        p.join("specs/tests/dose.md"),
+        "---\nid: TC-DOSE-0001\ntype: test-case\nlinks:\n  verifies:\n    - REQ-DOSE-0001.S1\n---\n# Dose test\n",
+    )
+    .unwrap();
+    let file = p.join("specs/requirements/dose/limit-the-dose.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        text.replace(
+            "status: accepted\n",
+            "status: accepted\napproved_by: Ann Lee\napproved_on: \"2026-10-28\"\n",
+        ),
+    )
+    .unwrap();
+    let out = run(p, &["compliance", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("\"met\": true"), "{}", out.stdout);
+    let out = run(p, &["check"]);
+    assert!(
+        !out.stdout.contains("E035") && !out.stdout.contains("E036"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn compliance_lists_standards_and_a_higher_level_asks_for_more() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    let out = run(p, &["compliance", "standards"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    for name in ["iec-62304", "iso-26262", "do-178c"] {
+        assert!(out.stdout.contains(name), "{}", out.stdout);
+    }
+
+    project_with_a_standard(p, "  standard: do-178c\n  level: A\n");
+    let out = run(p, &["compliance", "--json"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(
+        out.stdout.contains("requirement-allocated"),
+        "{}",
+        out.stdout
+    );
+
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, text.replace("level: A", "level: Z")).unwrap();
+    let out = run(p, &["check"]);
+    assert!(out.stdout.contains("E037"), "{}", out.stdout);
+}
+
+#[test]
+fn a_release_is_held_until_the_compliance_rules_are_met() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_a_standard(p, "  standard: iec-62304\n  level: A\n");
+    commit_all(p, "dose");
+    let out = run(p, &["release", "prepare", "0.1.0"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["release", "check", "0.1.0"]);
+    assert!(out.stdout.contains("compliance-met"), "{}", out.stdout);
+    assert_ne!(out.code, 0, "{}", out.stdout);
+}

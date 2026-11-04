@@ -7,6 +7,7 @@ pub mod architecture;
 pub mod change;
 pub mod check;
 pub mod claims;
+pub mod compliance;
 pub mod config;
 pub mod connect;
 pub mod context;

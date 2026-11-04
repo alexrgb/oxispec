@@ -401,13 +401,11 @@ pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
         return (memo.graph.clone(), stats);
     }
     let (graph, stats) = load_files(root, use_cache, found);
+    let config = crate::config::load(root).ok();
     let graph = graph
         .with_formats(crate::formats::Formats::load(root))
-        .with_debt(
-            crate::config::load(root)
-                .map(|c| c.debt)
-                .unwrap_or_default(),
-        );
+        .with_debt(config.clone().map(|c| c.debt).unwrap_or_default())
+        .with_compliance(config.map(|c| c.compliance).unwrap_or_default());
     if let Some(print) = print
         && let Ok(mut guard) = MEMO.lock()
     {
