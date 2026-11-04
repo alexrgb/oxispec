@@ -28,6 +28,7 @@ mod debt;
 mod formats;
 mod git;
 mod history;
+mod importer;
 mod machines;
 mod mcp;
 mod releases;
@@ -511,6 +512,27 @@ enum ImportKind {
         #[arg(long)]
         json: bool,
     },
+    /// Specs of OpenSpec, Spec Kit, Kiro or plain markdown. Each file becomes a requirement node;
+    /// what has no place in one (design notes, tasks, open changes) is listed
+    Specs {
+        /// openspec, speckit, kiro or markdown
+        #[arg(long)]
+        from: String,
+        /// The folder of specs (for markdown, a file or folder). Default: where the tool keeps them
+        #[arg(long)]
+        dir: Option<PathBuf>,
+        /// The requirement profile to write them in. Default: the one the config chooses
+        #[arg(long)]
+        format: Option<String>,
+        /// sequential or random; overrides the config
+        #[arg(long, value_enum)]
+        id_scheme: Option<IdSchemeArg>,
+        /// Show what would be written and write nothing
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -908,6 +930,28 @@ fn run(cli: Cli) -> Result<ExitCode> {
                             dir: dir.as_deref(),
                             format: format.as_deref(),
                             offset,
+                            dry_run,
+                            json,
+                        },
+                        cache,
+                    )?
+                }
+                ImportKind::Specs {
+                    from,
+                    dir,
+                    format,
+                    id_scheme,
+                    dry_run,
+                    json,
+                } => {
+                    let _lock = lock_project(&root)?;
+                    importer::import_specs(
+                        &root,
+                        &importer::Options {
+                            from: &from,
+                            dir: dir.as_deref(),
+                            format: format.as_deref(),
+                            scheme: id_scheme.map(IdScheme::from),
                             dry_run,
                             json,
                         },

@@ -18,6 +18,7 @@ pub mod formats;
 pub mod graph;
 pub mod id;
 pub mod impact;
+pub mod import;
 pub mod index;
 pub mod machines;
 pub mod modules;
