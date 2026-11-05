@@ -89,6 +89,7 @@ pub fn resolve_link(graph: &Graph, target: &str) -> LinkResolution {
     }
 }
 
+// spec: REQ-FORMAT-0002
 fn duplicates(graph: &Graph, out: &mut Vec<Finding>) {
     let mut seen: HashMap<&str, &Node> = HashMap::new();
     for n in &graph.nodes {
@@ -135,6 +136,7 @@ fn node_format(node: &Node, out: &mut Vec<Finding>) {
     }
 }
 
+// spec: REQ-FORMAT-0003
 fn links(graph: &Graph, node: &Node, out: &mut Vec<Finding>) {
     for (kind, targets) in &node.links {
         if !KNOWN_LINK_KINDS.contains(&kind.as_str()) {
@@ -177,6 +179,7 @@ fn links(graph: &Graph, node: &Node, out: &mut Vec<Finding>) {
     }
 }
 
+// spec: REQ-FORMAT-0004
 fn requirements(node: &Node, out: &mut Vec<Finding>, normative: bool) {
     if node.requirements.is_empty() {
         out.push(
@@ -248,6 +251,7 @@ fn change_set(node: &Node, out: &mut Vec<Finding>) {
     }
 }
 
+// spec: REQ-FORMAT-0005
 fn scenario_anchors(node: &Node, out: &mut Vec<Finding>) {
     let mut seen: HashMap<&str, usize> = HashMap::new();
     for scenario in node.requirements.iter().flat_map(|r| &r.scenarios) {
@@ -359,12 +363,14 @@ mod tests {
         assert!(codes(&g).is_empty());
     }
 
+    // verifies: REQ-FORMAT-0003.S1
     #[test]
     fn dangling_link() {
         let g = graph(&[("r.md", REQ)]);
         assert_eq!(codes(&g), vec!["E002"]);
     }
 
+    // verifies: REQ-FORMAT-0003.S3
     #[test]
     fn external_reference_is_info_only() {
         let text = REQ.replace("ADR-0001", "platform/identity:ADR-0009");
@@ -372,12 +378,14 @@ mod tests {
         assert_eq!(codes(&g), vec!["I001"]);
     }
 
+    // verifies: REQ-FORMAT-0002.S1
     #[test]
     fn duplicate_ids() {
         let g = graph(&[("a.md", ADR), ("b.md", ADR)]);
         assert_eq!(codes(&g), vec!["E001"]);
     }
 
+    // verifies: REQ-FORMAT-0004.S1, REQ-FORMAT-0004.S2
     #[test]
     fn requirement_rules() {
         let text = "---\nid: REQ-A-0002\ntype: requirement\n---\n### Requirement: X\nIt works.\n";
@@ -405,6 +413,7 @@ mod tests {
         assert_eq!(c, vec!["E005", "W001"]);
     }
 
+    // verifies: REQ-FORMAT-0006.S1
     #[test]
     fn incoming_links_are_computed() {
         let g = graph(&[("r.md", REQ), ("a.md", ADR)]);
@@ -421,6 +430,7 @@ mod tests {
         assert!(codes(&g).is_empty());
     }
 
+    // verifies: REQ-FORMAT-0003.S2
     #[test]
     fn link_to_a_missing_scenario_is_reported() {
         let adr = adr_with_link("refines", "REQ-A-0010.S9");
@@ -438,6 +448,7 @@ mod tests {
         assert_eq!(codes(&g), vec!["E009"]);
     }
 
+    // verifies: REQ-FORMAT-0005.S1, REQ-FORMAT-0005.S2
     #[test]
     fn duplicate_and_invalid_anchors() {
         let dup = REQ_ANCHORS.replace("{#S2}", "{#S1}");
