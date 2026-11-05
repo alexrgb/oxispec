@@ -97,6 +97,45 @@ impl<'a> Server<'a> {
     }
 }
 
+/// The tools a server offers for a project with these modules on.
+fn tools_for(modules: Vec<String>, read_only: bool) -> Vec<Value> {
+    let server = Server {
+        root: Path::new("."),
+        cfg: Config::new(modules, config::IdScheme::Sequential),
+        read_only,
+    };
+    server.tools()
+}
+
+/// Every tool the server can offer, each with the module it needs (if any)
+/// and whether it writes. Found by turning one module off at a time.
+pub(crate) fn tool_catalog() -> Vec<(Value, Option<String>)> {
+    let all: Vec<String> = oxispec_core::modules::MODULES
+        .iter()
+        .map(|m| m.name.to_string())
+        .collect();
+    let name_of = |t: &Value| t["name"].as_str().unwrap_or("").to_string();
+    let mut needs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for module in &all {
+        let without: Vec<String> = all.iter().filter(|m| *m != module).cloned().collect();
+        let kept: std::collections::HashSet<String> =
+            tools_for(without, false).iter().map(name_of).collect();
+        for t in tools_for(all.clone(), false) {
+            let n = name_of(&t);
+            if !kept.contains(&n) {
+                needs.entry(n).or_insert_with(|| module.clone());
+            }
+        }
+    }
+    tools_for(all, false)
+        .into_iter()
+        .map(|t| {
+            let module = needs.get(&name_of(&t)).cloned();
+            (t, module)
+        })
+        .collect()
+}
+
 pub fn serve(root: &Path, read_only: bool) -> Result<()> {
     let server = Server::new(root, read_only)?;
     let stdin = std::io::stdin();
@@ -223,6 +262,7 @@ impl Server<'_> {
         })
     }
 
+    // spec: REQ-MCP-0002
     fn tools(&self) -> Vec<Value> {
         let rev = json!({"type": "string", "description": "A git revision: a branch, tag, hash or date:YYYY-MM-DD. Default: the working tree."});
         let id_property = json!({"type": "string", "description": "A node ID such as REQ-AUTH-0001, or a scenario such as REQ-AUTH-0001.S1"});
@@ -606,6 +646,7 @@ impl Server<'_> {
         }
     }
 
+    // spec: REQ-MCP-0001
     fn get(&self, node_id: &str, at: Option<&str>, policy: &Policy) -> Result<String> {
         let graph = self.graph(at)?;
         let node = graph
@@ -683,6 +724,7 @@ impl Server<'_> {
         Ok(serde_json::to_string_pretty(&json!({"neighbors": rows}))?)
     }
 
+    // spec: REQ-MCP-0004
     fn propose(&self, args: &Value) -> Result<String> {
         if self.read_only {
             anyhow::bail!("the server is read-only");
@@ -848,6 +890,7 @@ fn valid_id(value: &str) -> Result<String> {
     Ok(value.to_string())
 }
 
+// spec: REQ-MCP-0003
 fn node_id(args: &Value, name: &str) -> Result<String> {
     valid_id(&text_arg(args, name)?)
 }

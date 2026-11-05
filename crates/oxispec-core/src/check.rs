@@ -216,6 +216,7 @@ fn requirements(node: &Node, out: &mut Vec<Finding>, normative: bool) {
     scenario_anchors(node, out);
 }
 
+// spec: REQ-CHANGE-0001, REQ-CHANGE-0002
 fn change_set(node: &Node, out: &mut Vec<Finding>) {
     let known = change::STATUSES.join(", ");
     match node.status.as_deref() {
@@ -484,6 +485,7 @@ mod tests {
         )
     }
 
+    // verifies: REQ-CHANGE-0001.S2
     #[test]
     fn change_set_statuses_are_checked() {
         let ok = |lines: &str| codes(&graph(&[("c.md", &change_set(lines))]));
@@ -494,6 +496,7 @@ mod tests {
         assert_eq!(ok("status: finished\n"), vec!["E012"]);
     }
 
+    // verifies: REQ-CHANGE-0002.S1
     #[test]
     fn approved_and_merged_change_sets_need_an_approver() {
         let ok = |lines: &str| codes(&graph(&[("c.md", &change_set(lines))]));

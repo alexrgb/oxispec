@@ -2247,7 +2247,7 @@ fn links_go_suspect_when_the_code_or_the_spec_changes_until_confirmed() {
     // Formatting and comments are not a change.
     fs::write(
         p.join("src/auth.rs"),
-        "// spec: REQ-AUTH-0001 (reviewed)\nfn expire_admin_session() {\n\n        end_after(15); // minutes\n}\n",
+        concat!("// spe", "c: REQ-AUTH-0001 (reviewed)\nfn expire_admin_session() {\n\n        end_after(15); // minutes\n}\n"),
     )
     .unwrap();
     assert_eq!(run(p, &["suspect", "--strict"]).code, 0);
@@ -2396,7 +2396,10 @@ fn imported_test_results_say_which_scenarios_pass() {
     // A test can name its scenario in its own name, and go test -json works.
     fs::write(
         p.join("go.json"),
-        "{\"Action\":\"pass\",\"Package\":\"p\",\"Test\":\"TestX [REQ-AUTH-0001.S2]\"}\n",
+        concat!(
+            "{\"Action\":\"pass\",\"Package\":\"p\",\"Test\":\"TestX [REQ-AUTH-0001",
+            ".S2]\"}\n"
+        ),
     )
     .unwrap();
     assert_eq!(
@@ -2970,6 +2973,7 @@ fn tool_names(replies: &[serde_json::Value]) -> Vec<String> {
         .collect()
 }
 
+// verifies: REQ-MCP-0002.S1, REQ-MCP-0002.S2
 #[test]
 fn mcp_speaks_the_protocol_and_lists_tools_by_module() {
     let dir = tempfile::tempdir().unwrap();
@@ -3093,6 +3097,7 @@ fn mcp_needs_its_module_and_answers_bad_messages_with_errors() {
     assert_eq!(replies[2]["error"]["code"], -32602);
 }
 
+// verifies: REQ-MCP-0001.S1
 #[test]
 fn mcp_read_tools_return_the_same_answers_as_the_commands() {
     let dir = tempfile::tempdir().unwrap();
@@ -3160,6 +3165,7 @@ fn mcp_read_tools_return_the_same_answers_as_the_commands() {
     assert!(!failed, "{text}");
 }
 
+// verifies: REQ-MCP-0003.S1, REQ-MCP-0003.S2
 #[test]
 fn mcp_refuses_arguments_that_could_be_read_as_options() {
     let dir = tempfile::tempdir().unwrap();
@@ -3192,6 +3198,7 @@ fn mcp_refuses_arguments_that_could_be_read_as_options() {
     assert!(!failed, "{text}");
 }
 
+// verifies: REQ-MCP-0004.S1, REQ-MCP-0004.S2, REQ-MCP-0004.S3
 #[test]
 fn mcp_proposes_a_draft_change_set_and_never_approves() {
     let dir = tempfile::tempdir().unwrap();
@@ -6208,6 +6215,10 @@ fn docs_reference_writes_the_commands_and_the_codes_and_check_notices_a_change()
         !commands.contains("--no-cache`:"),
         "global options are listed once"
     );
+    let tools = fs::read_to_string(p.join("ref/mcp-tools.md")).unwrap();
+    assert!(tools.contains("## `spec_propose_change`"), "{tools}");
+    assert!(tools.contains("Needs the `tests` module."), "{tools}");
+    assert!(tools.contains("Writes files."), "{tools}");
     let codes = fs::read_to_string(p.join("ref/check-codes.md")).unwrap();
     assert!(codes.contains("| E002 | error |"), "{codes}");
 

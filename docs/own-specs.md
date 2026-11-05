@@ -1,6 +1,6 @@
 # The project's own specs
 
-OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the parts of the product that are written down as specs, and `oxispec check` and `oxispec coverage` run on them in CI (the `specs` job in `.github/workflows/ci.yml`). It is a small start: the rules of the node file format. The rest of the documentation is still plain markdown in `docs/`.
+OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the parts of the product that are written down as specs, and `oxispec check` and `oxispec coverage` run on them in CI (the `specs` job in `.github/workflows/ci.yml`). It is a small start: the rules of the node file format, change sets and the MCP server. The rest of the documentation is still plain markdown in `docs/`.
 
 ## What is there
 
@@ -12,7 +12,9 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-FORMAT-0004` | A requirement has a SHALL and a scenario |
 | `REQ-FORMAT-0005` | Scenario anchors are unique and valid |
 | `REQ-FORMAT-0006` | Reverse links are computed |
-| `ADR-0001` to `ADR-0003` | Why files are the source of truth, why IDs do not depend on paths, why reverse links are not stored |
+| `REQ-CHANGE-0001`, `0002` | A change set follows a lifecycle; approval is recorded and can be withdrawn |
+| `REQ-MCP-0001` to `0004` | The read tools answer as the commands do; tools are offered by module and mode; arguments cannot be read as options; an agent can propose a change set but never approve it |
+| `ADR-0001` to `ADR-0004` | Why files are the source of truth, why IDs do not depend on paths, why reverse links are not stored, why the MCP server has no tool that approves |
 
 Each scenario is verified by an existing unit test, which carries a `// verifies: REQ-FORMAT-000N.SM` comment, and the code that does the work carries `// spec: REQ-FORMAT-000N`. `oxispec trace REQ-FORMAT-0004` shows the ties.
 
@@ -24,7 +26,7 @@ When a change alters one of these rules, change the requirement in the same pull
 
 ## The trace scan and test data
 
-`.oxispec/config.yaml` leaves a few files out of the scan (`trace.exclude`): the tests of the scanner itself hold annotations as sample text, in strings that look like comments, and the scan reads comments without parsing the language. If you add such a test, add its file there.
+`.oxispec/config.yaml` leaves a few files out of the scan (`trace.exclude`): the tests of the scanner itself hold annotations as sample text, in strings that look like comments, and the scan reads comments without parsing the language. If you add such a test, add its file there. A test file that also carries real `verifies:` comments (`crates/oxispec-cli/tests/cli.rs`) is scanned instead, and its few fixtures are written with `concat!("// spe", "c: ...")` so the scan does not see them.
 
 ## Publishing
 

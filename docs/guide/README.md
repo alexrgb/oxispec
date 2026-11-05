@@ -15,5 +15,6 @@ How to use the `oxispec` binary. Start with the first page, then take the one th
 | [MCP for clients](mcp-clients.md) | Give Claude Code, Cursor, Gemini or Copilot live access |
 | [Command reference](../reference/commands.md) | Every command and option, written from the program |
 | [Check codes](../reference/check-codes.md) | Every code `check` can report |
+| [MCP tools](../reference/mcp-tools.md) | Every tool the server offers, with arguments |
 
 When you need the detail of one feature there is a reference page for it in [docs](../): [format](../format.md), [trace](../trace.md), [profiles](../profiles.md), [CI](../ci.md), [the site](../site.md), [agents](../agents.md), [MCP](../mcp.md) and [releases](../releasing.md). `oxispec --help` and `oxispec <command> --help` list every command and option.

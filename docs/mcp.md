@@ -33,22 +33,7 @@ Add `"--read-only"` to `args` to leave out the one tool that writes.
 
 ## Tools
 
-| Tool | Does | Same as |
-|---|---|---|
-| `spec_search` | Full-text search: IDs, titles, snippets | `search --json` |
-| `spec_get` | One node with its **text**, links and what links to it, optionally `at` a revision | `show --json`, plus the text |
-| `spec_neighbors` | Nodes within 1 to 4 link hops, both directions, optionally only some link kinds | |
-| `spec_context` | A context pack (below) | `context` |
-| `spec_check` | The structural checks, optionally `at` a revision | `check --json` |
-| `spec_status` | A summary: nodes by type and status, findings by code, change sets in flight, the latest release, optionally `at` a revision | `status --json` |
-| `spec_history` | How a node changed | `history --json` |
-| `spec_diff` | How the specs differ between two revisions | `diff --json` |
-| `spec_trace` | Code and tests for a node (needs `tests`) | `trace --json` |
-| `spec_debt` | The tech debt backlog by severity and age, with overdue and stale flags and the release limits (needs `debt`). Optional `status`, `severity` and `all`. Problems come from `spec_check` | `debt --json` |
-| `spec_architecture` | The architecture model, or with `view` and `id` one Mermaid view (needs `architecture`). Problems come from `spec_check` | `architecture --json`, `architecture view` |
-| `spec_machine` | State machines: all of them, or one `id` with its properties, and with `view` set to `diagram` or `tests` a Mermaid diagram or one test per transition (needs `statemachines`). Problems come from `spec_check` | `machine --json` |
-| `spec_claims` | The vocabulary and the claims on each variable, optionally one `variable` (needs `consistency`). Conflicts come from `spec_check` | `claims --json` |
-| `spec_propose_change` | Writes a draft change set (needs `specs`, not offered with `--read-only`) | `new change` and `link` |
+The tools, their arguments and the module each one needs are listed in [the generated reference](reference/mcp-tools.md), written from the server itself. In short: `spec_search`, `spec_get`, `spec_neighbors`, `spec_context`, `spec_check`, `spec_status`, `spec_history`, `spec_diff` and `spec_trace` read the specs, `spec_debt`, `spec_architecture`, `spec_machine` and `spec_claims` read what their modules add, and `spec_propose_change` writes a draft change set. Each read tool runs the code of the command with `--json` (`spec_get` is `show --json` plus the text of the node, `spec_check` is `check --json`, and so on).
 
 Tool names use underscores, not dots, because some clients do not accept dots. The read tools run the same code as the `--json` commands, so an agent and a person get the same answers, and the JSON has the same `schema_version`.
 
