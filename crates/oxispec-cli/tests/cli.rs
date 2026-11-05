@@ -6220,3 +6220,29 @@ fn docs_reference_writes_the_commands_and_the_codes_and_check_notices_a_change()
     assert_ne!(out.code, 0);
     assert!(out.stderr.contains("out of date"), "{}", out.stderr);
 }
+
+#[test]
+fn every_relative_link_in_the_guide_and_the_reference_points_at_a_file() {
+    let docs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs");
+    let mut checked = 0;
+    for folder in ["guide", "reference"] {
+        for entry in fs::read_dir(docs.join(folder)).unwrap() {
+            let path = entry.unwrap().path();
+            let text = fs::read_to_string(&path).unwrap();
+            for part in text.split("](").skip(1) {
+                let target = part.split(')').next().unwrap();
+                let file = target.split('#').next().unwrap();
+                if file.is_empty() || file.starts_with("http") {
+                    continue;
+                }
+                assert!(
+                    path.parent().unwrap().join(file).exists(),
+                    "{} links to {file}, which does not exist",
+                    path.display()
+                );
+                checked += 1;
+            }
+        }
+    }
+    assert!(checked >= 20, "only {checked} links were checked");
+}

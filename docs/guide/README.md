@@ -9,6 +9,10 @@ How to use the `oxispec` binary. Start with the first page, then take the one th
 | [Writing requirements](requirements.md) | Requirements and scenarios, decisions, change sets, review |
 | [Code and tests](trace-and-coverage.md) | Tie code and tests to requirements and see what is not covered |
 | [Moving from another tool](importing.md) | OpenSpec, Spec Kit, Kiro or plain markdown |
+| [Checks in CI](ci-checks.md) | Fail pull requests on new problems, with reports |
+| [Releasing the specs](spec-releases.md) | Notes, a version, gates and a tag |
+| [Working with AI agents](working-with-agents.md) | Skills, and what an agent can do with them |
+| [MCP for clients](mcp-clients.md) | Give Claude Code, Cursor, Gemini or Copilot live access |
 | [Command reference](../reference/commands.md) | Every command and option, written from the program |
 | [Check codes](../reference/check-codes.md) | Every code `check` can report |
 
