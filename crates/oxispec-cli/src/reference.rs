@@ -7,6 +7,7 @@ use std::path::Path;
 use anyhow::{Result, bail};
 use clap::{Arg, Command};
 use oxispec_core::finding::CODES;
+use serde_json::Value;
 
 /// Options every command has; they are described once at the top.
 const GLOBAL: &[&str] = &["root", "no-cache", "help", "version"];
@@ -152,11 +153,87 @@ pub fn check_codes() -> String {
     out
 }
 
+fn parameter(name: &str, schema: &Value, required: bool) -> String {
+    let mut out = format!("- `{name}`");
+    let mut facts = Vec::new();
+    match schema["type"].as_str() {
+        Some("array") => facts.push(format!(
+            "array of {}",
+            schema["items"]["type"].as_str().unwrap_or("values")
+        )),
+        Some(t) => facts.push(t.to_string()),
+        None => {}
+    }
+    facts.push(if required { "required" } else { "optional" }.to_string());
+    if let Some(d) = schema.get("default") {
+        facts.push(format!("default {d}"));
+    }
+    if let (Some(lo), Some(hi)) = (schema.get("minimum"), schema.get("maximum")) {
+        facts.push(format!("{lo} to {hi}"));
+    }
+    out.push_str(&format!(" ({})", facts.join(", ")));
+    if let Some(d) = schema["description"].as_str() {
+        out.push_str(&format!(": {}", flat(d)));
+        if !d.ends_with(['.', '!', '?']) {
+            out.push('.');
+        }
+    }
+    out
+}
+
+pub fn mcp_tools() -> String {
+    let mut out = String::from(
+        "# MCP tools\n\n\
+         Written by `oxispec docs reference` from the server itself. Do not edit it by hand.\n\n\
+         These are the tools `oxispec mcp` offers when every module is on. A tool whose module is off is not \
+         offered. How to connect a client, and how the server behaves, is in [MCP](../mcp.md).\n",
+    );
+    for (tool, module) in crate::mcp::tool_catalog() {
+        let name = tool["name"].as_str().unwrap_or("");
+        out.push_str(&format!("\n## `{name}`\n\n"));
+        let desc = tool["description"].as_str().unwrap_or("");
+        out.push_str(&format!("{}\n\n", flat(desc)));
+        let writes = tool["annotations"]["readOnlyHint"] == Value::Bool(false);
+        let mut notes = Vec::new();
+        if let Some(m) = &module {
+            notes.push(format!("Needs the `{m}` module."));
+        }
+        if writes {
+            notes.push(
+                "Writes files. Not offered with `--read-only`, or by `oxispec serve`.".to_string(),
+            );
+        } else {
+            notes.push("Read only.".to_string());
+        }
+        out.push_str(&format!("{}\n", notes.join(" ")));
+        let required: Vec<&str> = tool["inputSchema"]["required"]
+            .as_array()
+            .map(|a| a.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        if let Some(props) = tool["inputSchema"]["properties"].as_object() {
+            if !props.is_empty() {
+                out.push_str("\nArguments:\n\n");
+            }
+            let mut keys: Vec<&String> = props.keys().collect();
+            keys.sort_by_key(|k| (!required.contains(&k.as_str()), k.as_str().to_string()));
+            for key in keys {
+                let schema = &props[key];
+                out.push_str(&format!(
+                    "{}\n",
+                    parameter(key, schema, required.contains(&key.as_str()))
+                ));
+            }
+        }
+    }
+    out
+}
+
 /// Writes the reference into `dir`, or with `check` compares it with what is there.
 pub fn run(root: &Command, dir: &Path, check: bool) -> Result<()> {
     let files = [
         ("commands.md", commands(root)),
         ("check-codes.md", check_codes()),
+        ("mcp-tools.md", mcp_tools()),
     ];
     let mut stale = Vec::new();
     for (name, text) in &files {

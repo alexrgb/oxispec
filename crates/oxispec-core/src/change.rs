@@ -11,6 +11,7 @@ pub const STATUSES: &[&str] = &["draft", "in-review", "approved", "merged", "rev
 ///              ^            |
 ///              +------------+   (changes after approval go back to review)
 /// ```
+// spec: REQ-CHANGE-0001
 pub fn next_statuses(from: &str) -> &'static [&'static str] {
     match from {
         "draft" => &["in-review"],
@@ -22,6 +23,7 @@ pub fn next_statuses(from: &str) -> &'static [&'static str] {
 }
 
 /// Approved and merged change sets must say who approved them.
+// spec: REQ-CHANGE-0002
 pub fn needs_approval(status: &str) -> bool {
     matches!(status, "approved" | "merged")
 }
@@ -55,6 +57,7 @@ pub fn utc_date(seconds: u64) -> String {
 mod tests {
     use super::*;
 
+    // verifies: REQ-CHANGE-0001.S1
     #[test]
     fn the_lifecycle_moves_forward_and_back_to_review() {
         assert_eq!(next_statuses("draft"), ["in-review"]);
@@ -70,6 +73,7 @@ mod tests {
         }
     }
 
+    // verifies: REQ-CHANGE-0002.S2
     #[test]
     fn approval_rules() {
         assert!(needs_approval("approved") && needs_approval("merged"));
