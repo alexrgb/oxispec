@@ -4,6 +4,8 @@ Agent-first spec engine in Rust. Specs, ADRs, test cases, standards, API contrac
 
 **Status: early.** The design is written and the first iteration is under way. See [docs/design.md](docs/design.md) for the full design and [docs/iterations.md](docs/iterations.md) for the plan and what is built so far.
 
+**New here?** Read the [user guide](docs/guide/README.md).
+
 ## Install
 
 Releases are not published yet, so for now build from source. When the first one is out, these will work (see [docs/releasing.md](docs/releasing.md)):
