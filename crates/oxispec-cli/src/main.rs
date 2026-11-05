@@ -32,6 +32,7 @@ mod history;
 mod importer;
 mod machines;
 mod mcp;
+mod reference;
 mod releases;
 mod rollback;
 mod search;
@@ -246,6 +247,11 @@ enum Command {
         action: Option<ComplianceAction>,
         #[arg(long)]
         json: bool,
+    },
+    /// Documentation written from the program: the command reference and the check codes
+    Docs {
+        #[command(subcommand)]
+        action: DocsAction,
     },
     /// Decision records: convert them between formats
     Adr {
@@ -553,6 +559,18 @@ enum ImportKind {
         dry_run: bool,
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum DocsAction {
+    /// Write commands.md and check-codes.md. With --check, write nothing and exit 1 when they differ
+    Reference {
+        /// Where to write them
+        #[arg(long, default_value = "docs/reference")]
+        out: PathBuf,
+        #[arg(long)]
+        check: bool,
     },
 }
 
@@ -969,6 +987,14 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 compliance::report(&root, json, cache)
             }
         },
+        Command::Docs { action } => {
+            match action {
+                DocsAction::Reference { out, check } => {
+                    reference::run(&<Cli as clap::CommandFactory>::command(), &out, check)?
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Adr { action } => {
             let root = project_root(cli.root.as_deref())?;
             match action {

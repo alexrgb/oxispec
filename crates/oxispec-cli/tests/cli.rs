@@ -6168,3 +6168,55 @@ fn a_skipped_item_is_not_written_and_an_empty_plan_is_refused() {
     assert!(out.stdout.contains("skipped item 2"), "{}", out.stdout);
     assert!(!p.join("specs/changes").read_dir().unwrap().any(|_| true));
 }
+
+#[test]
+fn the_committed_reference_matches_the_program() {
+    let dir = tempfile::tempdir().unwrap();
+    let committed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/reference");
+    let out = run(
+        dir.path(),
+        &[
+            "docs",
+            "reference",
+            "--check",
+            "--out",
+            committed.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(
+        out.code, 0,
+        "docs/reference is out of date. Run: cargo run -- docs reference\n{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn docs_reference_writes_the_commands_and_the_codes_and_check_notices_a_change() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    let out = run(p, &["docs", "reference", "--out", "ref"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let commands = fs::read_to_string(p.join("ref/commands.md")).unwrap();
+    for name in [
+        "`oxispec check`",
+        "`oxispec import plan start`",
+        "`oxispec docs reference`",
+    ] {
+        assert!(commands.contains(name), "{name} is missing");
+    }
+    assert!(
+        !commands.contains("--no-cache`:"),
+        "global options are listed once"
+    );
+    let codes = fs::read_to_string(p.join("ref/check-codes.md")).unwrap();
+    assert!(codes.contains("| E002 | error |"), "{codes}");
+
+    assert_eq!(
+        run(p, &["docs", "reference", "--check", "--out", "ref"]).code,
+        0
+    );
+    fs::write(p.join("ref/check-codes.md"), "old\n").unwrap();
+    let out = run(p, &["docs", "reference", "--check", "--out", "ref"]);
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("out of date"), "{}", out.stderr);
+}
