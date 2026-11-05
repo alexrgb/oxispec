@@ -521,6 +521,18 @@ enum ImportKind {
         #[arg(long)]
         json: bool,
     },
+    /// Decide what to make of each file of another tool, look at drafts, then apply
+    Plan {
+        #[command(subcommand)]
+        action: PlanAction,
+    },
+    /// Write the nodes of the import plan. With --dry-run: show them and write nothing
+    Apply {
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        json: bool,
+    },
     /// Specs of OpenSpec, Spec Kit, Kiro or plain markdown. Each file becomes a requirement node;
     /// what has no place in one (design notes, tasks, open changes) is listed
     Specs {
@@ -541,6 +553,39 @@ enum ImportKind {
         dry_run: bool,
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum PlanAction {
+    /// Look at the files and propose what to make of each. Writes .oxispec/import-plan.json
+    Start {
+        /// openspec, speckit, kiro or markdown
+        #[arg(long)]
+        from: String,
+        #[arg(long)]
+        dir: Option<PathBuf>,
+        /// Start again, replacing a plan that exists
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// The items of the plan, or one item. With --draft: the file it would write
+    Show {
+        n: Option<usize>,
+        #[arg(long)]
+        draft: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Change what an item becomes: requirement, change, adr or skip
+    Set {
+        n: usize,
+        #[arg(long)]
+        kind: Option<String>,
+        #[arg(long)]
+        title: Option<String>,
     },
 }
 
@@ -963,6 +1008,28 @@ fn run(cli: Cli) -> Result<ExitCode> {
                         },
                         cache,
                     )?
+                }
+                ImportKind::Plan { action } => match action {
+                    PlanAction::Start {
+                        from,
+                        dir,
+                        force,
+                        json,
+                    } => {
+                        let _lock = lock_project(&root)?;
+                        importer::plan_start(&root, &from, dir.as_deref(), force, json)?
+                    }
+                    PlanAction::Show { n, draft, json } => {
+                        importer::plan_show(&root, n, draft, json, cache)?
+                    }
+                    PlanAction::Set { n, kind, title } => {
+                        let _lock = lock_project(&root)?;
+                        importer::plan_set(&root, n, kind.as_deref(), title.as_deref())?
+                    }
+                },
+                ImportKind::Apply { dry_run, json } => {
+                    let _lock = lock_project(&root)?;
+                    importer::apply(&root, dry_run, json, cache)?
                 }
                 ImportKind::Specs {
                     from,

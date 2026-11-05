@@ -20,6 +20,7 @@ pub mod graph;
 pub mod id;
 pub mod impact;
 pub mod import;
+pub mod import_plan;
 pub mod index;
 pub mod machines;
 pub mod modules;

@@ -172,6 +172,22 @@ Ids come from the numbers in the file names, plus `--offset`. A project that alr
 
 Whatever cannot be mapped is listed, never dropped quietly: design notes, tasks, plans, open OpenSpec changes (start a change set for them), and sections such as Spec Kit's Key Entities. A file that already has an `id` is an OxiSpec node and is skipped. Where the source has no scenario for a requirement, a placeholder scenario is written, and where a statement has no SHALL or MUST the profile needs one, a sentence with SHALL is put before it. Each such step is a note on the node in the report, so `oxispec check` and the notes together show what is left to fill in. The command stops before writing if a target file already exists.
 
+### Deciding file by file
+
+`import specs` takes the specs only. To bring in the rest, and to choose what each file becomes, use a plan:
+
+```bash
+oxispec import plan start --from openspec     # writes .oxispec/import-plan.json and lists the items
+oxispec import plan show 2 --draft            # the file item 2 would write, and what is left to fill in
+oxispec import plan set 2 --kind adr          # requirement, change, adr or skip; --title renames it
+oxispec import apply --dry-run                # every file that would be written
+oxispec import apply                          # write them and remove the plan
+```
+
+An item is a spec (proposed as a requirement node), the design, tasks and plan files next to a spec (a change set), or an open change (a change set from its proposal, design, tasks and spec deltas), and archived changes (skipped). A change set is `draft`, with `Why`, `What changes` and `Impact` from the proposal, then `Design`, `Tasks` and one `Delta` section for each capability. The requirements that a delta modifies or removes are linked with `changes` when a node with that requirement exists, or is part of the same import. The ones it adds are listed and not linked. Headings in the copied text sit two levels deeper, so a `### Requirement:` in a delta is not read as a requirement of the change set. Nothing is written until `apply`, and it stops without writing if a target file exists.
+
+The `oxispec-import-specs` skill walks an agent through this: it proposes, asks the person about each item that could be something else, shows the drafts and the dry run, and applies only after a yes.
+
 ## Checks
 
 | Code | Meaning |
