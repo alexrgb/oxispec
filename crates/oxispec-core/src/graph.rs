@@ -145,6 +145,7 @@ impl Graph {
 
     /// Nodes that link to `node_id`, with the link kind. Reverse links are
     /// computed, never stored.
+    // spec: REQ-FORMAT-0006
     pub fn incoming(&self, node_id: &str) -> Vec<(&Node, &str)> {
         let base = id::base_of(node_id);
         let mut out = Vec::new();

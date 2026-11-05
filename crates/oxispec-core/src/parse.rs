@@ -342,6 +342,7 @@ pub fn parse_blocks(body: &str, line_offset: usize) -> Blocks {
 
 /// Parses one file. Files without frontmatter, or with frontmatter that has
 /// neither `id` nor `type`, are not nodes and produce nothing.
+// spec: REQ-FORMAT-0001
 pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) {
     let Some((yaml, body, consumed)) = split_frontmatter(text) else {
         return (None, Vec::new());
@@ -498,18 +499,21 @@ mod tests {
         assert_eq!(s[3].anchor.as_deref(), Some(""));
     }
 
+    // verifies: REQ-FORMAT-0001.S1
     #[test]
     fn ignores_files_without_frontmatter() {
         let (node, findings) = parse_file_text(Path::new("README.md"), "# Title\n");
         assert!(node.is_none() && findings.is_empty());
     }
 
+    // verifies: REQ-FORMAT-0001.S2
     #[test]
     fn ignores_unrelated_frontmatter() {
         let (node, findings) = parse_file_text(Path::new("p.md"), "---\ntitle: Page\n---\nbody\n");
         assert!(node.is_none() && findings.is_empty());
     }
 
+    // verifies: REQ-FORMAT-0001.S3
     #[test]
     fn missing_type_is_an_error() {
         let (node, findings) = parse_file_text(Path::new("p.md"), "---\nid: REQ-A-1\n---\n");

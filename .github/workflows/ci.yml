@@ -44,6 +44,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --locked
 
+  # The project's own specs (specs/), checked with the build of this commit.
+  specs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo run --locked --bin oxispec -- check
+      - run: cargo run --locked --bin oxispec -- coverage --fail-under 100
+
   # The oldest Rust we support, read from `rust-version` in Cargo.toml so there
   # is one place to change it.
   msrv:

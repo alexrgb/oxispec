@@ -56,6 +56,7 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | 32 | `docs/32-user-guide` | A user guide for the binary: getting started, concepts, writing requirements, code and tests, and moving from another tool, every command run against a real project | A new user can install, make a project, write and check a requirement, tie code to it and import from OpenSpec by following the guide. **Built** (this PR). See [guide](guide/README.md). The generated command reference and the site build are the next two steps. |
 | 33 | `docs/33-reference` | A command reference and a table of check codes written from the program (`oxispec docs reference`), with a test that fails when they are out of date | The reference lists every command and option, and the build fails if it was not regenerated. **Built** (this PR). See [reference](reference/commands.md). |
 | 34 | `docs/34-task-pages` | Task pages in the user guide for CI, releasing the specs, working with AI agents and MCP clients, run against a real project, with a test that the guide's links resolve | A user can set up CI checks, publish a spec release and connect an agent by following the pages. **Built** (this PR). Publishing the guide as a website is not built: `oxispec site` renders nodes, and the guide is plain markdown, so it waits for the project's own documentation to become nodes. GitHub renders the markdown in the meantime. |
+| 35 | `docs/35-own-specs` | The project uses OxiSpec on itself: `.oxispec/` and `specs/` with the rules of the node format as requirements (each scenario tied to an existing test) and three ADRs for the decisions behind them, checked in CI | `oxispec check` and `coverage --fail-under 100` pass on the repository and run as a CI job. **Built** (this PR). A first slice, not the whole documentation. See [own-specs.md](own-specs.md). |
 | 23+ | later | OIDC and richer policies for server mode, natural language layer, workspaces and federation | See design sections 10, 14 and 19 |
 
 The plan changes as we learn. Change it in a pull request, like anything else.
@@ -105,4 +106,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 32**: the user guide. See [guide](guide/README.md).
 - **Iteration 33**: the generated reference. See [reference](reference/commands.md).
 - **Iteration 34**: guide pages for CI, spec releases, agents and MCP. See [guide](guide/README.md).
+- **Iteration 35**: the project's own specs. See [own-specs.md](own-specs.md).
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).
