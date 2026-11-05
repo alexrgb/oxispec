@@ -1,8 +1,8 @@
 //! Import: specs written for another tool, read as requirement nodes.
 //!
-//! Four sources are understood: OpenSpec (`openspec/specs/<capability>/spec.md`),
-//! Spec Kit (`specs/<feature>/spec.md`), Kiro (`.kiro/specs/<feature>/requirements.md`)
-//! and plain markdown. Each spec file becomes one requirement node that holds a
+//! Six sources are understood: OpenSpec (`openspec/specs/<capability>/spec.md`),
+//! Spec Kit (`specs/<feature>/spec.md`), Kiro (`.kiro/specs/<feature>/requirements.md`),
+//! plain markdown, a product requirements document, and an OpenAPI or Swagger file. Each spec file becomes one requirement node that holds a
 //! `### Requirement:` block for each requirement in it. What has no place in a
 //! node (design notes, tasks, active changes) is listed, not dropped silently.
 
@@ -10,7 +10,10 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-pub const NAMES: &[&str] = &["openspec", "speckit", "kiro", "markdown"];
+mod sources;
+use sources::{find_openapi, prd};
+
+pub const NAMES: &[&str] = &["openspec", "speckit", "kiro", "markdown", "prd", "openapi"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
@@ -18,6 +21,10 @@ pub enum Source {
     SpecKit,
     Kiro,
     Markdown,
+    /// A product requirements document written as markdown.
+    Prd,
+    /// An OpenAPI or Swagger description, in JSON or YAML.
+    OpenApi,
 }
 
 impl Source {
@@ -27,6 +34,8 @@ impl Source {
             "speckit" | "spec-kit" => Some(Self::SpecKit),
             "kiro" => Some(Self::Kiro),
             "markdown" | "md" => Some(Self::Markdown),
+            "prd" => Some(Self::Prd),
+            "openapi" | "swagger" => Some(Self::OpenApi),
             _ => None,
         }
     }
@@ -37,7 +46,7 @@ impl Source {
             Self::OpenSpec => Some("openspec/specs"),
             Self::SpecKit => Some("specs"),
             Self::Kiro => Some(".kiro/specs"),
-            Self::Markdown => None,
+            Self::Markdown | Self::Prd | Self::OpenApi => None,
         }
     }
 }
@@ -155,7 +164,10 @@ fn collect_markdown(dir: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
 /// Finds the spec files under `dir`, and what next to them is left out.
 pub fn find(dir: &Path, source: Source) -> io::Result<Found> {
     let mut found = Found::default();
-    if source == Source::Markdown {
+    if source == Source::OpenApi {
+        return find_openapi(dir);
+    }
+    if matches!(source, Source::Markdown | Source::Prd) {
         let mut files = Vec::new();
         if dir.is_file() {
             files.push(dir.to_path_buf());
@@ -569,6 +581,9 @@ pub fn draft(input: &Input, source: Source, normative: bool) -> Draft {
         Source::SpecKit => speckit(&input.text),
         Source::Kiro => kiro(&input.text),
         Source::Markdown => markdown(&input.text, &input.name),
+        Source::Prd => prd(&input.text),
+        // `find` turned the description into the OpenSpec layout.
+        Source::OpenApi => openspec(&input.text),
     };
     for b in &mut blocks {
         if b.statement.is_empty() {
@@ -752,5 +767,49 @@ mod tests_of_import {
     fn a_file_with_an_id_is_already_a_node() {
         assert!(is_node("---\nid: REQ-A-0001\ntype: requirement\n---\nx"));
         assert!(!is_node("# Title\n---\nid: x"));
+    }
+
+    #[test]
+    fn prd_bullets_become_requirements_with_criteria() {
+        let text = "# Checkout PRD\n\n## Overview\nLet shoppers pay.\n\n## Non-goals\nRefunds.\n\n## Functional requirements\n- FR-1: Shoppers can pay by card\n  - WHEN the card is valid THEN the order is placed\n- As a shopper, I want to save my cart, so that I can return later\n\n## Out of scope\n- Gift cards\n\n## Open questions\n- Which PSP?\n";
+        let d = draft(&input("checkout", text), Source::Prd, true);
+        assert_eq!(d.blocks.len(), 2, "{:?}", d.blocks);
+        assert_eq!(d.blocks[0].title, "FR-1 Shoppers can pay by card");
+        assert_eq!(d.blocks[0].scenarios.len(), 1);
+        assert_eq!(d.blocks[1].title, "To save my cart");
+        assert!(
+            d.intro
+                .as_deref()
+                .is_some_and(|i| i.contains("Let shoppers pay"))
+        );
+        assert!(d.notes.iter().any(|n| n.contains("Non-goals")));
+        assert!(d.notes.iter().any(|n| n.contains("Open questions")));
+        assert!(d.notes.iter().any(|n| n.contains("Out of scope")));
+        assert_eq!(d.blocks.len(), 2);
+    }
+
+    #[test]
+    fn openapi_operations_become_requirements_by_tag() {
+        let dir = std::env::temp_dir().join(format!("oxispec-openapi-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("api.yaml");
+        std::fs::write(
+            &file,
+            "openapi: 3.0.0\ninfo:\n  title: Shop\npaths:\n  /orders/{id}:\n    get:\n      tags: [orders]\n      summary: Fetch an order\n      parameters:\n        - name: id\n          in: path\n          required: true\n      responses:\n        '200':\n          description: The order\n        '404':\n          description: No such order\n  /health:\n    get:\n      responses:\n        '200':\n          description: Fine\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("notes.yaml"), "a: b\n").unwrap();
+        let found = find(&dir, Source::OpenApi).unwrap();
+        assert_eq!(found.unmapped.len(), 1);
+        let names: Vec<_> = found.inputs.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(names, ["api", "orders"]);
+        let orders = found.inputs.iter().find(|i| i.name == "orders").unwrap();
+        let d = draft(orders, Source::OpenApi, true);
+        assert_eq!(d.blocks.len(), 1);
+        assert_eq!(d.blocks[0].title, "GET /orders/{id}");
+        assert!(d.blocks[0].statement.contains("Fetch an order"));
+        assert_eq!(d.blocks[0].scenarios.len(), 2);
+        assert!(d.notes.is_empty(), "{:?}", d.notes);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

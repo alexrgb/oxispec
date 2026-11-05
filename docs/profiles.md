@@ -167,6 +167,10 @@ Ids come from the numbers in the file names, plus `--offset`. A project that alr
 | `speckit` | `specs/<feature>/spec.md` | Each `FR-001: ...` line is a block. Each user story is a block, and its Given, When, Then lines are scenarios |
 | `kiro` | `.kiro/specs/<feature>/requirements.md` | Each `### Requirement N` is a block with the user story as its text. Each acceptance criterion is a scenario, split at `THEN` |
 | `markdown` | `--dir` names a file or a folder | The shallowest headings under the title are blocks, with their text |
+| `prd` | `--dir` names a PRD file or a folder of them | Overview, goals, background and problem sections are the purpose. Each bullet under a section named requirements, features, functional, user stories or scope is a block (`FR-1: ...` is titled by its id, `As a ... I want ...` by the goal). Bullets nested under it, and bullets under an Acceptance criteria heading, are scenarios, split at `THEN`. Other sections (non-goals, open questions, metrics) are listed as left out |
+| `openapi` | `--dir` names an OpenAPI or Swagger file (JSON or YAML) or a folder of them | One node per tag (`api` where an operation has none). Each operation is a block, `GET /orders/{id}`, with its summary as the text, and each response is a scenario. The description is read whole, so it has no plan; `import plan start --from openapi` says so |
+
+The `prd` and `openapi` sources have no default folder, so pass `--dir`. A PRD has no fixed layout, so the section names above are a guess: read the notes in the report and fix the node by hand where the guess was wrong. For an API description, the node is a start. It records which operations exist and what each answers; the behavior behind them is for you or an agent to write.
 
 `--dir` replaces the default folder. Each spec file becomes one node, `REQ-<NAME>-NNNN` in `specs/requirements/<name>/`, where the name is the capability or feature folder (or the file name) in capitals, without a leading number: `001-user-auth` gives `REQ-USERAUTH-0001`. `--id-scheme random` numbers them the other way.
 

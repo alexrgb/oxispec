@@ -1,6 +1,6 @@
 # Moving from another tool
 
-OxiSpec reads OpenSpec, Spec Kit, Kiro and plain markdown. Nothing is deleted or changed in the old folders.
+OxiSpec reads OpenSpec, Spec Kit, Kiro, plain markdown, product requirements documents (`--from prd`) and OpenAPI or Swagger descriptions (`--from openapi`). Nothing is deleted or changed in the old folders.
 
 ## Specs only, in one step
 
@@ -11,7 +11,7 @@ oxispec import specs --from openspec
 oxispec check
 ```
 
-Where it looks: `openspec/specs`, `specs` (Spec Kit), `.kiro/specs`; for `markdown` pass `--dir` with a file or folder. Each spec file becomes one requirement node; the report lists what was left out (design notes, tasks, plans and open changes).
+Where it looks: `openspec/specs`, `specs` (Spec Kit), `.kiro/specs`; for `markdown`, `prd` and `openapi` pass `--dir` with a file or folder. `prd` reads the bullets under requirements, features and user-story sections; `openapi` writes a node for each tag, a block for each operation and a scenario for each response (see [profiles.md](../profiles.md#importing-specs-from-other-tools)). Each spec file becomes one requirement node; the report lists what was left out (design notes, tasks, plans and open changes).
 
 The import does not invent content. Where a source has no scenario, it writes a placeholder, and where the project's style needs SHALL or MUST and the text has none, it adds a sentence that does. Each is a note in the report, and `oxispec check` shows what is left to fill in. A second run refuses to overwrite files.
 

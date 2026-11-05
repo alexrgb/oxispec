@@ -5960,6 +5960,49 @@ fn import_specs_takes_plain_markdown_and_refuses_unknown_sources() {
     assert!(out.stderr.contains("unknown source"), "{}", out.stderr);
 }
 
+#[test]
+fn import_specs_reads_a_prd_and_an_openapi_description() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    fs::write(
+        p.join("prd.md"),
+        "# Checkout\n\n## Overview\nLet shoppers pay.\n\n## Functional requirements\n- FR-1: Shoppers can pay by card\n  - WHEN the card is valid THEN the order is placed\n",
+    )
+    .unwrap();
+    let out = run(p, &["import", "specs", "--from", "prd", "--dir", "prd.md"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let text = fs::read_to_string(p.join("specs/requirements/prd/prd.md")).unwrap();
+    assert!(
+        text.contains("### Requirement: FR-1 Shoppers can pay by card"),
+        "{text}"
+    );
+    assert!(text.contains("**THEN** the order is placed"), "{text}");
+
+    fs::write(
+        p.join("api.json"),
+        "{\"openapi\":\"3.0.0\",\"info\":{\"title\":\"Shop\"},\"paths\":{\"/orders\":{\"post\":{\"tags\":[\"orders\"],\"summary\":\"Place an order\",\"responses\":{\"201\":{\"description\":\"Created\"}}}}}}",
+    )
+    .unwrap();
+    let out = run(
+        p,
+        &["import", "specs", "--from", "openapi", "--dir", "api.json"],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let text = fs::read_to_string(p.join("specs/requirements/orders/orders.md")).unwrap();
+    assert!(text.contains("### Requirement: POST /orders"), "{text}");
+    assert!(text.contains("responds with 201: Created"), "{text}");
+    let out = run(
+        p,
+        &[
+            "import", "plan", "start", "--from", "openapi", "--dir", "api.json",
+        ],
+    );
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("no plan"), "{}", out.stderr);
+    assert_eq!(run(p, &["check"]).code, 0);
+}
+
 fn project_with_a_standard(p: &Path, standard: &str) {
     git(p, &["init", "-q"]);
     assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);
