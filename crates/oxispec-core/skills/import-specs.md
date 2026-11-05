@@ -18,4 +18,4 @@ Bring the specs, changes and design notes of OpenSpec, Spec Kit, Kiro or plain m
 - Imported change sets are `draft`. Do not approve them; a person does that.
 - Do not edit the imported text to make `check` pass before the person has seen it. Report the findings, then fix with them.
 - Do not invent what is missing: a decision, a reason, a scenario. Leave the placeholder and say it is still to be written.
-- `oxispec import specs --from <tool>` imports only the specs, in one step, with no plan. Use the plan when there are changes or design notes.
+- `oxispec import specs --from <tool>` imports only the specs, in one step, with no plan. `--from prd` reads a product requirements document and `--from openapi` an OpenAPI or Swagger file; both need `--dir`, and `openapi` has no plan. After either, read the notes and fill in the scenarios and statements the import could only guess. Use the plan when there are changes or design notes.

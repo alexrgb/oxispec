@@ -555,7 +555,7 @@ Look at the files and propose what to make of each. Writes .oxispec/import-plan.
 Usage: oxispec import plan start [OPTIONS] --from <FROM>
 ```
 
-- `--from <FROM>`: openspec, speckit, kiro or markdown. Required.
+- `--from <FROM>`: openspec, speckit, kiro, markdown, prd (a product requirements document) or openapi (OpenAPI or Swagger, JSON or YAML). Required.
 - `--dir <DIR>`
 - `--force`: Start again, replacing a plan that exists.
 - `--json`
@@ -603,7 +603,7 @@ Specs of OpenSpec, Spec Kit, Kiro or plain markdown. Each file becomes a require
 Usage: oxispec import specs [OPTIONS] --from <FROM>
 ```
 
-- `--from <FROM>`: openspec, speckit, kiro or markdown. Required.
+- `--from <FROM>`: openspec, speckit, kiro, markdown, prd (a product requirements document) or openapi (OpenAPI or Swagger, JSON or YAML). Required.
 - `--dir <DIR>`: The folder of specs (for markdown, a file or folder). Default: where the tool keeps them.
 - `--format <FORMAT>`: The requirement profile to write them in. Default: the one the config chooses.
 - `--id-scheme <ID_SCHEME>`: sequential or random; overrides the config. One of `sequential`, `random`.

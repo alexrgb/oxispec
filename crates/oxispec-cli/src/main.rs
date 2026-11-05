@@ -542,7 +542,8 @@ enum ImportKind {
     /// Specs of OpenSpec, Spec Kit, Kiro or plain markdown. Each file becomes a requirement node;
     /// what has no place in one (design notes, tasks, open changes) is listed
     Specs {
-        /// openspec, speckit, kiro or markdown
+        /// openspec, speckit, kiro, markdown, prd (a product requirements document) or openapi
+        /// (OpenAPI or Swagger, JSON or YAML)
         #[arg(long)]
         from: String,
         /// The folder of specs (for markdown, a file or folder). Default: where the tool keeps them
@@ -578,7 +579,8 @@ enum DocsAction {
 enum PlanAction {
     /// Look at the files and propose what to make of each. Writes .oxispec/import-plan.json
     Start {
-        /// openspec, speckit, kiro or markdown
+        /// openspec, speckit, kiro, markdown, prd (a product requirements document) or openapi
+        /// (OpenAPI or Swagger, JSON or YAML)
         #[arg(long)]
         from: String,
         #[arg(long)]

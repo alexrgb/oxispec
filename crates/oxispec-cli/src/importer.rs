@@ -46,7 +46,10 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
         (Some(d), _) => d.to_path_buf(),
         (None, Some(d)) => root.join(d),
         (None, None) => {
-            bail!("plain markdown has no default place; pass `--dir` with a file or folder")
+            bail!(
+                "`{}` has no default place; pass `--dir` with a file or folder",
+                opts.from
+            )
         }
     };
     if !dir.exists() {
@@ -284,8 +287,13 @@ pub fn plan_start(
     let dir: PathBuf = match (dir, source.default_dir()) {
         (Some(d), _) => d.to_path_buf(),
         (None, Some(d)) => root.join(d),
-        (None, None) => bail!("plain markdown has no default place; pass `--dir`"),
+        (None, None) => bail!("`{from}` has no default place; pass `--dir`"),
     };
+    if source == Source::OpenApi {
+        bail!(
+            "an API description is read whole, so it has no plan; use `oxispec import specs --from openapi`"
+        );
+    }
     if !dir.exists() {
         bail!("{} does not exist; pass `--dir`", dir.display());
     }
