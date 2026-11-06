@@ -138,6 +138,18 @@ Arguments:
 - `severity` (string, optional): Only items with this severity.
 - `status` (string, optional): Only items with this status.
 
+## `spec_risks`
+
+The risk register, the most serious level first and the oldest first: each risk's status, likelihood, impact, level, owner, review date, what mitigates it and what it arises from, and the live critical risks that hold a release back. Problems come from spec_check.
+
+Needs the `risks` module. Read only.
+
+Arguments:
+
+- `all` (boolean, optional): Include risks that are not live (mitigated, accepted, closed). Default: false.
+- `level` (string, optional): Only risks at this level.
+- `status` (string, optional): Only risks with this status.
+
 ## `spec_machine`
 
 State machines. Without an ID, every machine. With an ID, its transitions and each property with a counterexample path if it is violated, or a Mermaid diagram or one test per transition. Problems come from spec_check.

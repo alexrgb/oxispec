@@ -61,6 +61,9 @@ pub struct Scenario {
     /// The step keywords in the order written (`given`, `when`, `then`, `and`, `but`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub steps: Vec<String>,
+    /// Status codes the scenario says the API responds with (`responds with 404`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub responds: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

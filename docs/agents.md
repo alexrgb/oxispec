@@ -19,6 +19,7 @@ Skills tell an AI coding agent how to work with the specs: how to look things up
 | `oxispec-write-api` | specs | An API as requirements titled as calls, the OpenAPI skeleton made from them, and the comparison with a real file |
 | `oxispec-import-specs` | specs | Moves specs, open changes and design notes from another tool in, with the person deciding what each file becomes |
 | `oxispec-write-test-plan` | tests | A test plan for requirements and risks, read against the tests, with approval left to a person |
+| `oxispec-review-security` | risks | A security review of an API or design with the OWASP lists as the lens, recording findings as risks for a person to rate |
 | `oxispec-manage-risks` | risks | Recording a risk, linking what mitigates it, and leaving acceptance to a person |
 | `oxispec-manage-debt` | debt | Recording a shortcut as a debt item, keeping the backlog honest and paying items off |
 | `oxispec-review-change` | core | Reviewing a branch with `ci`, `diff` and `suspect` |

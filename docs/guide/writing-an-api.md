@@ -67,3 +67,9 @@ To fill the card, link the requirement: `oxispec link REQ-ORDERS-0001 refines PR
 Removing an operation, or one of its responses, is a breaking change in a release: `oxispec release prepare` suggests a major version (a minor one before 1.0) and lists it under Breaking in the notes. Adding an operation is a minor change. This works from the requirements, so it holds for an API that is described in them. Changes to schemas are not seen.
 
 An existing description can be brought in once with `oxispec import specs --from openapi --dir openapi.yaml`, which writes the requirements in this form. See [Moving from another tool](importing.md).
+
+## Security
+
+`oxispec check` warns (W023) about an operation that has no scenario responding with `401` or `403`, but only in a project where some other operation has one. A project that has not started to model who may call gets no warnings. Once it has, an operation that never says what happens to a caller who may not use it shows up, which is where broken access control tends to hide. An operation whose statement says it is `public` is left alone: `The API SHALL provide \`GET /health\`: a public check.`
+
+This is a prompt to state the behavior, not a security test. It does not know whether the check exists in the code. Pair it with a scenario and a test, and record what you find in the [risk register](../risks.md). The skill `oxispec-review-security` walks an API through the OWASP API Security Top 10 and records risks for a person to rate.

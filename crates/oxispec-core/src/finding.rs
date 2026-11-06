@@ -219,6 +219,10 @@ pub const CODES: &[(&str, &str)] = &[
         "W022",
         "A live risk at a high level is covered by no approved test plan",
     ),
+    (
+        "W023",
+        "An operation states no 401 or 403 response, though other operations do",
+    ),
     ("I001", "A link to another project is not checked"),
     (
         "I002",

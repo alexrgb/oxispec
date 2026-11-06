@@ -403,6 +403,58 @@ pub fn card<'a>(graph: &Graph, op: &'a Operation) -> Card<'a> {
     }
 }
 
+/// Operations that state no 401 or 403 response, in a project where other
+/// operations do. Once a project models who may call (some operation
+/// answers 401 or 403), an operation that never says what happens to a
+/// caller who may not is a gap, and a place where broken access control
+/// hides. An operation whose statement says it is public is left alone.
+// spec: REQ-API-0006
+pub fn check(graph: &Graph) -> Vec<crate::finding::Finding> {
+    struct Op<'a> {
+        node: &'a crate::node::Node,
+        call: &'a str,
+        denies: bool,
+        public: bool,
+        line: usize,
+    }
+    let mut ops: Vec<Op> = Vec::new();
+    for node in graph.nodes.iter().filter(|n| n.ty == "requirement") {
+        for b in &node.requirements {
+            if parse_call(&b.name).is_none() {
+                continue;
+            }
+            ops.push(Op {
+                node,
+                call: &b.name,
+                denies: b
+                    .scenarios
+                    .iter()
+                    .flat_map(|s| &s.responds)
+                    .any(|c| c == "401" || c == "403"),
+                public: b.statement.to_ascii_lowercase().contains("public"),
+                line: b.line,
+            });
+        }
+    }
+    if !ops.iter().any(|o| o.denies) {
+        return Vec::new();
+    }
+    ops.iter()
+        .filter(|o| !o.denies && !o.public)
+        .map(|o| {
+            crate::finding::Finding::warning(
+                "W023",
+                format!(
+                    "{} says nothing about a caller who may not use it: no scenario responds with 401 or 403 (say `public` in its statement if anyone may call it)",
+                    o.call
+                ),
+            )
+            .at(&o.node.path, Some(o.line))
+            .node(&o.node.id)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -539,5 +591,40 @@ mod tests {
                 .iter()
                 .all(|s| s.starts_with("REQ-ORDERS-0001.S"))
         );
+    }
+
+    // verifies: REQ-API-0006.S1
+    #[test]
+    fn an_operation_without_a_denial_is_warned_about_once_the_project_models_one() {
+        let req = |id: &str, call: &str, extra: &str, code: &str| {
+            format!(
+                "---\nid: {id}\ntype: requirement\nstatus: draft\n---\n# {id}: R\n\n### Requirement: {call}\nThe API SHALL provide `{call}`{extra}.\n\n#### Scenario: Ok {{#S1}}\n- **WHEN** a\n- **THEN** the API responds with {code}\n"
+            )
+        };
+        let graph = |files: &[(&str, String)]| {
+            Graph::from_sources(
+                files
+                    .iter()
+                    .map(|(p, t)| (PathBuf::from(p), t.clone().into_bytes()))
+                    .collect::<Vec<_>>(),
+            )
+        };
+        // No operation answers 401 or 403: nothing is asked.
+        let none = graph(&[("a.md", req("REQ-A-0001", "GET /orders", "", "200"))]);
+        assert!(check(&none).is_empty());
+        // One does, so the others are asked.
+        let some = graph(&[
+            ("a.md", req("REQ-A-0001", "GET /orders", "", "200")),
+            ("b.md", req("REQ-A-0002", "DELETE /orders", "", "403")),
+            (
+                "c.md",
+                req("REQ-A-0003", "GET /health", ": a public check", "200"),
+            ),
+            ("d.md", req("REQ-A-0004", "Orders are kept", "", "200")),
+        ]);
+        let found = check(&some);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].code, "W023");
+        assert!(found[0].message.contains("GET /orders"));
     }
 }

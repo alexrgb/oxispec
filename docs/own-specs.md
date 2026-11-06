@@ -15,7 +15,7 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-CHANGE-0001`, `0002` | A change set follows a lifecycle; approval is recorded and can be withdrawn |
 | `REQ-MCP-0001` to `0004` | The read tools answer as the commands do; tools are offered by module and mode; arguments cannot be read as options; an agent can propose a change set but never approve it |
 | `REQ-PRD-0001` | A PRD is made from the nodes |
-| `REQ-API-0001` to `0005` | Operations come from the requirements; a description is compared with them; an operation has a card; removing from the API is breaking; a running service can be compared |
+| `REQ-API-0001` to `0006` | Operations come from the requirements; a description is compared with them; an operation has a card; removing from the API is breaking; a running service can be compared; an operation says what happens to a caller who may not use it |
 | `REQ-COMPLIANCE-0001` to `0003` | Rules grow with the level; a requirement past draft meets the rules of the standard; the compliance settings are checked |
 | `REQ-STYLE-0001`, `0002` | A requirement is worded as its style asks; a node meets its format profile |
 | `REQ-IMPORT-0001`, `0002` | An import reads the specs of other tools; a plan proposes what each file becomes |

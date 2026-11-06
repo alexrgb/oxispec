@@ -5650,6 +5650,40 @@ fn debt_needs_its_module_and_an_mcp_client_can_read_the_backlog() {
     assert!(is_error);
 }
 
+#[test]
+fn the_risk_register_is_an_mcp_tool_when_the_module_is_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(
+        run(p, &["init", "--preset", "minimal", "--with", "mcp"]).code,
+        0
+    );
+    assert!(!debt_tool_names(p).contains(&"spec_risks".to_string()));
+    assert_eq!(run(p, &["modules", "add", "risks"]).code, 0);
+    assert_eq!(
+        run(
+            p,
+            &[
+                "new",
+                "risk",
+                "Guessable ids",
+                "--likelihood",
+                "high",
+                "--impact",
+                "high"
+            ]
+        )
+        .code,
+        0
+    );
+    assert!(debt_tool_names(p).contains(&"spec_risks".to_string()));
+    let (is_error, text) = call_tool(p, "spec_risks", serde_json::json!({"level": "critical"}));
+    assert!(!is_error, "{text}");
+    assert!(text.contains("RISK-0001"), "{text}");
+    let (is_error, _) = call_tool(p, "spec_risks", serde_json::json!({"level": "Huge!"}));
+    assert!(is_error);
+}
+
 fn debt_tool_names(p: &Path) -> Vec<String> {
     tool_names(&mcp(
         p,

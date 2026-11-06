@@ -148,6 +148,12 @@ pub const SKILLS: &[Skill] = &[
         body: include_str!("../skills/write-test-plan.md"),
     },
     Skill {
+        name: "oxispec-review-security",
+        description: "Review a feature, an API or a design for security with the OWASP API Security Top 10 or ASVS as the lens, and record what is found as risks for the person to rate and accept. Use when asked for a security review, a threat check, or whether an API is safe.",
+        requires: &["risks"],
+        body: include_str!("../skills/review-security.md"),
+    },
+    Skill {
         name: "oxispec-manage-risks",
         description: "Record a risk to the application, keep the register honest, and decide with the person what to do about each: owner, likelihood, impact, what mitigates it, who accepts it. Use when a threat or weakness is found, a design is reviewed for security, or you are asked what risks there are.",
         requires: &["risks"],

@@ -68,5 +68,6 @@ A code is never reused. `E` is an error (`oxispec check` exits with 1), `W` a wa
 | W020 | warning | A test plan covers nothing |
 | W021 | warning | A requirement is accepted but no approved test plan covers it |
 | W022 | warning | A live risk at a high level is covered by no approved test plan |
+| W023 | warning | An operation states no 401 or 403 response, though other operations do |
 | I001 | info | A link to another project is not checked |
 | I002 | info | A claim says nothing that another claim does not already say |

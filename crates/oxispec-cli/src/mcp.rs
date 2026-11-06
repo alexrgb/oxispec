@@ -384,6 +384,19 @@ impl Server<'_> {
                 false,
             ));
         }
+        if self.cfg.has("risks") {
+            tools.push(tool(
+                "spec_risks",
+                "The risk register, the most serious level first and the oldest first: each risk's status, likelihood, impact, level, owner, review date, what mitigates it and what it arises from, and the live critical risks that hold a release back. Problems come from spec_check.",
+                json!({
+                    "status": {"type": "string", "enum": ["open", "mitigating", "mitigated", "accepted", "closed"], "description": "Only risks with this status"},
+                    "level": {"type": "string", "enum": ["low", "medium", "high", "critical"], "description": "Only risks at this level"},
+                    "all": {"type": "boolean", "description": "Include risks that are not live (mitigated, accepted, closed). Default: false."},
+                }),
+                &[],
+                false,
+            ));
+        }
         if self.cfg.has("statemachines") {
             tools.push(tool(
                 "spec_machine",
@@ -532,6 +545,21 @@ impl Server<'_> {
                 let severity = optional_word(args, "severity")?;
                 if let Some(severity) = &severity {
                     cmd.extend(["--severity", severity]);
+                }
+                if args.get("all").and_then(Value::as_bool) == Some(true) {
+                    cmd.push("--all");
+                }
+                self.cli(&cmd)
+            }
+            "spec_risks" => {
+                let mut cmd = vec!["risks", "--json"];
+                let status = optional_word(args, "status")?;
+                if let Some(status) = &status {
+                    cmd.extend(["--status", status]);
+                }
+                let level = optional_word(args, "level")?;
+                if let Some(level) = &level {
+                    cmd.extend(["--level", level]);
                 }
                 if args.get("all").and_then(Value::as_bool) == Some(true) {
                     cmd.push("--all");
