@@ -18,6 +18,7 @@ mod output;
 
 mod adr;
 mod agents;
+mod api;
 mod architecture;
 mod changes;
 mod ci;
@@ -26,6 +27,7 @@ mod compliance;
 mod connect;
 mod context;
 mod debt;
+mod fetch;
 mod formats;
 mod git;
 mod history;
@@ -224,6 +226,11 @@ enum Command {
         /// Where to append one JSON line per request. Default: .oxispec/server/audit.jsonl
         #[arg(long, value_name = "FILE")]
         audit_log: Option<PathBuf>,
+    },
+    /// An API as the requirements state it
+    Api {
+        #[command(subcommand)]
+        action: ApiAction,
     },
     /// Test plans read against the tests: what each covers, which scenarios no test verifies or
     /// that fail, and whether what mitigates each risk is tested
@@ -610,9 +617,10 @@ enum DocsAction {
         /// Write the skeleton to this file instead of printing it
         #[arg(long)]
         out: Option<PathBuf>,
-        /// Compare this OpenAPI or Swagger file (JSON or YAML) with the requirements
+        /// Compare this OpenAPI or Swagger file (JSON or YAML), or the description a running
+        /// service serves at an http:// address, with the requirements
         #[arg(long)]
-        against: Option<PathBuf>,
+        against: Option<String>,
         #[arg(long, default_value = "API")]
         title: String,
         #[arg(long, default_value = "0.1.0")]
@@ -786,6 +794,18 @@ enum NewKind {
     Machine { title: String },
     /// An element of the architecture model, or a deployment environment
     Architecture { kind: ElementKind, title: String },
+}
+
+#[derive(Subcommand)]
+enum ApiAction {
+    /// Everything the project says about an operation: its requirement, PRD, decisions, debt,
+    /// risks, test plans, responses and how each scenario is tested. Name it by its call
+    /// (`"GET /orders/{id}"`) or by its requirement ID
+    Show {
+        target: String,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1065,6 +1085,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
+        Command::Api { action } => {
+            let root = project_root(cli.root.as_deref())?;
+            match action {
+                ApiAction::Show { target, json } => api::show(&root, &target, json, cache)?,
+            }
+            Ok(ExitCode::SUCCESS)
+        }
         Command::TestPlan { id, strict, json } => {
             let root = project_root(cli.root.as_deref())?;
             testplan::run(&root, id.as_deref(), strict, json, cache)
@@ -1113,13 +1140,17 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     let graph = load_graph(&root, cache);
                     let ops = oxispec_core::api::operations(&graph, &root)?;
                     if let Some(file) = against {
-                        let doc = oxispec_core::api::load(&file)?;
+                        let doc = if file.starts_with("http://") || file.starts_with("https://") {
+                            oxispec_core::api::parse(&fetch::get(&file)?, &file)?
+                        } else {
+                            oxispec_core::api::load(Path::new(&file))?
+                        };
                         let d = oxispec_core::api::drift(&ops, &doc);
                         for c in &d.only_in_requirements {
                             outln!("only in the requirements: {c}");
                         }
                         for c in &d.only_in_description {
-                            outln!("only in {}: {c}", file.display());
+                            outln!("only in {file}: {c}");
                         }
                         for (c, missing, extra) in &d.codes {
                             outln!(
@@ -1139,7 +1170,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                         if d.is_empty() {
                             outln!(
                                 "{} and the requirements agree on {} operation(s)",
-                                file.display(),
+                                file,
                                 ops.len()
                             );
                             return Ok(ExitCode::SUCCESS);

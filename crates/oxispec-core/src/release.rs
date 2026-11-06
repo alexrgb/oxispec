@@ -172,6 +172,7 @@ fn labelled(node: &Node) -> String {
     }
 }
 
+// spec: REQ-API-0004
 /// Sorts a diff into breaking, added and changed. `new` is the state being
 /// released, used to look up titles.
 pub fn summarize(new: &Graph, diff: &GraphDiff) -> Summary {
@@ -1017,5 +1018,37 @@ mod tests {
             trace: None,
         });
         assert!(!all.iter().any(|g| g.name == "no-critical-risks"));
+    }
+
+    // verifies: REQ-API-0004.S1
+    #[test]
+    fn removing_an_operation_or_a_response_is_a_breaking_change() {
+        let two = "### Requirement: GET /orders\nThe API SHALL provide `GET /orders`: list.\n\n#### Scenario: Ok {#S1}\n- **WHEN** a\n- **THEN** the API responds with 200\n\n#### Scenario: Denied {#S2}\n- **WHEN** b\n- **THEN** the API responds with 403\n\n### Requirement: POST /orders\nThe API SHALL provide `POST /orders`: place.\n\n#### Scenario: Made {#S3}\n- **WHEN** c\n- **THEN** the API responds with 201\n";
+        let old = graph(&[("a.md", req("REQ-ORDERS-0001", "", two))]);
+        let no_post = two.split("### Requirement: POST").next().unwrap();
+        let fewer_ops = graph(&[("a.md", req("REQ-ORDERS-0001", "", no_post))]);
+        let summary = summarize(&fewer_ops, &diff_graphs(&old, &fewer_ops));
+        assert_eq!(summary.bump(), Bump::Major);
+        assert!(
+            summary.breaking.iter().any(|b| b.contains("POST /orders")),
+            "{:?}",
+            summary.breaking
+        );
+        let no_403 = two.replace(
+            "#### Scenario: Denied {#S2}\n- **WHEN** b\n- **THEN** the API responds with 403\n\n",
+            "",
+        );
+        let fewer_codes = graph(&[("a.md", req("REQ-ORDERS-0001", "", &no_403))]);
+        let summary = summarize(&fewer_codes, &diff_graphs(&old, &fewer_codes));
+        assert_eq!(summary.bump(), Bump::Major);
+        // A new operation is only an addition.
+        let grown = format!(
+            "{two}\n### Requirement: DELETE /orders\nThe API SHALL provide `DELETE /orders`: clear.\n\n#### Scenario: Gone {{#S4}}\n- **WHEN** d\n- **THEN** the API responds with 204\n"
+        );
+        let bigger = graph(&[("a.md", req("REQ-ORDERS-0001", "", &grown))]);
+        assert_eq!(
+            summarize(&bigger, &diff_graphs(&old, &bigger)).bump(),
+            Bump::Minor
+        );
     }
 }

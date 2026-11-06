@@ -3,7 +3,7 @@ name: oxispec-write-api
 description: "Describe an HTTP API as requirements titled as calls, make the skeleton of its OpenAPI description from them, and compare a real openapi file with them. Use when asked to design or document an API, or to see whether the spec and the API file agree."
 metadata:
   generated-by: oxispec
-  content-hash: "95192e1087b06c86"
+  content-hash: "365f27f5c22bf684"
 ---
 
 # Write an API as requirements
@@ -28,7 +28,7 @@ Describe an HTTP API as requirements, so that the skeleton of its OpenAPI descri
 
    Make the node with `oxispec new requirement <domain> "<title>"` and put the blocks in it. The domain becomes the tag.
 5. Run `oxispec check`, then `oxispec docs openapi` to see the skeleton.
-6. If the project keeps an `openapi.yaml` in the code, run `oxispec docs openapi --against openapi.yaml`. A call or status code that only one side has is for the person to settle: either the requirement or the file is out of date. Say which one you think it is, and change nothing until they decide.
+6. If the project keeps an `openapi.yaml` in the code, or the service serves its description at an `http://` address (`--against http://localhost:8080/v3/api-docs`), run `oxispec docs openapi --against openapi.yaml`. A call or status code that only one side has is for the person to settle: either the requirement or the file is out of date. Say which one you think it is, and change nothing until they decide.
 
 ## Rules
 

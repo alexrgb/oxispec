@@ -41,4 +41,29 @@ oxispec docs openapi --against openapi.yaml
 
 It prints each call that only the requirements or only the file has, and each call whose status codes differ, and exits 1 on any difference. Run it in CI next to `oxispec check`. It does not say which side is right. Decide, then change the requirement or the file.
 
+### A running service
+
+Most frameworks serve their description at an address: `/v3/api-docs` (Spring Boot with springdoc), `/openapi.json` (FastAPI), `/openapi/v1.json` (ASP.NET Core from .NET 9), `/api-json` (NestJS with `@nestjs/swagger`). Give that address instead of a file:
+
+```bash
+oxispec docs openapi --against http://localhost:8080/v3/api-docs
+```
+
+Only plain `http://` works, because no TLS library is linked. For an `https://` service, or one that needs a login, save the description with `curl` in the CI job and compare the file. A framework that writes the description at build time (springdoc's Maven plugin, `drf-spectacular`, `swag init`) needs no running service: compare the file it wrote.
+
+## One operation, with what surrounds it
+
+```bash
+oxispec api show "GET /orders/{id}"      # or the requirement ID, REQ-ORDERS-0001
+oxispec api show REQ-ORDERS-0001 --json
+```
+
+The card gives the summary, the requirement and its status, the PRD it refines, the decisions it was made by (`decided-by`), the tech debt that arises from it, the risks that arise from it or that it mitigates (with their level), the test plans that cover it, its responses, and how each scenario stands: `verified`, `no test` or `failing` (from the imported results). With the `tests` module off, the scenario states are unknown and say so.
+
+To fill the card, link the requirement: `oxispec link REQ-ORDERS-0001 refines PRD-0001`, `... decided-by ADR-0004`; `oxispec new debt "..." --from REQ-ORDERS-0001`; `oxispec new risk "..." --from REQ-ORDERS-0001`; `oxispec link TP-0001 covers REQ-ORDERS-0001`.
+
+## Breaking changes
+
+Removing an operation, or one of its responses, is a breaking change in a release: `oxispec release prepare` suggests a major version (a minor one before 1.0) and lists it under Breaking in the notes. Adding an operation is a minor change. This works from the requirements, so it holds for an API that is described in them. Changes to schemas are not seen.
+
 An existing description can be brought in once with `oxispec import specs --from openapi --dir openapi.yaml`, which writes the requirements in this form. See [Moving from another tool](importing.md).
