@@ -1,6 +1,6 @@
 # The project's own specs
 
-OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the parts of the product that are written down as specs, and `oxispec check` and `oxispec coverage` run on them in CI (the `specs` job in `.github/workflows/ci.yml`). It covers the rules of the node file format, change sets, the MCP server, PRDs, API operations, tech debt, releases, risks, test plans, compliance profiles, format profiles and styles, import, search, diffs, rollback, impact and context packs. The rest of the documentation is still plain markdown in `docs/`.
+OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the parts of the product that are written down as specs, and `oxispec check` and `oxispec coverage` run on them in CI (the `specs` job in `.github/workflows/ci.yml`). It covers the rules of the node file format, change sets, the MCP server, PRDs, API operations, tech debt, releases, risks, test plans, compliance profiles, format profiles and styles, import, search, diffs, rollback, impact, context packs, the trace scan and suspect links. The rest of the documentation is still plain markdown in `docs/`.
 
 ## What is there
 
@@ -16,6 +16,8 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-MCP-0001` to `0004` | The read tools answer as the commands do; tools are offered by module and mode; arguments cannot be read as options; an agent can propose a change set but never approve it |
 | `REQ-PRD-0001` | A PRD is made from the nodes |
 | `REQ-API-0001` to `0006` | Operations come from the requirements; a description is compared with them; an operation has a card; removing from the API is breaking; a running service can be compared; an operation says what happens to a caller who may not use it |
+| `REQ-TRACE-0001` to `0003` | Annotations are read from comments; coverage is counted from annotations; a marker inside a string is not an annotation |
+| `REQ-SUSPECT-0001` | A link goes suspect when either side changes |
 | `REQ-SEARCH-0001`, `0002` | Search finds what is written; the index follows the files |
 | `REQ-DIFF-0001`, `0002` | A diff names each kind of change; graphs are compared by node |
 | `REQ-ROLLBACK-0001`, `0002` | A rollback names an action for each node; it is checked before it is made |
@@ -40,7 +42,7 @@ When a change alters one of these rules, change the requirement in the same pull
 
 ## The trace scan and test data
 
-`.oxispec/config.yaml` leaves a few files out of the scan (`trace.exclude`): the tests of the scanner itself hold annotations as sample text, in strings that look like comments, and the scan reads comments without parsing the language. If you add such a test, add its file there. A test file that also carries real `verifies:` comments (`crates/oxispec-cli/tests/cli.rs`) is scanned instead, and its few fixtures are written with `concat!("// spe", "c: ...")` so the scan does not see them.
+Nothing is left out of the scan (`trace.exclude` is empty). For Rust, Go, TypeScript and JavaScript the scan reads a marker only in a real comment, found with the same parsers as the suspect links, so a test can hold `"// spec: REQ-A-0001"` in a string, or in a raw or multi-line string, and it is text. An example in the middle of a doc comment is not read either. The scenario ID in brackets as a test name is not read in Rust files, where a test is a function with no title, nor in comments. The setting still exists for a project that wants to leave a path out (generated code, fixtures); see [trace.md](trace.md).
 
 ## Publishing
 

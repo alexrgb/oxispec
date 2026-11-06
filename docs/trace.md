@@ -19,8 +19,8 @@ it('ends idle sessions [REQ-AUTH-0012.S1]', () => {})
 ```
 
 - **`spec: ID`** marks code that implements a requirement. **`verifies: ID`** marks a test. Several IDs can follow, separated by commas: `// spec: REQ-A-0001, REQ-A-0002`. Text after the IDs is ignored. `Spec:` and `Verifies:` work too.
-- **A scenario ID in brackets** (`[REQ-AUTH-0012.S1]`) anywhere on a line counts as `verifies`, which suits test names. It must name a scenario, so plain lists such as `[1, 2]` or `[REQ-A-0001]` are not read.
-- A marker only counts **inside a comment**, in any language that uses `//`, `#`, `/* */`, `--`, `<!-- -->`, `;`, or docstring quotes. There is no parser per language, so a marker in a string that looks like a comment would be read too. IDs must start with capital letters (`REQ`, `ADR`, `CHG`), so prose like `spec: see-above` is left alone.
+- **A scenario ID in brackets** (`[REQ-AUTH-0012.S1]`) anywhere on a line counts as `verifies`, which suits test names. It must name a scenario, so plain lists such as `[1, 2]` or `[REQ-A-0001]` are not read. It is not read in a Rust file (a Rust test has no title), in a comment, or as an index such as `s["REQ-A-0001.S1"]`.
+- A marker only counts **inside a comment**. For Go, Rust, TypeScript and JavaScript the scan uses the same tree-sitter parsers as the suspect links, so a marker counts only when it is the first thing in a real comment: not in a string, a raw string or a string over several lines, and not as an example in the middle of a doc comment (``// spec: REQ-A-0001`` after other words). For other languages there is no parser, and a marker counts after `//`, `#`, `/* */`, `--`, `<!-- -->`, `;`, or docstring quotes, unless that leader stands inside a double-quoted string on its line. IDs must start with capital letters (`REQ`, `ADR`, `CHG`), so prose like `spec: see-above` is left alone.
 - A **scenario can only be named if it has an anchor**: `#### Scenario: Idle admin {#S1}`.
 - **Links in nodes count as well.** A `test-case` node with `links: {verifies: REQ-AUTH-0012.S1}` covers that scenario, like a comment does.
 

@@ -87,11 +87,57 @@ fn leading_ids(rest: &str) -> Vec<&str> {
     found
 }
 
+/// Whether `at` in `line` falls inside a double-quoted string, judged from the
+/// quotes before it on the same line. A backslash escapes the next character and
+/// `'"'` is not a quote. A string that runs over several lines is not seen.
+fn in_string(line: &str, at: usize) -> bool {
+    let mut inside = false;
+    let mut chars = line[..at].chars().peekable();
+    let mut previous = ' ';
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' if inside => {
+                chars.next();
+            }
+            '"' if previous == '\'' && chars.peek() == Some(&'\'') => {}
+            '"' => inside = !inside,
+            _ => {}
+        }
+        previous = c;
+    }
+    inside
+}
+
 /// Whether what comes before a marker looks like the inside of a comment.
+/// A comment leader inside a string literal does not start a comment, so a
+/// string such as `"// spec: REQ-A-0001"` in a test is not an annotation.
 fn in_comment(before: &str) -> bool {
-    const LEADERS: &[&str] = &["//", "#", "/*", "--", "<!--", "\"\"\"", "'''", ";"];
+    const LEADERS: &[&str] = &["//", "#", "/*", "--", "<!--", ";"];
+    const DOCSTRINGS: &[&str] = &["\"\"\"", "'''"];
     let start = before.trim_start();
-    LEADERS.iter().any(|l| before.contains(l)) || start.starts_with(['*', '%'])
+    start.starts_with(['*', '%'])
+        || DOCSTRINGS.iter().any(|l| before.contains(l))
+        || LEADERS
+            .iter()
+            .any(|l| before.match_indices(l).any(|(i, _)| !in_string(before, i)))
+}
+
+/// With a parser: the marker is inside a comment node and is the first thing
+/// in it on its line, after one comment leader. So `// spec: REQ-A-0001`
+/// counts, and neither a marker in prose (`` `// spec: X` `` in a doc comment)
+/// nor one in a string does.
+fn in_parsed_comment(ranges: &[(usize, usize)], line_offset: usize, line: &str, at: usize) -> bool {
+    let absolute = line_offset + at;
+    let Some(&(from, _)) = ranges
+        .iter()
+        .find(|(from, to)| *from <= absolute && absolute < *to)
+    else {
+        return false;
+    };
+    let column = from.saturating_sub(line_offset).min(at);
+    let lead = line[column..at].trim();
+    const LEADERS: &[&str] = &["", "//", "///", "//!", "/*", "/**", "/*!", "*"];
+    LEADERS.contains(&lead)
 }
 
 const MARKERS: &[(&str, Kind)] = &[
@@ -104,7 +150,13 @@ const MARKERS: &[(&str, Kind)] = &[
 /// The annotations in one file's text.
 pub fn scan_text(path: &Path, text: &str) -> Vec<Annotation> {
     let mut found = Vec::new();
-    for (index, line) in text.lines().enumerate() {
+    // For a language with a parser, a marker counts only in a real comment.
+    let mut comments: Option<Option<Vec<(usize, usize)>>> = None;
+    let mut offset = 0;
+    for (index, whole) in text.split_inclusive('\n').enumerate() {
+        let line_offset = offset;
+        offset += whole.len();
+        let line = whole.trim_end_matches(['\n', '\r']);
         // Most lines have nothing. Skip them cheaply.
         if !(line.contains(':') || line.contains('[')) {
             continue;
@@ -127,7 +179,16 @@ pub fn scan_text(path: &Path, text: &str) -> Vec<Annotation> {
                     .chars()
                     .next_back()
                     .is_none_or(|c| !c.is_ascii_alphanumeric());
-                if boundary && in_comment(&line[..start]) {
+                let counts = boundary && {
+                    let ranges = comments
+                        .get_or_insert_with(|| crate::symbol::comment_ranges(path, text))
+                        .as_deref();
+                    match ranges {
+                        Some(ranges) => in_parsed_comment(ranges, line_offset, line, start),
+                        None => in_comment(&line[..start]),
+                    }
+                };
+                if counts {
                     for target in leading_ids(&line[from..]) {
                         add(target, *kind);
                     }
@@ -135,14 +196,30 @@ pub fn scan_text(path: &Path, text: &str) -> Vec<Annotation> {
             }
         }
         // `[REQ-AUTH-0012.S1]` in a test name, only when it names a scenario.
-        let mut rest = line;
+        // Not in Rust, where a test is a function and has no title. Not in a
+        // comment, and not an index such as `s["REQ-A-0001.S1"]`.
+        let bracket_form = path.extension().and_then(|e| e.to_str()) != Some("rs");
+        let mut rest = if bracket_form { line } else { "" };
         while let Some(open) = rest.find('[') {
+            let position = line.len() - rest.len() + open;
+            let before = line[..position].chars().next_back();
+            let indexing =
+                before.is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'));
+            let in_comment_text = comments
+                .get_or_insert_with(|| crate::symbol::comment_ranges(path, text))
+                .as_deref()
+                .is_some_and(|ranges| {
+                    let at = line_offset + position;
+                    ranges.iter().any(|(from, to)| *from <= at && at < *to)
+                });
+            let skip = indexing || in_comment_text;
             rest = &rest[open + 1..];
             let Some(close) = rest.find(']') else { break };
             let inside = &rest[..close];
             let ids = leading_ids(inside);
             let whole = inside.split(',').filter(|p| !p.trim().is_empty()).count();
-            if !ids.is_empty()
+            if !skip
+                && !ids.is_empty()
                 && ids.len() == whole
                 && ids
                     .iter()
@@ -458,6 +535,26 @@ def test_idle(): pass
         assert!(scan("let a = [REQ-A-0001.S1, 5];").is_empty());
         assert!(scan("let a = [1, 2, 3];").is_empty());
         assert!(scan("x[i] = y[j]").is_empty());
+    }
+
+    #[test]
+    fn a_marker_inside_a_string_is_not_an_annotation_but_one_after_code_is() {
+        // The fixtures of a test are strings that look like comments.
+        for text in [
+            r#"let code = "// verifies: REQ-A-0001.S1\n#[test]";"#,
+            r##"let t = "# spec: REQ-A-0001";"##,
+            r#"run("-- spec: REQ-A-0001")"#,
+        ] {
+            assert!(scan(text).is_empty(), "{text}");
+        }
+        // A comment after code, with strings before it, still counts.
+        assert_eq!(scan(r#"let u = "http://x"; // spec: REQ-A-0001"#).len(), 1);
+        assert_eq!(scan(r#"let q = '"'; // spec: REQ-A-0001"#).len(), 1);
+        assert_eq!(
+            scan(r#"let s = "a \" b"; // verifies: REQ-A-0001.S1"#).len(),
+            1
+        );
+        assert_eq!(scan("# spec: REQ-A-0001").len(), 1);
     }
 
     #[test]

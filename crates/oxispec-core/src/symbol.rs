@@ -237,6 +237,29 @@ fn symbols<'a>(lang: Lang, root: Node<'a>) -> Vec<Node<'a>> {
     found
 }
 
+/// The byte ranges of the comments in a file, for a language with a parser.
+/// `None` for another language, or when the file cannot be parsed at all. A
+/// marker in a string, a raw string or a character is not in any range.
+pub fn comment_ranges(path: &Path, text: &str) -> Option<Vec<(usize, usize)>> {
+    let lang = language_of(path)?;
+    let mut parser = Parser::new();
+    parser.set_language(&grammar(lang)).ok()?;
+    let tree = parser.parse(text, None)?;
+    let mut found = Vec::new();
+    let mut stack = vec![tree.root_node()];
+    while let Some(node) = stack.pop() {
+        if node.kind().ends_with("comment") {
+            found.push((node.start_byte(), node.end_byte()));
+            continue;
+        }
+        let mut cursor = node.walk();
+        let children: Vec<Node> = node.children(&mut cursor).collect();
+        stack.extend(children);
+    }
+    found.sort_unstable();
+    Some(found)
+}
+
 /// The symbol for each line in `lines` (1-based). A line inside a symbol
 /// gets the innermost one around it. A line above one, as a comment is, gets
 /// the next symbol after it. `None` for a language without a parser, or when
