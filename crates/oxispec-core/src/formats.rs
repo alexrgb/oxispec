@@ -532,6 +532,7 @@ fn field<'a>(node: &'a Node, name: &str) -> Option<&'a str> {
     }
 }
 
+// spec: REQ-STYLE-0002
 pub fn check(graph: &Graph) -> Vec<Finding> {
     let formats = &graph.formats;
     let mut out = formats.problems.clone();
@@ -732,6 +733,7 @@ mod tests_of_formats {
 
     const LIGHT: &str = "formats:\n  adr: light\nprofiles:\n  light:\n    type: adr\n    sections: [Context, Decision]\n    optional: [Consequences]\n    fields: [owner]\n    statuses: [proposed, accepted]\n";
 
+    // verifies: REQ-STYLE-0002.S1
     #[test]
     fn a_node_that_meets_its_profile_has_no_findings() {
         let cfg = config(LIGHT);
@@ -745,6 +747,7 @@ mod tests_of_formats {
         assert!(codes(&g).is_empty(), "{:?}", check(&g));
     }
 
+    // verifies: REQ-STYLE-0002.S2
     #[test]
     fn a_missing_section_field_and_status_are_reported_with_their_own_codes() {
         let cfg = config(LIGHT);
@@ -805,6 +808,7 @@ mod tests_of_formats {
         assert!(codes(&g).is_empty());
     }
 
+    // verifies: REQ-STYLE-0002.S3
     #[test]
     fn a_config_that_names_a_missing_or_wrong_profile_is_reported() {
         let cfg = config("formats:\n  adr: nope\n  requirement: default\n");

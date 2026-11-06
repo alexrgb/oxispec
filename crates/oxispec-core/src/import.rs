@@ -573,6 +573,7 @@ fn has_normative(s: &str) -> bool {
         .any(|w| w == "SHALL" || w == "MUST")
 }
 
+// spec: REQ-IMPORT-0001
 /// Reads one spec file. With `normative`, a statement without SHALL or MUST
 /// gets a sentence in front of it that has one.
 pub fn draft(input: &Input, source: Source, normative: bool) -> Draft {
@@ -698,6 +699,7 @@ mod tests_of_import {
         }
     }
 
+    // verifies: REQ-IMPORT-0001.S1
     #[test]
     fn openspec_blocks_and_scenarios_are_kept() {
         let text = "# Auth Specification\n\n## Purpose\nLet people in.\n\n## Requirements\n\n### Requirement: Login\nThe system SHALL sign users in.\n\n#### Scenario: Good password\n- **WHEN** a user gives the right password\n- **THEN** a session starts\n- **AND** it is logged\n";
@@ -711,6 +713,7 @@ mod tests_of_import {
         assert!(d.notes.is_empty(), "{:?}", d.notes);
     }
 
+    // verifies: REQ-IMPORT-0001.S2
     #[test]
     fn kiro_criteria_split_at_then() {
         let text = "# Requirements\n\n## Introduction\nA tool.\n\n## Requirements\n\n### Requirement 1\n\n**User Story:** As a user, I want to log in, so that I can work.\n\n#### Acceptance Criteria\n\n1. WHEN a user gives a password THEN the system SHALL start a session\n2. IF the password is wrong THEN the system SHALL refuse\n";
@@ -725,6 +728,7 @@ mod tests_of_import {
         );
     }
 
+    // verifies: REQ-IMPORT-0001.S3
     #[test]
     fn speckit_stories_and_functional_requirements() {
         let text = "# Feature Specification: Search\n\n## User Scenarios & Testing\n\n### User Story 1 - Find a file (Priority: P1)\n\nA user types a word and sees the files.\n\n**Acceptance Scenarios**:\n\n1. **Given** an index, **When** the user types a word, **Then** matching files are listed\n\n## Requirements\n\n- **FR-001**: System MUST rank by title.\n\n## Key Entities\n- File\n";
@@ -769,6 +773,7 @@ mod tests_of_import {
         assert!(!is_node("# Title\n---\nid: x"));
     }
 
+    // verifies: REQ-IMPORT-0001.S4
     #[test]
     fn prd_bullets_become_requirements_with_criteria() {
         let text = "# Checkout PRD\n\n## Overview\nLet shoppers pay.\n\n## Non-goals\nRefunds.\n\n## Functional requirements\n- FR-1: Shoppers can pay by card\n  - WHEN the card is valid THEN the order is placed\n- As a shopper, I want to save my cart, so that I can return later\n\n## Out of scope\n- Gift cards\n\n## Open questions\n- Which PSP?\n";
@@ -788,6 +793,7 @@ mod tests_of_import {
         assert_eq!(d.blocks.len(), 2);
     }
 
+    // verifies: REQ-IMPORT-0001.S5
     #[test]
     fn openapi_operations_become_requirements_by_tag() {
         let dir = std::env::temp_dir().join(format!("oxispec-openapi-{}", std::process::id()));
