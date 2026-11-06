@@ -1,6 +1,6 @@
 # The project's own specs
 
-OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the parts of the product that are written down as specs, and `oxispec check` and `oxispec coverage` run on them in CI (the `specs` job in `.github/workflows/ci.yml`). It is a small start: the rules of the node file format, change sets and the MCP server. The rest of the documentation is still plain markdown in `docs/`.
+OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the parts of the product that are written down as specs, and `oxispec check` and `oxispec coverage` run on them in CI (the `specs` job in `.github/workflows/ci.yml`). It covers the rules of the node file format, change sets, the MCP server, PRDs, API operations, tech debt and releases. The rest of the documentation is still plain markdown in `docs/`.
 
 ## What is there
 
@@ -14,6 +14,10 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-FORMAT-0006` | Reverse links are computed |
 | `REQ-CHANGE-0001`, `0002` | A change set follows a lifecycle; approval is recorded and can be withdrawn |
 | `REQ-MCP-0001` to `0004` | The read tools answer as the commands do; tools are offered by module and mode; arguments cannot be read as options; an agent can propose a change set but never approve it |
+| `REQ-PRD-0001` | A PRD is made from the nodes |
+| `REQ-API-0001`, `0002` | Operations come from the requirements; a description is compared with them |
+| `REQ-DEBT-0001` to `0004` | A debt item has valid fields; a live item is held to account; the backlog is ordered; limits count live items |
+| `REQ-RELEASE-0001` to `0003` | The suggested version follows SemVer; gates hold a release back; release notes list what changed |
 | `ADR-0001` to `ADR-0004` | Why files are the source of truth, why IDs do not depend on paths, why reverse links are not stored, why the MCP server has no tool that approves |
 
 Each scenario is verified by an existing unit test, which carries a `// verifies: REQ-FORMAT-000N.SM` comment, and the code that does the work carries `// spec: REQ-FORMAT-000N`. `oxispec trace REQ-FORMAT-0004` shows the ties.

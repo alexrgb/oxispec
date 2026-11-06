@@ -105,6 +105,7 @@ fn item<'a>(node: &'a Node, cfg: &DebtConfig, today: i64) -> Item<'a> {
     }
 }
 
+// spec: REQ-DEBT-0003
 /// The debt items, the most serious first and, among those, the oldest first.
 /// With `all`, items that are resolved or accepted are included, last.
 pub fn backlog<'a>(graph: &'a Graph, today: &str, all: bool) -> Vec<Item<'a>> {
@@ -139,6 +140,7 @@ pub fn live_counts(graph: &Graph) -> BTreeMap<String, usize> {
     counts
 }
 
+// spec: REQ-DEBT-0004
 /// A severity whose limit is exceeded: `(severity, live items, limit)`.
 pub fn over_limits(graph: &Graph) -> Vec<(String, usize, u32)> {
     let counts = live_counts(graph);
@@ -159,6 +161,8 @@ pub fn check(graph: &Graph) -> Vec<Finding> {
     check_at(graph, &today())
 }
 
+// spec: REQ-DEBT-0001
+// spec: REQ-DEBT-0002
 pub fn check_at(graph: &Graph, today: &str) -> Vec<Finding> {
     let mut out = Vec::new();
     let now = day_number(today).unwrap_or(0);
@@ -273,12 +277,14 @@ mod tests_of_debt {
         );
     }
 
+    // verifies: REQ-DEBT-0001.S2
     #[test]
     fn a_complete_item_raises_nothing() {
         let g = graph(&[("DEBT-0001", FULL)], DebtConfig::default());
         assert!(codes(&g, "2026-11-04").is_empty());
     }
 
+    // verifies: REQ-DEBT-0002.S1
     #[test]
     fn a_live_item_without_an_owner_or_a_source_is_warned_about() {
         let g = graph(
@@ -288,6 +294,7 @@ mod tests_of_debt {
         assert_eq!(codes(&g, "2026-11-04"), ["W013", "W016"]);
     }
 
+    // verifies: REQ-DEBT-0001.S1
     #[test]
     fn an_invalid_status_severity_or_date_is_an_error() {
         let g = graph(
@@ -314,6 +321,7 @@ mod tests_of_debt {
         );
     }
 
+    // verifies: REQ-DEBT-0002.S2
     #[test]
     fn overdue_and_stale_apply_only_to_live_items() {
         let late = format!("{FULL}due: 2026-10-15\n");
@@ -334,6 +342,7 @@ mod tests_of_debt {
         }
     }
 
+    // verifies: REQ-DEBT-0003.S1
     #[test]
     fn the_backlog_puts_the_most_serious_and_the_oldest_first() {
         let g = graph(
@@ -380,6 +389,7 @@ mod tests_of_debt {
         );
     }
 
+    // verifies: REQ-DEBT-0004.S1
     #[test]
     fn limits_count_live_items_by_severity() {
         let mut cfg = DebtConfig::default();
