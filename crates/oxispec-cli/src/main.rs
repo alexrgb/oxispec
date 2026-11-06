@@ -40,6 +40,7 @@ mod search;
 mod server;
 mod site;
 mod status;
+mod testplan;
 mod trace;
 
 #[derive(Parser)]
@@ -223,6 +224,17 @@ enum Command {
         /// Where to append one JSON line per request. Default: .oxispec/server/audit.jsonl
         #[arg(long, value_name = "FILE")]
         audit_log: Option<PathBuf>,
+    },
+    /// Test plans read against the tests: what each covers, which scenarios no test verifies or
+    /// that fail, and whether what mitigates each risk is tested
+    TestPlan {
+        /// Only this plan
+        id: Option<String>,
+        /// Exit 1 when an approved plan has a gap
+        #[arg(long)]
+        strict: bool,
+        #[arg(long)]
+        json: bool,
     },
     /// The risk register, the most serious and the oldest first
     #[command(args_conflicts_with_subcommands = true)]
@@ -736,6 +748,9 @@ enum NewKind {
         #[arg(long)]
         format: Option<String>,
     },
+    /// A test plan: what is tested, how, where, and when it is done. Link what it covers with
+    /// `covers`
+    TestPlan { title: String },
     /// A risk to the application, for example: new risk "Session tokens never expire"
     /// --likelihood medium --impact high --from REQ-AUTH-0001
     Risk {
@@ -1050,6 +1065,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
+        Command::TestPlan { id, strict, json } => {
+            let root = project_root(cli.root.as_deref())?;
+            testplan::run(&root, id.as_deref(), strict, json, cache)
+        }
         Command::Risks {
             action,
             status,
@@ -1347,6 +1366,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 NewKind::Prd { title } => {
                     require_module(&cfg, "specs")?;
                     new_prd(&root, &title, scheme, cache)?
+                }
+                NewKind::TestPlan { title } => {
+                    require_module(&cfg, "tests")?;
+                    new_test_plan(&root, &title, scheme, cache)?
                 }
                 NewKind::Risk {
                     title,
@@ -1678,6 +1701,9 @@ fn ensure_module_dirs(root: &Path, cfg: &Config) -> Result<()> {
     }
     if cfg.has("debt") {
         fs::create_dir_all(root.join("specs/debt"))?;
+    }
+    if cfg.has("tests") {
+        fs::create_dir_all(root.join("specs/test-plans"))?;
     }
     if cfg.has("risks") {
         fs::create_dir_all(root.join("specs/risks"))?;
@@ -2343,6 +2369,51 @@ fn new_debt(
         .replace("@SEVERITY@", severity)
         .replace("@DATE@", &today)
         .replace("@LINKS@", &links);
+    write_new(root, &rel, &body)?;
+    Ok((id, rel))
+}
+
+const TEST_PLAN_TEMPLATE: &str = "---
+id: @ID@
+type: test-plan
+status: draft
+owner:
+date: @DATE@
+links:
+  covers: []
+---
+# @ID@: @TITLE@
+
+## Scope
+
+What is tested, and what is not.
+
+## Approach
+
+## Levels
+
+Unit, integration, end to end, security, performance: which apply, and where each runs.
+
+## Environments
+
+## Exit criteria
+
+When testing is done: which scenarios pass, and what may be left.
+";
+
+fn new_test_plan(
+    root: &Path,
+    title: &str,
+    scheme: IdScheme,
+    cache: bool,
+) -> Result<(String, PathBuf)> {
+    let id = allocate_id(&load_graph(root, cache), "TP-", scheme)?;
+    let suffix = id.strip_prefix("TP-").unwrap_or(&id);
+    let rel = PathBuf::from("specs/test-plans").join(format!("{suffix}-{}.md", slug(title)?));
+    let body = TEST_PLAN_TEMPLATE
+        .replace("@ID@", &id)
+        .replace("@TITLE@", title)
+        .replace("@DATE@", &oxispec_core::debt::today());
     write_new(root, &rel, &body)?;
     Ok((id, rel))
 }

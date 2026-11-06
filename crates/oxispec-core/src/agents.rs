@@ -142,6 +142,12 @@ pub const SKILLS: &[Skill] = &[
         body: include_str!("../skills/write-api.md"),
     },
     Skill {
+        name: "oxispec-write-test-plan",
+        description: "Write a test plan for requirements and risks: scope, approach, levels, environments and exit criteria, then read it against the tests to see what is not verified. Use when asked to plan testing, or what is not tested yet.",
+        requires: &["tests"],
+        body: include_str!("../skills/write-test-plan.md"),
+    },
+    Skill {
         name: "oxispec-manage-risks",
         description: "Record a risk to the application, keep the register honest, and decide with the person what to do about each: owner, likelihood, impact, what mitigates it, who accepts it. Use when a threat or weakness is found, a design is reviewed for security, or you are asked what risks there are.",
         requires: &["risks"],

@@ -192,6 +192,7 @@ pub const CODES: &[(&str, &str)] = &[
         "E039",
         "A risk is accepted but no person is named in `approved_by`",
     ),
+    ("E040", "A test plan has a status or date that is not valid"),
     (
         "W012",
         "A decision is superseded by another, but its status still says it is in force",
@@ -208,6 +209,15 @@ pub const CODES: &[(&str, &str)] = &[
     (
         "W019",
         "A risk is being mitigated but no `mitigated-by` link says by what",
+    ),
+    ("W020", "A test plan covers nothing"),
+    (
+        "W021",
+        "A requirement is accepted but no approved test plan covers it",
+    ),
+    (
+        "W022",
+        "A live risk at a high level is covered by no approved test plan",
     ),
     ("I001", "A link to another project is not checked"),
     (

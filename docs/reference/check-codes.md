@@ -56,6 +56,7 @@ A code is never reused. `E` is an error (`oxispec check` exits with 1), `W` a wa
 | W011 | warning | A decision is marked superseded, but no decision in force supersedes it |
 | E038 | error | A risk has a status, likelihood, impact or date that is not valid |
 | E039 | error | A risk is accepted but no person is named in `approved_by` |
+| E040 | error | A test plan has a status or date that is not valid |
 | W012 | warning | A decision is superseded by another, but its status still says it is in force |
 | W013 | warning | A debt item that is still to be paid has no owner |
 | W014 | warning | A debt item is past its due date |
@@ -64,5 +65,8 @@ A code is never reused. `E` is an error (`oxispec check` exits with 1), `W` a wa
 | W017 | warning | A risk that is still live has no owner |
 | W018 | warning | A live risk is past its review date |
 | W019 | warning | A risk is being mitigated but no `mitigated-by` link says by what |
+| W020 | warning | A test plan covers nothing |
+| W021 | warning | A requirement is accepted but no approved test plan covers it |
+| W022 | warning | A live risk at a high level is covered by no approved test plan |
 | I001 | info | A link to another project is not checked |
 | I002 | info | A claim says nothing that another claim does not already say |
