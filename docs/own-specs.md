@@ -42,9 +42,7 @@ When a change alters one of these rules, change the requirement in the same pull
 
 ## The trace scan and test data
 
-The scan reads comments without parsing the language, but it does not read a marker that stands inside a double-quoted string on its line, so `"// spec: REQ-A-0001"` in a test is text and not an annotation. A string that runs over several lines, and an example in a doc comment, are still read.
-
-`.oxispec/config.yaml` leaves a few files out of the scan (`trace.exclude`): the tests of the scanner itself hold annotations as sample text, in strings that look like comments, and the scan reads comments without parsing the language. If you add such a test, add its file there. A test file that also carries real `verifies:` comments (`crates/oxispec-cli/tests/cli.rs`) is scanned instead, and its few fixtures are written with `concat!("// spe", "c: ...")` so the scan does not see them.
+Nothing is left out of the scan (`trace.exclude` is empty). For Rust, Go, TypeScript and JavaScript the scan reads a marker only in a real comment, found with the same parsers as the suspect links, so a test can hold `"// spec: REQ-A-0001"` in a string, or in a raw or multi-line string, and it is text. An example in the middle of a doc comment is not read either. The scenario ID in brackets as a test name is not read in Rust files, where a test is a function with no title, nor in comments. The setting still exists for a project that wants to leave a path out (generated code, fixtures); see [trace.md](trace.md).
 
 ## Publishing
 

@@ -8,10 +8,3 @@ modules:
 - ci
 topology: single
 id_scheme: sequential
-trace:
-  exclude:
-    # These hold annotations as test data, in strings that look like comments.
-    - crates/oxispec-core/src/results.rs
-    - crates/oxispec-core/src/suspect.rs
-    - crates/oxispec-core/src/symbol.rs
-    - crates/oxispec-core/src/trace.rs

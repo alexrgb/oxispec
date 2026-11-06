@@ -4,9 +4,9 @@ type: requirement
 status: accepted
 date: 2026-11-06
 ---
-### Requirement: A marker inside a string is not an annotation
-The system SHALL NOT read a marker that stands inside a string literal on its line as an annotation, and SHALL still read one in a comment after code that has strings before it.
+### Requirement: Only a real comment is an annotation
+The system SHALL read a marker in a Rust, Go, TypeScript or JavaScript file only when it is the first thing in a real comment, so that a marker in a string, a raw string, an example in a doc comment or an index such as `s["REQ-A-0001.S1"]` is not an annotation, and SHALL read a scenario ID in brackets as a test name only outside Rust and outside comments.
 
-#### Scenario: Strings {#S1}
-- **WHEN** a marker follows a comment leader inside a string, and another follows a comment after code with strings and a quote character
-- **THEN** the first is not read and the second is
+#### Scenario: Strings and examples {#S1}
+- **WHEN** a marker stands in a string, a raw string, a string over several lines, or as an example inside a doc comment
+- **THEN** it is not read, and a marker in a comment after code, in a block comment, or after a string that holds a quote character is read

@@ -1,5 +1,5 @@
 //! Tests of suspect links that carry real `verifies:` comments. The sample
-//! code is built with `concat!` so the scan does not read it as annotations.
+//! code is in strings, which the scan does not read as comments.
 
 use std::path::Path;
 
@@ -21,7 +21,7 @@ fn graph(body: &str) -> Graph {
 }
 
 fn code(body: &str, tail: &str) -> String {
-    format!("{}{body}{tail}", concat!("// spe", "c: REQ-A-0001\n"))
+    format!("{}{body}{tail}", "// spec: REQ-A-0001\n")
 }
 
 fn states(g: &Graph, code: &str, lock: &Lock) -> Vec<State> {
