@@ -487,7 +487,7 @@ Documentation written from the program: the command reference and the check code
 Usage: oxispec docs [OPTIONS] <COMMAND>
 ```
 
-Subcommands: `reference`, `prd`
+Subcommands: `reference`, `openapi`, `prd`
 
 ### `oxispec docs reference`
 
@@ -499,6 +499,18 @@ Usage: oxispec docs reference [OPTIONS]
 
 - `--out <OUT>`: Where to write them. Default: `docs/reference`.
 - `--check`
+
+### `oxispec docs openapi`
+
+An OpenAPI skeleton made from the requirements that are titled as calls, such as `GET /orders/{id}`. It has no schemas or security. With --against, compare a file with the requirements instead and exit 1 when they differ
+
+```text
+Usage: oxispec docs openapi [OPTIONS]
+```
+
+- `--out <OUT>`: Write the skeleton to this file instead of printing it.
+- `--against <AGAINST>`: Compare this OpenAPI or Swagger file (JSON or YAML) with the requirements.
+- `--title <TITLE>` Default: `API`.
 
 ### `oxispec docs prd`
 

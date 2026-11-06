@@ -136,6 +136,12 @@ pub const SKILLS: &[Skill] = &[
         body: include_str!("../skills/write-prd.md"),
     },
     Skill {
+        name: "oxispec-write-api",
+        description: "Describe an HTTP API as requirements titled as calls, make the skeleton of its OpenAPI description from them, and compare a real openapi file with them. Use when asked to design or document an API, or to see whether the spec and the API file agree.",
+        requires: &["specs"],
+        body: include_str!("../skills/write-api.md"),
+    },
+    Skill {
         name: "oxispec-import-specs",
         description: "Import the specs, open changes and design notes of OpenSpec, Spec Kit, Kiro or plain markdown, deciding with the person what each file becomes, showing drafts and a dry run before writing. Use when asked to move a project to OxiSpec.",
         requires: &["specs"],

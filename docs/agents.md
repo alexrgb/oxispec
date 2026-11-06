@@ -16,6 +16,7 @@ Skills tell an AI coding agent how to work with the specs: how to look things up
 | `oxispec-sync-code` | tests | Deciding which side is right for a suspect link, then confirming |
 | `oxispec-write-adr` | adrs | A decision record with the options that were rejected |
 | `oxispec-write-prd` | specs | A PRD as nodes: interviews the person, shows a draft, then writes the `prd` node and the requirements that refine it |
+| `oxispec-write-api` | specs | An API as requirements titled as calls, the OpenAPI skeleton made from them, and the comparison with a real file |
 | `oxispec-import-specs` | specs | Moves specs, open changes and design notes from another tool in, with the person deciding what each file becomes |
 | `oxispec-manage-debt` | debt | Recording a shortcut as a debt item, keeping the backlog honest and paying items off |
 | `oxispec-review-change` | core | Reviewing a branch with `ci`, `diff` and `suspect` |

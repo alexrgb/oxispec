@@ -6029,6 +6029,52 @@ fn a_prd_is_written_as_nodes_and_read_as_a_document() {
     assert!(out.stderr.contains("not a prd"), "{}", out.stderr);
 }
 
+#[test]
+fn openapi_is_made_from_requirements_and_a_file_is_compared_with_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    fs::write(
+        p.join("api.json"),
+        "{\"openapi\":\"3.0.0\",\"info\":{\"title\":\"Shop\"},\"paths\":{\"/orders/{id}\":{\"get\":{\"tags\":[\"orders\"],\"summary\":\"Fetch an order\",\"responses\":{\"200\":{\"description\":\"The order\"},\"404\":{\"description\":\"No such order\"}}}}}}",
+    )
+    .unwrap();
+    let out = run(
+        p,
+        &["import", "specs", "--from", "openapi", "--dir", "api.json"],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(
+        p,
+        &["docs", "openapi", "--title", "Shop", "--out", "made.yaml"],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let made = fs::read_to_string(p.join("made.yaml")).unwrap();
+    assert!(made.contains("\"/orders/{id}\":"), "{made}");
+    assert!(made.contains("\"404\":"), "{made}");
+    let out = run(p, &["docs", "openapi", "--against", "api.json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("agree on 1 operation"),
+        "{}",
+        out.stdout
+    );
+    fs::write(
+        p.join("other.json"),
+        "{\"openapi\":\"3.0.0\",\"paths\":{\"/health\":{\"get\":{\"responses\":{\"200\":{}}}}}}",
+    )
+    .unwrap();
+    let out = run(p, &["docs", "openapi", "--against", "other.json"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout
+            .contains("only in the requirements: GET /orders/{id}"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("GET /health"), "{}", out.stdout);
+}
+
 fn project_with_a_standard(p: &Path, standard: &str) {
     git(p, &["init", "-q"]);
     assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);

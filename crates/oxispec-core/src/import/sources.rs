@@ -156,7 +156,7 @@ fn is_openapi_file(path: &Path) -> bool {
     )
 }
 
-fn parse_description(path: &Path, text: &str) -> Option<Value> {
+pub(crate) fn parse_description(path: &Path, text: &str) -> Option<Value> {
     let value: Value = if path.extension().and_then(|e| e.to_str()) == Some("json") {
         serde_json::from_str(text).ok()?
     } else {
@@ -179,7 +179,7 @@ fn collect_description_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) -> i
     Ok(())
 }
 
-const METHODS: &[&str] = &["get", "put", "post", "delete", "patch", "head", "options"];
+pub(crate) const METHODS: &[&str] = &["get", "put", "post", "delete", "patch", "head", "options"];
 
 fn ref_name(v: &Value) -> Option<&str> {
     v.get("$ref")?.as_str()?.rsplit('/').next()
