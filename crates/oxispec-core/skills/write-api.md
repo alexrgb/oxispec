@@ -20,7 +20,7 @@ Describe an HTTP API as requirements, so that the skeleton of its OpenAPI descri
 
    Make the node with `oxispec new requirement <domain> "<title>"` and put the blocks in it. The domain becomes the tag.
 5. Run `oxispec check`, then `oxispec docs openapi` to see the skeleton.
-6. If the project keeps an `openapi.yaml` in the code, run `oxispec docs openapi --against openapi.yaml`. A call or status code that only one side has is for the person to settle: either the requirement or the file is out of date. Say which one you think it is, and change nothing until they decide.
+6. If the project keeps an `openapi.yaml` in the code, or the service serves its description at an `http://` address (`--against http://localhost:8080/v3/api-docs`), run `oxispec docs openapi --against openapi.yaml`. A call or status code that only one side has is for the person to settle: either the requirement or the file is out of date. Say which one you think it is, and change nothing until they decide.
 
 ## Rules
 

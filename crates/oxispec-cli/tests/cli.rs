@@ -6174,6 +6174,127 @@ fn a_test_plan_is_read_against_the_tests() {
     assert_ne!(out.code, 0);
 }
 
+// verifies: REQ-API-0005.S1
+// verifies: REQ-API-0005.S2
+#[test]
+fn an_operation_card_and_a_running_service_are_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let api = "{\"openapi\":\"3.0.0\",\"info\":{\"title\":\"Shop\"},\"paths\":{\"/orders/{id}\":{\"get\":{\"tags\":[\"orders\"],\"summary\":\"Fetch an order\",\"responses\":{\"200\":{\"description\":\"The order\"},\"404\":{\"description\":\"No such order\"}}}}}}";
+    fs::write(p.join("api.json"), api).unwrap();
+    let out = run(
+        p,
+        &["import", "specs", "--from", "openapi", "--dir", "api.json"],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert_eq!(run(p, &["new", "prd", "Shop"]).code, 0);
+    assert_eq!(
+        run(p, &["link", "REQ-ORDERS-0001", "refines", "PRD-0001"]).code,
+        0
+    );
+    assert_eq!(
+        run(
+            p,
+            &[
+                "new",
+                "risk",
+                "Order ids can be guessed",
+                "--from",
+                "REQ-ORDERS-0001"
+            ]
+        )
+        .code,
+        0
+    );
+    let out = run(p, &["api", "show", "GET /orders/{id}"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    for want in [
+        "PRD: PRD-0001",
+        "risks: RISK-0001",
+        "responds 404: No such order",
+        "REQ-ORDERS-0001.S1: no test",
+    ] {
+        assert!(out.stdout.contains(want), "{want} in {}", out.stdout);
+    }
+    let out = run(p, &["api", "show", "REQ-ORDERS-0001", "--json"]);
+    assert!(
+        out.stdout.contains("\"call\": \"GET /orders/{id}\""),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["api", "show", "DELETE /nothing"]);
+    assert_ne!(out.code, 0);
+    assert!(
+        out.stderr.contains("no operation matches"),
+        "{}",
+        out.stderr
+    );
+
+    // A running service, with the body sent in chunks as some frameworks do.
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    let handle = std::thread::spawn(move || {
+        for request in server.incoming_requests().take(3) {
+            let response = match request.url() {
+                "/docs" => tiny_http::Response::from_string(api).boxed(),
+                "/chunked" => tiny_http::Response::new(
+                    tiny_http::StatusCode(200),
+                    vec![],
+                    std::io::Cursor::new(api.as_bytes().to_vec()),
+                    None,
+                    None,
+                )
+                .boxed(),
+                _ => tiny_http::Response::from_string("no")
+                    .with_status_code(404)
+                    .boxed(),
+            };
+            let _ = request.respond(response);
+        }
+    });
+    for path in ["docs", "chunked"] {
+        let out = run(
+            p,
+            &[
+                "docs",
+                "openapi",
+                "--against",
+                &format!("http://127.0.0.1:{port}/{path}"),
+            ],
+        );
+        assert_eq!(out.code, 0, "{path}: {}{}", out.stdout, out.stderr);
+        assert!(
+            out.stdout.contains("agree on 1 operation"),
+            "{}",
+            out.stdout
+        );
+    }
+    let out = run(
+        p,
+        &[
+            "docs",
+            "openapi",
+            "--against",
+            &format!("http://127.0.0.1:{port}/missing"),
+        ],
+    );
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("404"), "{}", out.stderr);
+    handle.join().unwrap();
+    let out = run(
+        p,
+        &["docs", "openapi", "--against", "https://example.com/docs"],
+    );
+    assert_ne!(out.code, 0);
+    assert!(
+        out.stderr.contains("https is not supported"),
+        "{}",
+        out.stderr
+    );
+}
+
 fn project_with_a_standard(p: &Path, standard: &str) {
     git(p, &["init", "-q"]);
     assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);

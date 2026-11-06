@@ -226,6 +226,17 @@ impl Drift {
     }
 }
 
+/// Reads an OpenAPI or Swagger description from text: JSON, else YAML.
+// spec: REQ-API-0005
+pub fn parse(text: &str, name: &str) -> Result<Value, Error> {
+    let value: Option<Value> = serde_json::from_str(text)
+        .ok()
+        .or_else(|| serde_saphyr::from_str(text).ok());
+    value
+        .filter(|v| v.get("openapi").is_some() || v.get("swagger").is_some())
+        .ok_or_else(|| Error::NotADescription(name.to_string()))
+}
+
 /// Reads an OpenAPI or Swagger file (JSON or YAML).
 pub fn load(path: &Path) -> Result<Value, Error> {
     let text = fs::read_to_string(path)
@@ -279,6 +290,117 @@ pub fn drift(ops: &[Operation], doc: &Value) -> Drift {
         .cloned()
         .collect();
     d
+}
+
+/// Everything the project says about one operation.
+#[derive(Debug)]
+pub struct Card<'a> {
+    pub operation: &'a Operation,
+    pub status: Option<String>,
+    /// The scenarios of the operation's block, like `REQ-ORDERS-0001.S1`.
+    pub scenarios: Vec<String>,
+    /// Product requirements documents the requirement refines.
+    pub prds: Vec<String>,
+    /// Decisions it was made by (`decided-by`).
+    pub decisions: Vec<String>,
+    /// Tech debt that arises from it.
+    pub debt: Vec<String>,
+    /// Risks that arise from it or that it mitigates, with their level.
+    pub risks: Vec<(String, Option<&'static str>)>,
+    /// Test plans that cover it.
+    pub plans: Vec<String>,
+}
+
+/// The operations a target names: a call such as `GET /orders/{id}` (the
+/// method in any case), or a requirement ID for all of its operations.
+pub fn select<'a>(ops: &'a [Operation], target: &str) -> Vec<&'a Operation> {
+    let target = target.trim();
+    if let Some((m, p)) = target.split_once(' ') {
+        let m = m.to_ascii_lowercase();
+        return ops
+            .iter()
+            .filter(|o| o.method == m && o.path == p.trim())
+            .collect();
+    }
+    let base = crate::id::base_of(target);
+    ops.iter().filter(|o| o.node == base).collect()
+}
+
+/// The links around an operation's requirement, read from the graph.
+// spec: REQ-API-0003
+pub fn card<'a>(graph: &Graph, op: &'a Operation) -> Card<'a> {
+    let node = graph.get(&op.node);
+    let outgoing = |kind: &str, ty: &str| -> Vec<String> {
+        node.map(|n| {
+            n.links
+                .get(kind)
+                .into_iter()
+                .flatten()
+                .map(|t| crate::id::base_of(t).to_string())
+                .filter(|t| graph.get(t).is_some_and(|x| x.ty == ty))
+                .collect()
+        })
+        .unwrap_or_default()
+    };
+    let mut debt = Vec::new();
+    let mut plans = Vec::new();
+    let mut risk_nodes: Vec<&crate::node::Node> = Vec::new();
+    for (other, kind) in graph.incoming(&op.node) {
+        match (other.ty.as_str(), kind) {
+            ("debt", "arises-from") => debt.push(other.id.clone()),
+            ("risk", "arises-from") => risk_nodes.push(other),
+            ("test-plan", "covers") => plans.push(other.id.clone()),
+            _ => {}
+        }
+    }
+    for r in graph.nodes.iter().filter(|n| n.ty == "risk") {
+        let mitigated = r
+            .links
+            .get("mitigated-by")
+            .into_iter()
+            .flatten()
+            .any(|t| crate::id::base_of(t) == op.node);
+        if mitigated {
+            risk_nodes.push(r);
+        }
+    }
+    let mut risks: Vec<(String, Option<&'static str>)> = risk_nodes
+        .into_iter()
+        .map(|r| {
+            (
+                r.id.clone(),
+                crate::risks::level(r.likelihood.as_deref(), r.impact.as_deref()),
+            )
+        })
+        .collect();
+    for list in [&mut debt, &mut plans] {
+        list.sort();
+        list.dedup();
+    }
+    risks.sort();
+    risks.dedup();
+    let scenarios = node
+        .into_iter()
+        .flat_map(|n| {
+            n.requirements
+                .iter()
+                .filter(|b| b.name == op.call())
+                .flat_map(|b| &b.scenarios)
+                .filter_map(|s| s.anchor.as_deref())
+                .filter(|a| crate::id::is_valid_segment(a))
+                .map(|a| format!("{}.{a}", n.id))
+        })
+        .collect();
+    Card {
+        operation: op,
+        status: node.and_then(|n| n.status.clone()),
+        scenarios,
+        prds: outgoing("refines", "prd"),
+        decisions: outgoing("decided-by", "adr"),
+        debt,
+        risks,
+        plans,
+    }
 }
 
 #[cfg(test)]
@@ -360,6 +482,62 @@ mod tests {
         assert_eq!(
             drift(&ops, &empty).only_in_requirements,
             ["GET /orders/{id}"]
+        );
+    }
+
+    // verifies: REQ-API-0003.S1
+    #[test]
+    fn a_card_gathers_what_surrounds_an_operation() {
+        let dir = tempfile::tempdir().unwrap();
+        let files = [
+            (
+                "specs/prd/1.md",
+                "---\nid: PRD-0001\ntype: prd\nstatus: draft\n---\n# PRD-0001: P\n",
+            ),
+            (
+                "specs/adr/1.md",
+                "---\nid: ADR-0001\ntype: adr\nstatus: accepted\n---\n# ADR-0001: A\n",
+            ),
+            (
+                "specs/debt/1.md",
+                "---\nid: DEBT-0001\ntype: debt\nstatus: open\nseverity: low\nlinks:\n  arises-from: REQ-ORDERS-0001\n---\n# DEBT-0001: D\n",
+            ),
+            (
+                "specs/risks/1.md",
+                "---\nid: RISK-0001\ntype: risk\nstatus: open\nlikelihood: high\nimpact: high\nlinks:\n  mitigated-by: [REQ-ORDERS-0001]\n---\n# RISK-0001: R\n",
+            ),
+            (
+                "specs/tp/1.md",
+                "---\nid: TP-0001\ntype: test-plan\nstatus: draft\nlinks:\n  covers: [REQ-ORDERS-0001]\n---\n# TP-0001: T\n",
+            ),
+            (
+                "specs/requirements/orders/orders.md",
+                "---\nid: REQ-ORDERS-0001\ntype: requirement\nstatus: draft\nlinks:\n  refines: PRD-0001\n  decided-by: ADR-0001\n---\n# REQ-ORDERS-0001: Orders\n\n### Requirement: GET /orders/{id}\nThe API SHALL provide `GET /orders/{id}`: fetch an order.\n\n#### Scenario: Found {#S1}\n- **WHEN** a\n- **THEN** the API responds with 200: The order\n\n#### Scenario: Missing {#S2}\n- **WHEN** b\n- **THEN** the API responds with 404: No such order\n",
+            ),
+        ];
+        let mut sources = Vec::new();
+        for (rel, text) in files {
+            let path = dir.path().join(rel);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, text).unwrap();
+            sources.push((PathBuf::from(rel), text.as_bytes().to_vec()));
+        }
+        let graph = Graph::from_sources(sources);
+        let ops = operations(&graph, dir.path()).unwrap();
+        assert_eq!(select(&ops, "get /orders/{id}").len(), 1);
+        assert_eq!(select(&ops, "REQ-ORDERS-0001").len(), 1);
+        assert!(select(&ops, "POST /nowhere").is_empty());
+        let c = card(&graph, &ops[0]);
+        assert_eq!(c.prds, ["PRD-0001"]);
+        assert_eq!(c.decisions, ["ADR-0001"]);
+        assert_eq!(c.debt, ["DEBT-0001"]);
+        assert_eq!(c.risks, [("RISK-0001".to_string(), Some("critical"))]);
+        assert_eq!(c.plans, ["TP-0001"]);
+        assert_eq!(c.scenarios.len(), 2);
+        assert!(
+            c.scenarios
+                .iter()
+                .all(|s| s.starts_with("REQ-ORDERS-0001.S"))
         );
     }
 }

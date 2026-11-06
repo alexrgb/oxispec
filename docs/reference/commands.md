@@ -4,7 +4,7 @@ Written by `oxispec docs reference` from the program itself. Do not edit it by h
 
 Every command also accepts `--root <ROOT>` (the project folder; default: the nearest parent with `.oxispec/config.yaml`), `--no-cache` (do not read or write the local index) and `--help`.
 
-Commands: [`init`](#oxispec-init), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`show`](#oxispec-show)
+Commands: [`init`](#oxispec-init), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`show`](#oxispec-show)
 
 ## `oxispec init`
 
@@ -454,6 +454,27 @@ Usage: oxispec serve [OPTIONS]
 - `--behind-tls-proxy`: Allow a non-local address because a TLS proxy in front encrypts the traffic.
 - `--audit-log <FILE>`: Where to append one JSON line per request. Default: .oxispec/server/audit.jsonl.
 
+## `oxispec api`
+
+An API as the requirements state it
+
+```text
+Usage: oxispec api [OPTIONS] <COMMAND>
+```
+
+Subcommands: `show`
+
+### `oxispec api show`
+
+Everything the project says about an operation: its requirement, PRD, decisions, debt, risks, test plans, responses and how each scenario is tested. Name it by its call (`"GET /orders/{id}"`) or by its requirement ID
+
+```text
+Usage: oxispec api show [OPTIONS] <TARGET>
+```
+
+- `<TARGET>`
+- `--json`
+
 ## `oxispec test-plan`
 
 Test plans read against the tests: what each covers, which scenarios no test verifies or that fail, and whether what mitigates each risk is tested
@@ -574,7 +595,7 @@ Usage: oxispec docs openapi [OPTIONS]
 ```
 
 - `--out <OUT>`: Write the skeleton to this file instead of printing it.
-- `--against <AGAINST>`: Compare this OpenAPI or Swagger file (JSON or YAML) with the requirements.
+- `--against <AGAINST>`: Compare this OpenAPI or Swagger file (JSON or YAML), or the description a running service serves at an http:// address, with the requirements.
 - `--title <TITLE>` Default: `API`.
 
 ### `oxispec docs prd`
