@@ -305,6 +305,8 @@ fn live_lock() -> std::sync::MutexGuard<'static, Option<Live>> {
     LIVE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+// spec: REQ-SEARCH-0001
+// spec: REQ-SEARCH-0002
 /// Searches the nodes of `graph`. With `persist` the index is kept under
 /// `.oxispec/cache/search` and updated in place, otherwise it is built in
 /// memory for this one search. `rebuild` throws a stored index away first.
@@ -509,6 +511,7 @@ mod tests {
         dir
     }
 
+    // verifies: REQ-SEARCH-0002.S3
     #[test]
     fn searches_at_the_same_time_share_one_index_without_errors() {
         let dir = project();
@@ -526,6 +529,7 @@ mod tests {
         }
     }
 
+    // verifies: REQ-SEARCH-0001.S1
     #[test]
     fn finds_words_in_the_text_the_title_and_the_id() {
         let dir = project();
@@ -545,6 +549,7 @@ mod tests {
         assert_eq!(ids(&ask("\"session")), ["REQ-A-0001", "ADR-0001"]);
     }
 
+    // verifies: REQ-SEARCH-0001.S2
     #[test]
     fn a_title_match_ranks_above_a_text_match() {
         let dir = project();
@@ -556,6 +561,7 @@ mod tests {
         assert_eq!(hits[1].title.as_deref(), Some("Use Postgres"));
     }
 
+    // verifies: REQ-SEARCH-0001.S3
     #[test]
     fn snippets_mark_the_matched_words() {
         let dir = project();
@@ -566,6 +572,7 @@ mod tests {
         assert!(!snippet.contains('\n'));
     }
 
+    // verifies: REQ-SEARCH-0001.S4
     #[test]
     fn type_and_status_narrow_the_results() {
         let dir = project();
@@ -584,6 +591,7 @@ mod tests {
         assert!(ask(Some("adr"), Some("accepted")).is_empty());
     }
 
+    // verifies: REQ-SEARCH-0002.S1
     #[test]
     fn a_stored_index_only_redoes_what_changed() {
         let dir = project();
@@ -676,6 +684,7 @@ mod tests {
         assert_eq!(ids(&hits), ["REQ-A-0003"]);
     }
 
+    // verifies: REQ-SEARCH-0002.S2
     #[test]
     fn a_damaged_or_old_index_is_rebuilt() {
         let dir = project();

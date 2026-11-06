@@ -21,6 +21,7 @@ pub struct Neighbor {
     pub incoming: bool,
 }
 
+// spec: REQ-CONTEXT-0001
 /// Nodes within `depth` link hops of `seed`, following links in both directions,
 /// nearest first. `kinds` limits the links that are followed. At most `limit` are returned.
 pub fn neighbors(
@@ -160,6 +161,7 @@ fn cut(text: &str, max_tokens: usize) -> String {
     format!("{}\n[cut to fit the budget]\n", head[..end].trim_end())
 }
 
+// spec: REQ-CONTEXT-0002
 /// The nodes asked for, then their neighbors up to `depth`, nearest first, with their
 /// text, until `budget` tokens are used. What does not fit is listed as a pointer.
 /// `text_of` gives the text of a node, or `None` when it cannot be read.
@@ -315,6 +317,7 @@ mod tests {
         Some(format!("text of {}", n.id))
     }
 
+    // verifies: REQ-CONTEXT-0001.S1
     #[test]
     fn neighbors_follow_links_in_both_directions() {
         let g = sample();
@@ -336,6 +339,7 @@ mod tests {
         );
     }
 
+    // verifies: REQ-CONTEXT-0001.S2
     #[test]
     fn neighbors_respect_depth_kinds_and_limit() {
         let g = sample();
@@ -352,6 +356,7 @@ mod tests {
         assert_eq!(neighbors(&g, "REQ-A-0001.S1", 1, None, 100).len(), 2);
     }
 
+    // verifies: REQ-CONTEXT-0002.S1
     #[test]
     fn a_pack_lists_the_nearest_nodes_first_and_the_requirement_before_the_decision() {
         let g = sample();
@@ -380,6 +385,7 @@ mod tests {
         assert_eq!(ids, vec!["REQ-A-0001", "REQ-A-0002", "ADR-0001"]);
     }
 
+    // verifies: REQ-CONTEXT-0002.S2
     #[test]
     fn what_does_not_fit_becomes_a_pointer() {
         let g = sample();
@@ -404,6 +410,7 @@ mod tests {
         assert!(ids.contains(&"REQ-A-0003"), "{ids:?}");
     }
 
+    // verifies: REQ-CONTEXT-0002.S3
     #[test]
     fn an_oversized_node_that_was_asked_for_is_cut_not_dropped() {
         let g = sample();
@@ -416,6 +423,7 @@ mod tests {
         assert_eq!(p.pointers.len(), 2);
     }
 
+    // verifies: REQ-CONTEXT-0002.S4
     #[test]
     fn several_seeds_share_one_budget_and_unknown_seeds_are_skipped() {
         let g = sample();
@@ -429,6 +437,7 @@ mod tests {
         assert_eq!(ids, vec!["REQ-A-0003", "ADR-0001"]);
     }
 
+    // verifies: REQ-CONTEXT-0002.S5
     #[test]
     fn a_token_is_about_four_characters() {
         assert_eq!(tokens(""), 0);

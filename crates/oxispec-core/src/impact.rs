@@ -17,6 +17,7 @@ pub struct Impact {
     pub nodes: usize,
 }
 
+// spec: REQ-IMPACT-0001
 /// `changed_paths` are the files that differ from the base, relative to the
 /// project root. `old_ids` are the IDs the changed files had at the base,
 /// which is how a deleted or renamed node still finds the nodes that linked to it.
@@ -91,6 +92,7 @@ mod tests {
         "---\nid: REQ-A-0002\ntype: requirement\nlinks:\n  refines: REQ-A-0001\n---\n";
     const C: &str = "---\nid: REQ-A-0003\ntype: requirement\n---\n";
 
+    // verifies: REQ-IMPACT-0001.S1
     #[test]
     fn a_changed_node_brings_in_the_nodes_that_link_to_it() {
         let g = graph(&[("a.md", A), ("b.md", B_LINKS_A), ("c.md", C)]);
@@ -100,6 +102,7 @@ mod tests {
         assert_eq!(i.nodes, 2);
     }
 
+    // verifies: REQ-IMPACT-0001.S2
     #[test]
     fn a_changed_referrer_does_not_bring_in_what_it_links_to() {
         let g = graph(&[("a.md", A), ("b.md", B_LINKS_A), ("c.md", C)]);
@@ -108,6 +111,7 @@ mod tests {
         assert_eq!(i.nodes, 1);
     }
 
+    // verifies: REQ-IMPACT-0001.S3
     #[test]
     fn a_deleted_node_is_found_through_its_old_id() {
         // a.md is gone, but b.md still links to REQ-A-0001.
@@ -117,6 +121,7 @@ mod tests {
         assert!(!i.paths.contains(Path::new("c.md")));
     }
 
+    // verifies: REQ-IMPACT-0001.S4
     #[test]
     fn links_to_a_scenario_count_as_links_to_the_node() {
         let b = "---\nid: REQ-A-0002\ntype: requirement\nlinks:\n  refines: REQ-A-0001.S1\n---\n";
@@ -125,6 +130,7 @@ mod tests {
         assert_eq!(i.paths, set(&["a.md", "b.md"]));
     }
 
+    // verifies: REQ-IMPACT-0001.S5
     #[test]
     fn findings_are_kept_only_for_nodes_in_scope() {
         let broken = "---\nid: ADR-0009\ntype: adr\nlinks:\n  refines: NOPE-0001\n---\n";
@@ -143,6 +149,7 @@ mod tests {
         );
     }
 
+    // verifies: REQ-IMPACT-0001.S6
     #[test]
     fn a_duplicate_id_is_kept_even_when_it_is_reported_on_the_other_file() {
         let g = graph(&[("a.md", A), ("z.md", A)]);
