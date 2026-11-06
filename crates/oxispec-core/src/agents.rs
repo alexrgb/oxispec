@@ -142,6 +142,12 @@ pub const SKILLS: &[Skill] = &[
         body: include_str!("../skills/write-api.md"),
     },
     Skill {
+        name: "oxispec-manage-risks",
+        description: "Record a risk to the application, keep the register honest, and decide with the person what to do about each: owner, likelihood, impact, what mitigates it, who accepts it. Use when a threat or weakness is found, a design is reviewed for security, or you are asked what risks there are.",
+        requires: &["risks"],
+        body: include_str!("../skills/manage-risks.md"),
+    },
+    Skill {
         name: "oxispec-import-specs",
         description: "Import the specs, open changes and design notes of OpenSpec, Spec Kit, Kiro or plain markdown, deciding with the person what each file becomes, showing drafts and a dry run before writing. Use when asked to move a project to OxiSpec.",
         requires: &["specs"],
@@ -345,6 +351,7 @@ mod tests {
             "statemachines",
             "architecture",
             "debt",
+            "risks",
         ]);
         assert_eq!(all.len(), SKILLS.len());
     }

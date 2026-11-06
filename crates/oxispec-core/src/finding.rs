@@ -185,6 +185,14 @@ pub const CODES: &[(&str, &str)] = &[
         "A decision is marked superseded, but no decision in force supersedes it",
     ),
     (
+        "E038",
+        "A risk has a status, likelihood, impact or date that is not valid",
+    ),
+    (
+        "E039",
+        "A risk is accepted but no person is named in `approved_by`",
+    ),
+    (
         "W012",
         "A decision is superseded by another, but its status still says it is in force",
     ),
@@ -195,6 +203,12 @@ pub const CODES: &[(&str, &str)] = &[
         "A debt item has not been reviewed for longer than the project allows",
     ),
     ("W016", "A debt item does not say what it arises from"),
+    ("W017", "A risk that is still live has no owner"),
+    ("W018", "A live risk is past its review date"),
+    (
+        "W019",
+        "A risk is being mitigated but no `mitigated-by` link says by what",
+    ),
     ("I001", "A link to another project is not checked"),
     (
         "I002",

@@ -16,6 +16,7 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-MCP-0001` to `0004` | The read tools answer as the commands do; tools are offered by module and mode; arguments cannot be read as options; an agent can propose a change set but never approve it |
 | `REQ-PRD-0001` | A PRD is made from the nodes |
 | `REQ-API-0001`, `0002` | Operations come from the requirements; a description is compared with them |
+| `REQ-RISK-0001` to `0005` | A risk has valid fields; the level is worked out; a risk is accepted by a person; the register is ordered; a critical risk holds a release back |
 | `REQ-DEBT-0001` to `0004` | A debt item has valid fields; a live item is held to account; the backlog is ordered; limits count live items |
 | `REQ-RELEASE-0001` to `0003` | The suggested version follows SemVer; gates hold a release back; release notes list what changed |
 | `ADR-0001` to `ADR-0004` | Why files are the source of truth, why IDs do not depend on paths, why reverse links are not stored, why the MCP server has no tool that approves |

@@ -31,6 +31,7 @@ pub mod prd;
 pub mod release;
 pub mod report;
 pub mod results;
+pub mod risks;
 pub mod rollback;
 pub mod search;
 pub mod site;

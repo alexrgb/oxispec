@@ -397,6 +397,9 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
         due: fm.due,
         cost: fm.cost,
         interest: fm.interest,
+        likelihood: fm.likelihood,
+        impact: fm.impact,
+        review: fm.review,
         title,
         path: path.to_path_buf(),
         links: fm

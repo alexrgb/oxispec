@@ -34,7 +34,7 @@ pass version-matches-changes  0.1.0 is at least the suggested 0.1.0
 ready to publish
 ```
 
-A gate marked `fail` blocks the release; some are advisory and only warn. More gates appear when the project asks for them: coverage and passing tests when tests are traced, `debt-within-limits` when the config sets `debt.limits`, and `compliance-met` when it has a `compliance:` section (see [compliance](../compliance.md) and [debt](../debt.md)).
+A gate marked `fail` blocks the release; some are advisory and only warn. More gates appear when the project asks for them: coverage and passing tests when tests are traced, `debt-within-limits` when the config sets `debt.limits`, `no-critical-risks` when the project has risks (see [risks](../risks.md)), and `compliance-met` when it has a `compliance:` section (see [compliance](../compliance.md) and [debt](../debt.md)).
 
 ## Publish
 

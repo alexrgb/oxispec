@@ -34,6 +34,7 @@ mod machines;
 mod mcp;
 mod reference;
 mod releases;
+mod risks;
 mod rollback;
 mod search;
 mod server;
@@ -222,6 +223,23 @@ enum Command {
         /// Where to append one JSON line per request. Default: .oxispec/server/audit.jsonl
         #[arg(long, value_name = "FILE")]
         audit_log: Option<PathBuf>,
+    },
+    /// The risk register, the most serious and the oldest first
+    #[command(args_conflicts_with_subcommands = true)]
+    Risks {
+        #[command(subcommand)]
+        action: Option<RisksAction>,
+        /// Only risks with this status: open, mitigating, mitigated, accepted or closed
+        #[arg(long)]
+        status: Option<String>,
+        /// Only risks at this level: low, medium, high or critical
+        #[arg(long)]
+        level: Option<String>,
+        /// Include risks that are not live (mitigated, accepted, closed)
+        #[arg(long)]
+        all: bool,
+        #[arg(long)]
+        json: bool,
     },
     /// The tech debt backlog, the most serious and the oldest first
     #[command(args_conflicts_with_subcommands = true)]
@@ -718,6 +736,20 @@ enum NewKind {
         #[arg(long)]
         format: Option<String>,
     },
+    /// A risk to the application, for example: new risk "Session tokens never expire"
+    /// --likelihood medium --impact high --from REQ-AUTH-0001
+    Risk {
+        title: String,
+        /// low, medium or high
+        #[arg(long, default_value = "medium")]
+        likelihood: String,
+        /// low, medium, high or critical
+        #[arg(long, default_value = "medium")]
+        impact: String,
+        /// The node it arises from; becomes an `arises-from` link
+        #[arg(long)]
+        from: Option<String>,
+    },
     /// A tech debt item, for example: new debt "Retry loop has no backoff" --from REQ-API-0003
     Debt {
         title: String,
@@ -739,6 +771,19 @@ enum NewKind {
     Machine { title: String },
     /// An element of the architecture model, or a deployment environment
     Architecture { kind: ElementKind, title: String },
+}
+
+#[derive(Subcommand)]
+enum RisksAction {
+    /// Move a risk to open, mitigating, mitigated, accepted or closed, and record the review.
+    /// Accepting a risk records who accepts it
+    Status {
+        id: String,
+        status: String,
+        /// Who accepts the risk (default: git user.name). Only for `accepted`
+        #[arg(long)]
+        by: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1002,6 +1047,23 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     json,
                     cache,
                 )?,
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Risks {
+            action,
+            status,
+            level,
+            all,
+            json,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            match action {
+                Some(RisksAction::Status { id, status, by }) => {
+                    let _lock = lock_project(&root)?;
+                    risks::set_status(&root, &id, &status, by.as_deref(), cache)?
+                }
+                None => risks::list(&root, status.as_deref(), level.as_deref(), all, json, cache)?,
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -1285,6 +1347,23 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 NewKind::Prd { title } => {
                     require_module(&cfg, "specs")?;
                     new_prd(&root, &title, scheme, cache)?
+                }
+                NewKind::Risk {
+                    title,
+                    likelihood,
+                    impact,
+                    from,
+                } => {
+                    require_module(&cfg, "risks")?;
+                    new_risk(
+                        &root,
+                        &title,
+                        &likelihood,
+                        &impact,
+                        from.as_deref(),
+                        scheme,
+                        cache,
+                    )?
                 }
                 NewKind::Change { title } => {
                     require_module(&cfg, "specs")?;
@@ -1599,6 +1678,9 @@ fn ensure_module_dirs(root: &Path, cfg: &Config) -> Result<()> {
     }
     if cfg.has("debt") {
         fs::create_dir_all(root.join("specs/debt"))?;
+    }
+    if cfg.has("risks") {
+        fs::create_dir_all(root.join("specs/risks"))?;
     }
     Ok(())
 }
@@ -2260,6 +2342,48 @@ fn new_debt(
         .replace("@TITLE@", title)
         .replace("@SEVERITY@", severity)
         .replace("@DATE@", &today)
+        .replace("@LINKS@", &links);
+    write_new(root, &rel, &body)?;
+    Ok((id, rel))
+}
+
+fn new_risk(
+    root: &Path,
+    title: &str,
+    likelihood: &str,
+    impact: &str,
+    from: Option<&str>,
+    scheme: IdScheme,
+    cache: bool,
+) -> Result<(String, PathBuf)> {
+    if !oxispec_core::risks::LIKELIHOODS.contains(&likelihood) {
+        bail!(
+            "likelihood `{likelihood}` is not one of {}",
+            oxispec_core::risks::LIKELIHOODS.join(", ")
+        );
+    }
+    if !oxispec_core::risks::IMPACTS.contains(&impact) {
+        bail!(
+            "impact `{impact}` is not one of {}",
+            oxispec_core::risks::IMPACTS.join(", ")
+        );
+    }
+    let graph = load_graph(root, cache);
+    if let Some(from) = from
+        && graph.get(from).is_none()
+    {
+        bail!("no node {from} to link `arises-from` to");
+    }
+    let id = allocate_id(&graph, "RISK-", scheme)?;
+    let suffix = id.strip_prefix("RISK-").unwrap_or(&id);
+    let rel = PathBuf::from("specs/risks").join(format!("{suffix}-{}.md", slug(title)?));
+    let links = from.map_or(String::new(), |f| format!("links:\n  arises-from: {f}\n"));
+    let body = risks::TEMPLATE
+        .replace("@ID@", &id)
+        .replace("@TITLE@", title)
+        .replace("@LIKELIHOOD@", likelihood)
+        .replace("@IMPACT@", impact)
+        .replace("@DATE@", &oxispec_core::debt::today())
         .replace("@LINKS@", &links);
     write_new(root, &rel, &body)?;
     Ok((id, rel))
