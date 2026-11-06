@@ -6329,6 +6329,74 @@ fn an_operation_card_and_a_running_service_are_read() {
     );
 }
 
+#[test]
+fn the_languages_of_the_scan_are_chosen_at_init_and_listed() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    let out = run(
+        p,
+        &["init", "--preset", "specs-tests", "--languages", "cobol"],
+    );
+    assert_ne!(out.code, 0);
+    assert!(
+        out.stderr.contains("unknown language `cobol`"),
+        "{}",
+        out.stderr
+    );
+    let out = run(
+        p,
+        &[
+            "init",
+            "--preset",
+            "specs-tests",
+            "--languages",
+            "rust,python",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let config = fs::read_to_string(p.join(".oxispec/config.yaml")).unwrap();
+    assert!(config.contains("languages"), "{config}");
+
+    let out = run(p, &["languages"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let rust = out.stdout.lines().find(|l| l.starts_with("rust")).unwrap();
+    assert!(rust.contains("yes") && rust.contains("grammar"), "{rust}");
+    let go = out.stdout.lines().find(|l| l.starts_with("go ")).unwrap();
+    assert!(go.contains("no"), "{go}");
+    assert!(
+        out.stdout.contains("only the languages marked yes"),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["languages", "--json"]);
+    assert!(out.stdout.contains("\"limited\": true"), "{}", out.stdout);
+
+    // Only the chosen languages are scanned.
+    assert_eq!(run(p, &["new", "requirement", "a", "Thing"]).code, 0);
+    fs::write(p.join("a.py"), "# spec: REQ-A-0001\n").unwrap();
+    fs::write(p.join("a.go"), "// spec: REQ-A-0001\n").unwrap();
+    let out = run(p, &["trace"]);
+    assert!(out.stdout.contains("a.py"), "{}", out.stdout);
+    assert!(!out.stdout.contains("a.go"), "{}", out.stdout);
+
+    // A project may add a language by naming its extension and leader.
+    let config = fs::read_to_string(p.join(".oxispec/config.yaml")).unwrap();
+    fs::write(
+        p.join(".oxispec/config.yaml"),
+        format!(
+            "{}\n  comments:\n    zig:\n      extensions: [zig]\n      leaders: [\"//\"]\n",
+            config.replace(
+                "  languages:\n  - rust\n  - python\n",
+                "  languages:\n  - rust\n  - python\n  - zig"
+            )
+        ),
+    )
+    .unwrap();
+    fs::write(p.join("a.zig"), "// spec: REQ-A-0001\n").unwrap();
+    let out = run(p, &["trace"]);
+    assert!(out.stdout.contains("a.zig"), "{}{}", out.stdout, out.stderr);
+}
+
 fn project_with_a_standard(p: &Path, standard: &str) {
     git(p, &["init", "-q"]);
     assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);

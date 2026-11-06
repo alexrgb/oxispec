@@ -234,8 +234,8 @@ fn trace_facts(
         return Ok(None);
     }
     let scan = match at {
-        Some(rev) => git::scan_at(root, rev, &cfg.trace.exclude)?,
-        None => trace::scan_tree(root, &cfg.trace.exclude)?,
+        Some(rev) => git::scan_at(root, rev, &cfg.trace)?,
+        None => trace::scan_tree_with(root, &cfg.trace)?,
     };
     let lock = match at {
         Some(rev) => match git::file_at(root, &rev.oid, Path::new(suspect::LOCK_PATH))? {

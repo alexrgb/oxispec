@@ -5,7 +5,7 @@ use std::path::Path;
 
 use anyhow::{Result, bail};
 use oxispec_core::api::{self, Card};
-use oxispec_core::trace::{coverage, scan_tree};
+use oxispec_core::trace::{coverage, scan_tree_with};
 use oxispec_core::{OUTPUT_SCHEMA_VERSION, config, results};
 use serde_json::json;
 
@@ -18,7 +18,7 @@ fn standing(root: &Path, cache: bool) -> Result<Option<(BTreeSet<String>, BTreeS
     if !cfg.has("tests") {
         return Ok(None);
     }
-    let scan = scan_tree(root, &cfg.trace.exclude)?;
+    let scan = scan_tree_with(root, &cfg.trace)?;
     let graph = load_graph(root, cache);
     let unverified = coverage(&graph, &scan.annotations, None)
         .unverified
