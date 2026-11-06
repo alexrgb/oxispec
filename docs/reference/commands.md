@@ -4,7 +4,7 @@ Written by `oxispec docs reference` from the program itself. Do not edit it by h
 
 Every command also accepts `--root <ROOT>` (the project folder; default: the nearest parent with `.oxispec/config.yaml`), `--no-cache` (do not read or write the local index) and `--help`.
 
-Commands: [`init`](#oxispec-init), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`show`](#oxispec-show)
+Commands: [`init`](#oxispec-init), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`risks`](#oxispec-risks), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`show`](#oxispec-show)
 
 ## `oxispec init`
 
@@ -68,7 +68,7 @@ Usage: oxispec new [OPTIONS] <COMMAND>
 
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
-Subcommands: `requirement`, `adr`, `debt`, `prd`, `change`, `vocabulary`, `machine`, `architecture`
+Subcommands: `requirement`, `adr`, `risk`, `debt`, `prd`, `change`, `vocabulary`, `machine`, `architecture`
 
 ### `oxispec new requirement`
 
@@ -93,6 +93,20 @@ Usage: oxispec new adr [OPTIONS] <TITLE>
 
 - `<TITLE>`
 - `--format <FORMAT>`: The format profile to write it in. Default: the one the config chooses for ADRs.
+- `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
+
+### `oxispec new risk`
+
+A risk to the application, for example: new risk "Session tokens never expire" --likelihood medium --impact high --from REQ-AUTH-0001
+
+```text
+Usage: oxispec new risk [OPTIONS] <TITLE>
+```
+
+- `<TITLE>`
+- `--likelihood <LIKELIHOOD>`: low, medium or high. Default: `medium`.
+- `--impact <IMPACT>`: low, medium, high or critical. Default: `medium`.
+- `--from <FROM>`: The node it arises from; becomes an `arises-from` link.
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
 ### `oxispec new debt`
@@ -428,6 +442,34 @@ Usage: oxispec serve [OPTIONS]
 - `--listen <ADDRESS>`: Address to listen on. Default: `127.0.0.1:7878`.
 - `--behind-tls-proxy`: Allow a non-local address because a TLS proxy in front encrypts the traffic.
 - `--audit-log <FILE>`: Where to append one JSON line per request. Default: .oxispec/server/audit.jsonl.
+
+## `oxispec risks`
+
+The risk register, the most serious and the oldest first
+
+```text
+Usage: oxispec risks [OPTIONS]
+       oxispec risks <COMMAND>
+```
+
+- `--status <STATUS>`: Only risks with this status: open, mitigating, mitigated, accepted or closed.
+- `--level <LEVEL>`: Only risks at this level: low, medium, high or critical.
+- `--all`: Include risks that are not live (mitigated, accepted, closed).
+- `--json`
+
+Subcommands: `status`
+
+### `oxispec risks status`
+
+Move a risk to open, mitigating, mitigated, accepted or closed, and record the review. Accepting a risk records who accepts it
+
+```text
+Usage: oxispec risks status [OPTIONS] <ID> <STATUS>
+```
+
+- `<ID>`
+- `<STATUS>`
+- `--by <BY>`: Who accepts the risk (default: git user.name). Only for `accepted`.
 
 ## `oxispec debt`
 

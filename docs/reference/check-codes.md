@@ -54,10 +54,15 @@ A code is never reused. `E` is an error (`oxispec check` exits with 1), `W` a wa
 | W009 | warning | A container has no owner or no technology |
 | W010 | warning | A container runs in no deployment environment |
 | W011 | warning | A decision is marked superseded, but no decision in force supersedes it |
+| E038 | error | A risk has a status, likelihood, impact or date that is not valid |
+| E039 | error | A risk is accepted but no person is named in `approved_by` |
 | W012 | warning | A decision is superseded by another, but its status still says it is in force |
 | W013 | warning | A debt item that is still to be paid has no owner |
 | W014 | warning | A debt item is past its due date |
 | W015 | warning | A debt item has not been reviewed for longer than the project allows |
 | W016 | warning | A debt item does not say what it arises from |
+| W017 | warning | A risk that is still live has no owner |
+| W018 | warning | A live risk is past its review date |
+| W019 | warning | A risk is being mitigated but no `mitigated-by` link says by what |
 | I001 | info | A link to another project is not checked |
 | I002 | info | A claim says nothing that another claim does not already say |

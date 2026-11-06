@@ -47,6 +47,7 @@ fn run_checks(graph: &Graph) -> Vec<Finding> {
     supersede_cycles(graph, &mut findings);
     findings.extend(crate::formats::check(graph));
     findings.extend(crate::debt::check(graph));
+    findings.extend(crate::risks::check(graph));
     findings.extend(crate::compliance::check(graph));
     findings.extend(crate::claims::check(graph));
     findings.extend(crate::machines::check(graph));

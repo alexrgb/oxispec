@@ -6075,6 +6075,65 @@ fn openapi_is_made_from_requirements_and_a_file_is_compared_with_them() {
     assert!(out.stdout.contains("GET /health"), "{}", out.stdout);
 }
 
+#[test]
+fn risks_are_registered_listed_and_accepted_by_a_person() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let out = run(
+        p,
+        &[
+            "new",
+            "risk",
+            "Tokens never expire",
+            "--likelihood",
+            "high",
+            "--impact",
+            "high",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("RISK-0001"), "{}", out.stdout);
+    let out = run(p, &["risks"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("critical"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("holds a release back"),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["risks", "--json"]);
+    assert!(
+        out.stdout.contains("\"level\": \"critical\""),
+        "{}",
+        out.stdout
+    );
+    let out = run(
+        p,
+        &["risks", "status", "RISK-0001", "accepted", "--by", "Dana"],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let text = fs::read_to_string(
+        p.join("specs/risks").join(
+            fs::read_dir(p.join("specs/risks"))
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap()
+                .file_name(),
+        ),
+    )
+    .unwrap();
+    assert!(text.contains("approved_by: \"Dana\""), "{text}");
+    let out = run(p, &["risks"]);
+    assert!(out.stdout.contains("no risks"), "{}", out.stdout);
+    let out = run(p, &["risks", "status", "RISK-0001", "later"]);
+    assert_ne!(out.code, 0);
+    let out = run(p, &["new", "risk", "x", "--impact", "huge"]);
+    assert_ne!(out.code, 0);
+}
+
 fn project_with_a_standard(p: &Path, standard: &str) {
     git(p, &["init", "-q"]);
     assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);

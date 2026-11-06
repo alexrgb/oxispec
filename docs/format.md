@@ -29,7 +29,7 @@ The system MUST expire admin sessions after 15 minutes of inactivity.
 | Key | Meaning |
 |---|---|
 | `id` | Required. Never changes and is never reused. |
-| `type` | Required. `requirement`, `adr`, `decision`, `test-case`, `standard`, `api`, `state-machine`, `diagram`, `term`, `change`, `system`, `container`, `component`, `person`, `deployment-environment`, `release`, `debt` or `prd`. Other types give a warning, because later modules add types. |
+| `type` | Required. `requirement`, `adr`, `decision`, `test-case`, `standard`, `api`, `state-machine`, `diagram`, `term`, `change`, `system`, `container`, `component`, `person`, `deployment-environment`, `release`, `debt`, `prd` or `risk`. Other types give a warning, because later modules add types. |
 | `status` | Optional, free text for now, for example `draft` or `accepted`. |
 | `owner` | Optional, free text for now. |
 | `approved_by`, `approved_on` | Set on [change sets](#change-sets) when they are approved. A name, and a date as `YYYY-MM-DD`. |
@@ -275,6 +275,8 @@ Codes are stable. A code is never reused.
 | E035 | error | A node lacks a link the compliance rules ask for (see [compliance.md](compliance.md)) |
 | E036 | error | A node lacks the sign-off the compliance rules ask for |
 | E037 | error | The `compliance:` settings in the config are not valid |
+| E038 | error | A risk has a status, likelihood, impact or date that is not valid (see [risks.md](risks.md)) |
+| E039 | error | A risk is accepted but no person is named in `approved_by` |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |
@@ -291,6 +293,9 @@ Codes are stable. A code is never reused.
 | W014 | warning | A debt item is past its due date |
 | W015 | warning | A debt item has not been reviewed for longer than `debt.stale_days` |
 | W016 | warning | A debt item has no `arises-from` link |
+| W017 | warning | A live risk has no owner |
+| W018 | warning | A live risk is past its review date |
+| W019 | warning | A risk is being mitigated but has no `mitigated-by` link |
 | I001 | info | A link to another project is not checked. Shown with `--verbose`. |
 | I002 | info | A claim says nothing that another claim does not already say. Shown with `--verbose`. |
 

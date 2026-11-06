@@ -28,6 +28,10 @@ pub struct Frontmatter {
     /// What it takes to pay a debt item off, and what it costs while it stays.
     pub cost: Option<String>,
     pub interest: Option<String>,
+    /// How likely a risk is and how much it would matter, and when to look at it again.
+    pub likelihood: Option<String>,
+    pub impact: Option<String>,
+    pub review: Option<String>,
     #[serde(default)]
     pub links: BTreeMap<String, OneOrMany>,
 }
@@ -120,6 +124,13 @@ pub struct Node {
     pub cost: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interest: Option<String>,
+    /// For a risk: how likely it is, how much it would matter, and when to review it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub likelihood: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub impact: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review: Option<String>,
     /// The first `# ` heading, without a leading `ID: `.
     pub title: Option<String>,
     /// Path relative to the project root.
@@ -179,6 +190,7 @@ pub const KNOWN_TYPES: &[&str] = &[
     "vocabulary",
     "debt",
     "prd",
+    "risk",
 ];
 
 /// Link kinds known to this version (design section 4). Others get a
@@ -200,4 +212,5 @@ pub const KNOWN_LINK_KINDS: &[&str] = &[
     "changes",
     "includes",
     "arises-from",
+    "mitigated-by",
 ];

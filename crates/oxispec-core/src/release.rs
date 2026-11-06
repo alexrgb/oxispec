@@ -498,6 +498,26 @@ pub fn gates(candidate: &Candidate) -> Vec<Gate> {
         ));
     }
 
+    if crate::risks::has_risks(graph) {
+        let critical = crate::risks::critical(graph);
+        gates.push(Gate::new(
+            "no-critical-risks",
+            critical.is_empty(),
+            if critical.is_empty() {
+                "no live risk is at the critical level".to_string()
+            } else {
+                format!(
+                    "critical risks still live: {}",
+                    critical
+                        .iter()
+                        .map(|n| n.id.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            },
+        ));
+    }
+
     let (rules, problems) = crate::compliance::resolve(graph.compliance_config());
     if !rules.is_empty() || !problems.is_empty() {
         let gaps: usize = crate::compliance::report(graph)
@@ -952,5 +972,50 @@ mod tests {
             trace: None,
         });
         assert!(can_release(&all), "{all:?}");
+    }
+
+    // verifies: REQ-RISK-0005.S2
+    #[test]
+    fn a_live_critical_risk_holds_a_release_back() {
+        let risk = |status: &str| {
+            format!(
+                "---\nid: RISK-0001\ntype: risk\nstatus: {status}\nlikelihood: high\nimpact: high\n---\n# RISK-0001: Risk\n"
+            )
+        };
+        let target = v("0.1.0");
+        let ready = manifest("");
+        let run = |status: &str| {
+            let new = graph(&[("a.md", req("REQ-A-0001", "", REQ)), ("r.md", risk(status))]);
+            let diff = diff_graphs(&Graph::default(), &new);
+            gates(&Candidate {
+                version: &target,
+                base: None,
+                manifest: &ready,
+                graph: &new,
+                diff: &diff,
+                tag_exists: false,
+                trace: None,
+            })
+        };
+        let held = run("open");
+        assert!(!gate(&held, "no-critical-risks").passed);
+        assert!(
+            gate(&held, "no-critical-risks")
+                .detail
+                .contains("RISK-0001")
+        );
+        assert!(gate(&run("mitigated"), "no-critical-risks").passed);
+        let none = graph(&[("a.md", req("REQ-A-0001", "", REQ))]);
+        let diff = diff_graphs(&Graph::default(), &none);
+        let all = gates(&Candidate {
+            version: &target,
+            base: None,
+            manifest: &ready,
+            graph: &none,
+            diff: &diff,
+            tag_exists: false,
+            trace: None,
+        });
+        assert!(!all.iter().any(|g| g.name == "no-critical-risks"));
     }
 }
