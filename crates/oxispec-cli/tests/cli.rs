@@ -6003,6 +6003,32 @@ fn import_specs_reads_a_prd_and_an_openapi_description() {
     assert_eq!(run(p, &["check"]).code, 0);
 }
 
+#[test]
+fn a_prd_is_written_as_nodes_and_read_as_a_document() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let out = run(p, &["new", "prd", "Checkout"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("PRD-0001"), "{}", out.stdout);
+    assert_eq!(
+        run(p, &["new", "requirement", "pay", "Pay by card"]).code,
+        0
+    );
+    let out = run(p, &["link", "REQ-PAY-0001", "refines", "PRD-0001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert_eq!(run(p, &["check"]).code, 0);
+    let out = run(p, &["docs", "prd", "PRD-0001", "--out", "prd.md"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let doc = fs::read_to_string(p.join("prd.md")).unwrap();
+    assert!(doc.contains("## Non-goals"), "{doc}");
+    assert!(doc.contains("### REQ-PAY-0001: "), "{doc}");
+    let out = run(p, &["docs", "prd", "REQ-PAY-0001"]);
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("not a prd"), "{}", out.stderr);
+}
+
 fn project_with_a_standard(p: &Path, standard: &str) {
     git(p, &["init", "-q"]);
     assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);

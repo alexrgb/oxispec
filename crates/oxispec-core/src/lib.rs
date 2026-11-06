@@ -26,6 +26,7 @@ pub mod machines;
 pub mod modules;
 pub mod node;
 pub mod parse;
+pub mod prd;
 pub mod release;
 pub mod report;
 pub mod results;

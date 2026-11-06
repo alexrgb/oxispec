@@ -178,6 +178,7 @@ pub const KNOWN_TYPES: &[&str] = &[
     "release",
     "vocabulary",
     "debt",
+    "prd",
 ];
 
 /// Link kinds known to this version (design section 4). Others get a
