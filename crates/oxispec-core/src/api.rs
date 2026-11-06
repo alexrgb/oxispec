@@ -30,6 +30,8 @@ pub struct Operation {
     pub responses: BTreeMap<String, String>,
     /// The requirement node that states it.
     pub node: String,
+    /// Its scenarios as written: a name and the steps, like `WHEN a user logs in`.
+    pub scenarios: Vec<(String, Vec<String>)>,
 }
 
 impl Operation {
@@ -120,18 +122,28 @@ pub fn operations(graph: &Graph, root: &Path) -> Result<Vec<Operation>, Error> {
                     summary: summary_of(&text_of(&s.body)),
                     responses: BTreeMap::new(),
                     node: node.id.clone(),
+                    scenarios: Vec::new(),
                 });
-            } else if s.title.starts_with("Scenario:")
+            } else if let Some(scenario) = s.title.strip_prefix("Scenario:")
                 && let Some(op) = current.as_mut()
             {
+                let scenario = match scenario.rfind("{#") {
+                    Some(i) => scenario[..i].trim(),
+                    None => scenario.trim(),
+                };
+                let mut steps = Vec::new();
                 for line in &s.body {
                     let step = line.trim().trim_start_matches("- ").replace("**", "");
+                    if !step.trim().is_empty() {
+                        steps.push(step.trim().to_string());
+                    }
                     if let Some(then) = step.strip_prefix("THEN ")
                         && let Some((code, what)) = response_of(then)
                     {
                         op.responses.entry(code).or_insert(what);
                     }
                 }
+                op.scenarios.push((scenario.to_string(), steps));
             }
         }
         flush(current.take());

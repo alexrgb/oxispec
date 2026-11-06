@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use oxispec_core::api::{self, Card};
 use oxispec_core::trace::{coverage, scan_tree_with};
 use oxispec_core::{OUTPUT_SCHEMA_VERSION, config, results};
@@ -130,6 +130,207 @@ pub fn show(root: &Path, target: &str, json_output: bool, cache: bool) -> Result
         for s in &c.scenarios {
             outln!("    {s}: {}", state(s, &known));
         }
+    }
+    Ok(())
+}
+
+/// Embeds text with a service that has the OpenAI-compatible embeddings API.
+struct HttpEmbedder {
+    url: String,
+    model: String,
+    key: Option<String>,
+}
+
+impl oxispec_core::apiindex::Embedder for HttpEmbedder {
+    fn id(&self) -> String {
+        format!("http {} {}", self.url, self.model)
+    }
+
+    fn embed(&self, texts: &[String]) -> std::result::Result<Vec<Vec<f32>>, String> {
+        let mut headers = Vec::new();
+        if let Some(key) = &self.key {
+            headers.push(format!("Authorization: Bearer {key}"));
+        }
+        let mut out = Vec::new();
+        for batch in texts.chunks(16) {
+            let body = serde_json::json!({"model": self.model, "input": batch}).to_string();
+            let answer = crate::fetch::post_json(&self.url, &headers, &body)
+                .map_err(|e| format!("the embedder {} failed: {e:#}", self.url))?;
+            let value: serde_json::Value = serde_json::from_str(&answer)
+                .map_err(|e| format!("the embedder {} did not answer with JSON: {e}", self.url))?;
+            let mut rows: Vec<(u64, Vec<f32>)> = value["data"]
+                .as_array()
+                .ok_or_else(|| format!("the answer of {} has no `data` list", self.url))?
+                .iter()
+                .enumerate()
+                .map(|(i, row)| {
+                    let v: Vec<f32> = row["embedding"]
+                        .as_array()
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|x| x.as_f64())
+                                .map(|x| x as f32)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    (row["index"].as_u64().unwrap_or(i as u64), v)
+                })
+                .collect();
+            rows.sort_by_key(|(i, _)| *i);
+            if rows.len() != batch.len() || rows.iter().any(|(_, v)| v.is_empty()) {
+                return Err(format!(
+                    "the embedder {} gave {} vectors for {} texts",
+                    self.url,
+                    rows.len(),
+                    batch.len()
+                ));
+            }
+            for (_, mut v) in rows {
+                let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+                if norm > 0.0 {
+                    v.iter_mut().for_each(|x| *x /= norm);
+                }
+                out.push(v);
+            }
+        }
+        Ok(out)
+    }
+}
+
+fn embedder(root: &Path) -> Result<Box<dyn oxispec_core::apiindex::Embedder>> {
+    let cfg = config::load(root)?;
+    Ok(match cfg.api_index.embedder {
+        None => Box::new(oxispec_core::apiindex::HashEmbedder),
+        Some(e) => {
+            let key = match &e.api_key_env {
+                Some(name) => Some(
+                    std::env::var(name)
+                        .with_context(|| format!("the environment variable {name} is not set"))?,
+                ),
+                None => None,
+            };
+            Box::new(HttpEmbedder {
+                url: e.url,
+                model: e.model,
+                key,
+            })
+        }
+    })
+}
+
+// spec: REQ-APIINDEX-0004
+/// Builds or updates the index of the operations.
+pub fn index(root: &Path, openapi: Option<&str>, json_output: bool, cache: bool) -> Result<()> {
+    use oxispec_core::apiindex;
+    let cfg = config::load(root)?;
+    require_module(&cfg, "specs")?;
+    let graph = load_graph(root, cache);
+    let ops = api::operations(&graph, root)?;
+    if ops.is_empty() {
+        bail!(
+            "no requirement is titled as a call; a block titled `GET /orders` is an operation (see the API guide)"
+        );
+    }
+    let doc = match openapi {
+        None => None,
+        Some(src) if src.starts_with("http://") || src.starts_with("https://") => {
+            Some(api::parse(&crate::fetch::get(src)?, src)?)
+        }
+        Some(path) => Some(api::load(Path::new(path))?),
+    };
+    let embedder = embedder(root)?;
+    let chunks = apiindex::chunks(&graph, &ops, doc.as_ref());
+    let mut store = apiindex::load(root).unwrap_or_else(|| apiindex::Store::new(&embedder.id()));
+    let stats =
+        apiindex::sync(&mut store, chunks, embedder.as_ref()).map_err(anyhow::Error::msg)?;
+    apiindex::save(root, &store)?;
+    if json_output {
+        outln!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "schema_version": OUTPUT_SCHEMA_VERSION,
+                "embedder": store.embedder,
+                "operations": store.entries.len(),
+                "added": stats.added,
+                "updated": stats.updated,
+                "removed": stats.removed,
+                "unchanged": stats.unchanged,
+                "path": apiindex::INDEX_PATH,
+            }))?
+        );
+        return Ok(());
+    }
+    outln!(
+        "{} operation(s) in {} ({}): {} added, {} updated, {} removed, {} unchanged",
+        store.entries.len(),
+        apiindex::INDEX_PATH,
+        store.embedder,
+        stats.added,
+        stats.updated,
+        stats.removed,
+        stats.unchanged
+    );
+    Ok(())
+}
+
+// spec: REQ-APIINDEX-0004
+/// Answers a query with the nearest operations.
+pub fn search(root: &Path, query: &str, top: usize, json_output: bool) -> Result<()> {
+    use oxispec_core::apiindex;
+    let cfg = config::load(root)?;
+    require_module(&cfg, "specs")?;
+    let Some(store) = apiindex::load(root) else {
+        bail!("there is no index yet; build it with `oxispec api index`");
+    };
+    let embedder = embedder(root)?;
+    if store.embedder != embedder.id() {
+        bail!(
+            "the index was made with `{}` and the config now says `{}`; run `oxispec api index` again",
+            store.embedder,
+            embedder.id()
+        );
+    }
+    let vector = embedder
+        .embed(&[query.to_string()])
+        .map_err(anyhow::Error::msg)?
+        .remove(0);
+    let hits = apiindex::search(&store, &vector, top);
+    if json_output {
+        let rows: Vec<_> = hits
+            .iter()
+            .map(|h| {
+                json!({
+                    "call": h.entry.call,
+                    "requirement": h.entry.node,
+                    "tag": h.entry.tag,
+                    "status": h.entry.status,
+                    "score": h.score,
+                    "text": h.entry.text,
+                })
+            })
+            .collect();
+        outln!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "schema_version": OUTPUT_SCHEMA_VERSION,
+                "query": query,
+                "embedder": store.embedder,
+                "hits": rows,
+            }))?
+        );
+        return Ok(());
+    }
+    if hits.is_empty() {
+        outln!("nothing in the index");
+    }
+    for h in &hits {
+        outln!(
+            "{:.2}  {}  [{}]  {}",
+            h.score,
+            h.entry.call,
+            h.entry.tag,
+            h.entry.node
+        );
     }
     Ok(())
 }

@@ -198,6 +198,8 @@ agents: [claude, cursor]   # only with the agents module; see agents.md
 trace:
   exclude: ["vendor/**"]   # optional
   languages: [rust, python]   # optional: scan only these, see trace.md
+api_index:                  # optional: embed with a service, see the API guide
+  embedder: { url: "http://localhost:11434/v1/embeddings", model: nomic-embed-text }
 ```
 
 `format` is the project format version. A project without it is read as format 1. A project with a higher number than this version knows stops with a message to upgrade oxispec.

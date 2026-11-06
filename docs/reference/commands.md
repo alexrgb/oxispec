@@ -473,7 +473,7 @@ An API as the requirements state it
 Usage: oxispec api [OPTIONS] <COMMAND>
 ```
 
-Subcommands: `show`
+Subcommands: `show`, `index`, `search`
 
 ### `oxispec api show`
 
@@ -484,6 +484,29 @@ Usage: oxispec api show [OPTIONS] <TARGET>
 ```
 
 - `<TARGET>`
+- `--json`
+
+### `oxispec api index`
+
+Build or update the search index of the operations: one chunk of text for each, with its PRD, decisions, risks, debt and test plans. Kept in .oxispec/cache. Embeds with the built-in embedder (words and word pairs), or the service in `api_index.embedder`
+
+```text
+Usage: oxispec api index [OPTIONS]
+```
+
+- `--openapi <OPENAPI>`: An OpenAPI or Swagger file, or an http:// address, whose text is added to each chunk.
+- `--json`
+
+### `oxispec api search`
+
+The operations nearest to a query, from the index
+
+```text
+Usage: oxispec api search [OPTIONS] <QUERY>
+```
+
+- `<QUERY>`
+- `--top <TOP>`: How many to show. Default: `5`.
 - `--json`
 
 ## `oxispec test-plan`

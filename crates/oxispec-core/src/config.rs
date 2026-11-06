@@ -49,6 +49,32 @@ pub struct TraceConfig {
     pub comments: BTreeMap<String, CommentSyntax>,
 }
 
+/// A service that turns text into vectors, with the OpenAI-compatible
+/// `POST /v1/embeddings` API that Ollama, LM Studio, vLLM and llama.cpp offer.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EmbedderConfig {
+    /// For example `http://localhost:11434/v1/embeddings`. Plain `http://` only.
+    pub url: String,
+    pub model: String,
+    /// The name of an environment variable that holds a bearer token, if the
+    /// service wants one. The token itself is never written in the config.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key_env: Option<String>,
+}
+
+/// Settings of the API index. Without an embedder, the built-in one is used.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApiIndexConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embedder: Option<EmbedderConfig>,
+}
+
+impl ApiIndexConfig {
+    fn is_default(&self) -> bool {
+        self.embedder.is_none()
+    }
+}
+
 /// The files and comment leaders of a language that is read without a grammar.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommentSyntax {
@@ -75,6 +101,9 @@ pub struct Config {
     pub id_scheme: IdScheme,
     #[serde(default, skip_serializing_if = "TraceConfig::is_default")]
     pub trace: TraceConfig,
+    /// How the operations of an API are embedded for `oxispec api index`.
+    #[serde(default, skip_serializing_if = "ApiIndexConfig::is_default")]
+    pub api_index: ApiIndexConfig,
     /// The AI clients that get skills, by id. See `agents::CLIENTS`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub agents: Vec<String>,
@@ -156,6 +185,7 @@ impl Config {
             topology: default_topology(),
             id_scheme,
             trace: TraceConfig::default(),
+            api_index: ApiIndexConfig::default(),
             agents: Vec::new(),
             formats: BTreeMap::new(),
             profiles: BTreeMap::new(),

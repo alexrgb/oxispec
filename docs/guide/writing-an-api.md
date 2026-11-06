@@ -68,6 +68,28 @@ Removing an operation, or one of its responses, is a breaking change in a releas
 
 An existing description can be brought in once with `oxispec import specs --from openapi --dir openapi.yaml`, which writes the requirements in this form. See [Moving from another tool](importing.md).
 
+## Search the operations
+
+```bash
+oxispec api index --openapi openapi.yaml      # build or update the index
+oxispec api search "what happens when the card is declined" --top 3
+oxispec api search "fetch an order" --json     # for a script or an assistant
+```
+
+The index has one chunk of text for each operation: its call and summary, its scenarios, the PRD, decisions, tech debt, risks and test plans around it (the same things as `oxispec api show`), and, with `--openapi`, what the file says about it (parameters, response descriptions, the operation ID). The file or an `http://` address is optional. The index is kept in `.oxispec/cache/api-index.json`, which is git-ignored and made again by `api index`; only the chunks whose text changed are embedded again. Run `api index` in CI or at deploy, after `oxispec check`, to feed an assistant that answers questions about the API.
+
+How a text becomes a vector is the embedder. The **built-in** one needs no model and no network: it counts words (cut to their stems) and word pairs into 256 buckets. It finds what shares words with the question, so `card declined` finds the operation that mentions a declined card, but it does not know that `refund` and `give the money back` mean the same. For that, point the index at a service that embeds text, in `.oxispec/config.yaml`:
+
+```yaml
+api_index:
+  embedder:
+    url: http://localhost:11434/v1/embeddings   # Ollama, LM Studio, vLLM, llama.cpp
+    model: nomic-embed-text
+    api_key_env: EMBEDDINGS_KEY                  # optional: the name of a variable, never the key
+```
+
+The service must have the OpenAI-compatible embeddings API. Only plain `http://` works, which suits a model on your machine or in your network, and keeps the text of private specs there. A different embedder, or a different model, makes the next `api index` embed everything again, and `api search` refuses an index made by another embedder.
+
 ## Security
 
 `oxispec check` warns (W023) about an operation that has no scenario responding with `401` or `403`, but only in a project where some other operation has one. A project that has not started to model who may call gets no warnings. Once it has, an operation that never says what happens to a caller who may not use it shows up, which is where broken access control tends to hide. An operation whose statement says it is `public` is left alone: `The API SHALL provide \`GET /health\`: a public check.`
