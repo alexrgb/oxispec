@@ -296,8 +296,11 @@ mod tests {
         assert_eq!(reports.len(), 1);
         let r = &reports[0];
         assert_eq!(r.requirements[0].scenarios, 2);
-        assert_eq!(r.requirements[0].unverified, ["REQ-A-0001.S2"]);
-        assert_eq!(r.requirements[0].failing, ["REQ-A-0001.S1"]);
+        let row = &r.requirements[0];
+        assert_eq!(row.unverified.len(), 1);
+        assert!(row.unverified.contains(&"REQ-A-0001.S2".to_string()));
+        assert_eq!(row.failing.len(), 1);
+        assert!(row.failing.contains(&"REQ-A-0001.S1".to_string()));
         assert!(
             !r.risks[0].tested,
             "a scenario of its mitigation is not verified"
