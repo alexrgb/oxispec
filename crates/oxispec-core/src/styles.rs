@@ -228,6 +228,7 @@ pub fn gherkin_steps(steps: &[String]) -> Result<(), String> {
     }
 }
 
+// spec: REQ-STYLE-0001
 /// The findings for one requirement node under a style.
 pub fn check(node: &Node, style: Style) -> Vec<Finding> {
     let mut out = Vec::new();
@@ -273,6 +274,7 @@ pub fn check(node: &Node, style: Style) -> Vec<Finding> {
 mod tests_of_styles {
     use super::*;
 
+    // verifies: REQ-STYLE-0001.S1
     #[test]
     fn the_six_ears_patterns_are_told_apart() {
         for (text, want) in [
@@ -337,6 +339,7 @@ mod tests_of_styles {
         assert!(ears("The marshall command prints.").is_err());
     }
 
+    // verifies: REQ-STYLE-0001.S2
     #[test]
     fn a_user_story_needs_a_role_a_goal_and_a_benefit() {
         assert_eq!(
@@ -360,6 +363,7 @@ mod tests_of_styles {
         }
     }
 
+    // verifies: REQ-STYLE-0001.S3
     #[test]
     fn a_gherkin_scenario_needs_when_and_then() {
         let steps = |s: &[&str]| s.iter().map(|s| s.to_string()).collect::<Vec<_>>();

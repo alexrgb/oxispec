@@ -103,6 +103,7 @@ fn signed(id: &str, ty: &str) -> Rule {
     }
 }
 
+// spec: REQ-COMPLIANCE-0001
 /// The rules of a tier: each tier has those of the one below.
 pub fn tier_rules(tier: u8) -> Vec<Rule> {
     let mut rules = Vec::new();
@@ -334,6 +335,8 @@ pub fn report(graph: &Graph) -> Vec<RuleReport> {
         .collect()
 }
 
+// spec: REQ-COMPLIANCE-0002
+// spec: REQ-COMPLIANCE-0003
 /// E035 for a missing link, E036 for a missing sign-off, E037 for a bad config.
 pub fn check(graph: &Graph) -> Vec<Finding> {
     let mut out = Vec::new();
@@ -383,6 +386,7 @@ mod tests_of_compliance {
 
     const REQ: &str = "---\nid: REQ-A-0001\ntype: requirement\nstatus: accepted\n---\n### Requirement: X\nThe system SHALL x.\n#### Scenario: s {#S1}\n- **WHEN** a\n- **THEN** b\n";
 
+    // verifies: REQ-COMPLIANCE-0001.S1
     #[test]
     fn tiers_grow_with_the_level() {
         assert_eq!(tier_rules(0).len(), 0);
@@ -391,6 +395,7 @@ mod tests_of_compliance {
         assert_eq!(tier_rules(3).len(), 5);
     }
 
+    // verifies: REQ-COMPLIANCE-0002.S1
     #[test]
     fn a_requirement_without_a_test_or_sign_off_is_reported() {
         let g = graph(&[("r.md", REQ)], standard("iec-62304", "A"));
@@ -398,6 +403,7 @@ mod tests_of_compliance {
         assert_eq!(codes, vec!["E035", "E036"]);
     }
 
+    // verifies: REQ-COMPLIANCE-0002.S2
     #[test]
     fn a_test_on_a_scenario_and_a_sign_off_meet_the_rules() {
         let signed = REQ.replace(
@@ -412,6 +418,7 @@ mod tests_of_compliance {
         assert!(check(&g).is_empty(), "{:?}", check(&g));
     }
 
+    // verifies: REQ-COMPLIANCE-0002.S3
     #[test]
     fn a_draft_is_left_alone() {
         let g = graph(
@@ -421,6 +428,7 @@ mod tests_of_compliance {
         assert!(check(&g).is_empty());
     }
 
+    // verifies: REQ-COMPLIANCE-0003.S1
     #[test]
     fn a_bad_config_is_e037() {
         let g = graph(&[], standard("iec-62304", "Z"));
@@ -429,6 +437,7 @@ mod tests_of_compliance {
         assert_eq!(check(&g)[0].code, "E037");
     }
 
+    // verifies: REQ-COMPLIANCE-0003.S2
     #[test]
     fn own_rules_are_checked_and_can_name_a_status() {
         let mut cfg = ComplianceConfig::default();

@@ -104,6 +104,7 @@ fn markdown_files(dir: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
     Ok(())
 }
 
+// spec: REQ-IMPORT-0002
 /// Proposes what to make of what `import::find` finds under `dir`. `shown`
 /// turns a path into the text the plan keeps.
 pub fn propose(
@@ -533,6 +534,7 @@ mod tests_of_plan {
         );
     }
 
+    // verifies: REQ-IMPORT-0002.S1
     #[test]
     fn a_plan_proposes_requirements_for_specs_and_change_sets_for_the_rest() {
         let dir = tempfile::tempdir().unwrap();
@@ -563,6 +565,7 @@ mod tests_of_plan {
         assert_eq!(plan.items[2].sources.len(), 4);
     }
 
+    // verifies: REQ-IMPORT-0002.S2
     #[test]
     fn a_change_set_keeps_the_proposal_design_tasks_and_links_the_modified_requirements() {
         let dir = tempfile::tempdir().unwrap();
@@ -603,6 +606,7 @@ mod tests_of_plan {
         );
     }
 
+    // verifies: REQ-IMPORT-0002.S3
     #[test]
     fn notes_can_become_an_adr_with_the_text_as_context() {
         let dir = tempfile::tempdir().unwrap();
