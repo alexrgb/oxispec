@@ -19,9 +19,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use serde::Serialize;
 
 use crate::check::{LinkResolution, resolve_link};
+use crate::config::TraceConfig;
 use crate::finding::Finding;
 use crate::graph::Graph;
 use crate::id;
+use crate::languages::Languages;
 use crate::symbol::{Symbol, bind};
 
 /// Files larger than this are not scanned. They are generated or data.
@@ -111,15 +113,17 @@ fn in_string(line: &str, at: usize) -> bool {
 /// Whether what comes before a marker looks like the inside of a comment.
 /// A comment leader inside a string literal does not start a comment, so a
 /// string such as `"// spec: REQ-A-0001"` in a test is not an annotation.
-fn in_comment(before: &str) -> bool {
-    const LEADERS: &[&str] = &["//", "#", "/*", "--", "<!--", ";"];
+fn in_comment(before: &str, leaders: Option<&[String]>) -> bool {
+    const GENERIC: &[&str] = &["//", "#", "/*", "--", "<!--", ";"];
     const DOCSTRINGS: &[&str] = &["\"\"\"", "'''"];
     let start = before.trim_start();
+    let at_leader = |l: &str| before.match_indices(l).any(|(i, _)| !in_string(before, i));
     start.starts_with(['*', '%'])
         || DOCSTRINGS.iter().any(|l| before.contains(l))
-        || LEADERS
-            .iter()
-            .any(|l| before.match_indices(l).any(|(i, _)| !in_string(before, i)))
+        || match leaders {
+            Some(own) => own.iter().any(|l| at_leader(l)),
+            None => GENERIC.iter().any(|l| at_leader(l)),
+        }
 }
 
 /// With a parser: the marker is inside a comment node and is the first thing
@@ -149,6 +153,16 @@ const MARKERS: &[(&str, Kind)] = &[
 
 /// The annotations in one file's text.
 pub fn scan_text(path: &Path, text: &str) -> Vec<Annotation> {
+    scan_text_with(path, text, &Languages::default())
+}
+
+/// The annotations in one file's text, reading its language as the project's
+/// settings say.
+pub fn scan_text_with(path: &Path, text: &str, languages: &Languages) -> Vec<Annotation> {
+    let leaders: Option<&[String]> = languages
+        .for_path(path)
+        .filter(|l| !l.parsed)
+        .map(|l| l.leaders.as_slice());
     let mut found = Vec::new();
     // For a language with a parser, a marker counts only in a real comment.
     let mut comments: Option<Option<Vec<(usize, usize)>>> = None;
@@ -185,7 +199,7 @@ pub fn scan_text(path: &Path, text: &str) -> Vec<Annotation> {
                         .as_deref();
                     match ranges {
                         Some(ranges) => in_parsed_comment(ranges, line_offset, line, start),
-                        None => in_comment(&line[..start]),
+                        None => in_comment(&line[..start], leaders),
                     }
                 };
                 if counts {
@@ -249,6 +263,8 @@ pub fn scan_text(path: &Path, text: &str) -> Vec<Annotation> {
 pub enum Error {
     #[error("invalid trace exclude pattern `{0}`: {1}")]
     Pattern(String, String),
+    #[error("invalid trace settings: {0}")]
+    Languages(String),
 }
 
 /// The `trace.exclude` globs, ready to test paths against.
@@ -282,7 +298,18 @@ pub const MAX_SCANNED_BYTES: usize = MAX_FILE_BYTES as usize;
 /// Walks the project and reads annotations from every text file that is not
 /// ignored by git, not markdown (those are the specs), and not excluded.
 pub fn scan_tree(root: &Path, exclude: &[String]) -> Result<Scan, Error> {
-    let overrides = exclusions(root, exclude)?;
+    let config = TraceConfig {
+        exclude: exclude.to_vec(),
+        ..TraceConfig::default()
+    };
+    scan_tree_with(root, &config)
+}
+
+/// Like [`scan_tree`], with the project's whole `trace` settings: the
+/// languages it scans and how it reads their comments.
+pub fn scan_tree_with(root: &Path, config: &TraceConfig) -> Result<Scan, Error> {
+    let languages = Languages::from_config(config).map_err(Error::Languages)?;
+    let overrides = exclusions(root, &config.exclude)?;
     let walker = ignore::WalkBuilder::new(root)
         .require_git(false)
         .overrides(overrides)
@@ -308,7 +335,10 @@ pub fn scan_tree(root: &Path, exclude: &[String]) -> Result<Scan, Error> {
             files.fetch_add(1, Ordering::Relaxed);
             let relative = path.strip_prefix(root).unwrap_or(path);
             let relative = PathBuf::from(relative.to_string_lossy().replace('\\', "/"));
-            let annotations = scan_text(&relative, &text);
+            if !languages.wants(&relative) {
+                return ignore::WalkState::Continue;
+            }
+            let annotations = scan_text_with(&relative, &text, &languages);
             if !annotations.is_empty()
                 && let Ok(mut all) = found.lock()
             {

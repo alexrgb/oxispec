@@ -100,6 +100,16 @@ enum Command {
         /// cursor, copilot, gemini, agents, or none (default: claude,cursor,copilot,gemini)
         #[arg(long, value_delimiter = ',')]
         agents: Vec<String>,
+        /// The languages of the project, comma separated (see `oxispec languages`). The trace
+        /// scan then reads only their files. Default: every text file
+        #[arg(long, value_delimiter = ',')]
+        languages: Vec<String>,
+    },
+    /// The languages the trace scan knows: which have a grammar, which are read by their
+    /// comment leaders, and which the project chose in `trace.languages`
+    Languages {
+        #[arg(long)]
+        json: bool,
     },
     /// List, add or remove modules
     Modules {
@@ -990,9 +1000,23 @@ fn run(cli: Cli) -> Result<ExitCode> {
             without,
             id_scheme,
             agents,
+            languages,
         } => {
             let dir = cli.root.unwrap_or_else(|| PathBuf::from("."));
-            init(&dir, &preset, &with, &without, id_scheme.into(), &agents)?;
+            init(
+                &dir,
+                &preset,
+                &with,
+                &without,
+                id_scheme.into(),
+                &agents,
+                &languages,
+            )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Languages { json } => {
+            let root = project_root(cli.root.as_deref())?;
+            languages_command(&root, json)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Claims { variable, at, json } => {
@@ -1749,6 +1773,7 @@ fn init(
     without: &[String],
     id_scheme: IdScheme,
     agent_clients: &[String],
+    languages: &[String],
 ) -> Result<()> {
     if dir.join(config::CONFIG_PATH).exists() {
         bail!("{} is already initialized", dir.display());
@@ -1777,6 +1802,7 @@ fn init(
         }
     }
     let mut cfg = Config::new(resolved, id_scheme);
+    cfg.trace = oxispec_core::languages::config_for(languages).map_err(anyhow::Error::msg)?;
     if cfg.has("agents") {
         cfg.agents = if agent_clients.is_empty() {
             oxispec_core::agents::DEFAULT_CLIENTS
@@ -1804,6 +1830,69 @@ fn init(
     );
     warn_planned(&cfg.modules);
     agents::write_after_init(dir, &cfg)?;
+    Ok(())
+}
+
+fn languages_command(root: &Path, json: bool) -> Result<()> {
+    use serde_json::json as obj;
+    let cfg = config::load(root)?;
+    let langs = oxispec_core::languages::Languages::from_config(&cfg.trace)
+        .map_err(|e| anyhow::anyhow!("invalid trace settings: {e}"))?;
+    let chosen = langs.chosen();
+    let scanned = |name: &str| chosen.is_none_or(|c| c.iter().any(|n| n == name));
+    if json {
+        let rows: Vec<_> = langs
+            .all()
+            .iter()
+            .map(|l| {
+                obj!({
+                    "name": l.name,
+                    "extensions": l.extensions,
+                    "read_with": if l.parsed { "grammar" } else { "comment leaders" },
+                    "leaders": l.leaders,
+                    "scanned": scanned(&l.name),
+                })
+            })
+            .collect();
+        outln!(
+            "{}",
+            serde_json::to_string_pretty(&obj!({
+                "schema_version": oxispec_core::OUTPUT_SCHEMA_VERSION,
+                "limited": langs.is_limited(),
+                "languages": rows,
+            }))?
+        );
+        return Ok(());
+    }
+    outln!(
+        "{:<12} {:<9} {:<16} {:<18} EXTENSIONS",
+        "LANGUAGE",
+        "SCANNED",
+        "READ WITH",
+        "LEADERS"
+    );
+    for l in langs.all() {
+        outln!(
+            "{:<12} {:<9} {:<16} {:<18} {}",
+            l.name,
+            if scanned(&l.name) { "yes" } else { "no" },
+            if l.parsed {
+                "grammar"
+            } else {
+                "comment leaders"
+            },
+            l.leaders.join(" "),
+            l.extensions.join(", ")
+        );
+    }
+    outln!(
+        "{}",
+        if langs.is_limited() {
+            "only the languages marked yes are scanned (trace.languages)"
+        } else {
+            "every text file is scanned; limit it with `trace.languages` in .oxispec/config.yaml or `init --languages`"
+        }
+    );
     Ok(())
 }
 

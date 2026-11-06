@@ -33,6 +33,26 @@ trace:
   exclude: ["vendor/**", "**/*.generated.*"]
 ```
 
+### Languages
+
+By default every text file is scanned. To scan only the languages of your project, name them, either at `oxispec init --languages rust,python` or in the config:
+
+```yaml
+trace:
+  languages: [rust, typescript, python, zig]   # scan only these
+  comments:                                    # a language without a grammar
+    zig: { extensions: [zig], leaders: ["//"] }
+```
+
+`oxispec languages` lists what is known, which languages the project scans, and how each is read. There are two ways to read a language:
+
+| Read with | Languages | What it means |
+|---|---|---|
+| a grammar | Rust, Go, TypeScript, JavaScript | A tree-sitter parser, built into the binary, finds the comments, and knows the function a comment is about. This is what the suspect links need. |
+| comment leaders | Python, Ruby, shell, YAML, TOML, Java, Kotlin, Swift, C#, C, C++, PHP, Scala, Dart, SQL, Lua, Haskell, HTML and XML, Lisp, and any you add | The scan looks for `#`, `//`, `--` and the like before the marker, and skips one inside a double-quoted string. A link has no code side, so only the spec is watched. |
+
+`trace.comments` adds a language by its file extensions and comment leaders, or changes the leaders of a built-in language that has no grammar. It cannot give a language a grammar: that is code, and goes in with a release of oxispec. A name that is not known in `trace.languages`, leaders given for a language with a grammar, or a new language without `extensions` and `leaders` stops the scan with the reason.
+
 The walk uses all cores and nothing is cached. On 50,000 source files (195 MB, 10 cores, macOS), a scan takes about 2 s.
 
 ## Commands

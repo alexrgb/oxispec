@@ -313,12 +313,22 @@ pub fn file_at(root: &Path, oid: &str, path: &Path) -> Result<Option<Vec<u8>>> {
 /// The trace annotations in the files of a revision, read the way
 /// `scan_tree` reads the working tree: no markdown, hidden or excluded files,
 /// nothing over the size limit or not UTF-8.
-pub fn scan_at(root: &Path, revision: &Revision, exclude: &[String]) -> Result<Scan> {
-    let exclusions = trace::exclusions(root, exclude)?;
+pub fn scan_at(
+    root: &Path,
+    revision: &Revision,
+    config: &oxispec_core::config::TraceConfig,
+) -> Result<Scan> {
+    let exclusions = trace::exclusions(root, &config.exclude)?;
+    let languages = oxispec_core::languages::Languages::from_config(config)
+        .map_err(|e| anyhow::anyhow!("invalid trace settings: {e}"))?;
     let prefix = prefix(root)?;
     let listing = git_stdout(root, &["ls-tree", "-r", "-z", "--name-only", &revision.oid])?;
     let files: Vec<String> = names(&listing)
-        .filter(|n| !n.contains('\n') && trace::is_scanned(&exclusions, Path::new(n)))
+        .filter(|n| {
+            !n.contains('\n')
+                && trace::is_scanned(&exclusions, Path::new(n))
+                && languages.wants(Path::new(n))
+        })
         .collect();
     let mut scan = Scan::default();
     // Read in batches, so a large repository is never held in memory whole.
@@ -336,7 +346,7 @@ pub fn scan_at(root: &Path, revision: &Revision, exclude: &[String]) -> Result<S
             };
             scan.files += 1;
             scan.annotations
-                .extend(trace::scan_text(Path::new(name), &text));
+                .extend(trace::scan_text_with(Path::new(name), &text, &languages));
         }
     }
     scan.annotations

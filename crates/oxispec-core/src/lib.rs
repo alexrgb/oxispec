@@ -23,6 +23,7 @@ pub mod impact;
 pub mod import;
 pub mod import_plan;
 pub mod index;
+pub mod languages;
 pub mod machines;
 pub mod modules;
 pub mod node;

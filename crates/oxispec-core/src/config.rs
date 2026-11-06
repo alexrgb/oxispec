@@ -40,11 +40,27 @@ pub struct TraceConfig {
     /// Globs of files to leave out, for example `vendor/**`.
     #[serde(default)]
     pub exclude: Vec<String>,
+    /// Scan only the files of these languages (see `oxispec languages`).
+    /// Empty: every text file.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub languages: Vec<String>,
+    /// How the comments of a language without a grammar are read, by name.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub comments: BTreeMap<String, CommentSyntax>,
+}
+
+/// The files and comment leaders of a language that is read without a grammar.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommentSyntax {
+    #[serde(default)]
+    pub extensions: Vec<String>,
+    #[serde(default)]
+    pub leaders: Vec<String>,
 }
 
 impl TraceConfig {
     fn is_default(&self) -> bool {
-        self.exclude.is_empty()
+        self.exclude.is_empty() && self.languages.is_empty() && self.comments.is_empty()
     }
 }
 

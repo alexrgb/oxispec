@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use anyhow::{Context, Result, bail};
 use oxispec_core::results;
 use oxispec_core::suspect::{self, State};
-use oxispec_core::trace::{Annotation, Coverage, Kind, Scan, coverage, scan_tree};
+use oxispec_core::trace::{Annotation, Coverage, Kind, Scan, coverage, scan_tree_with};
 use oxispec_core::{OUTPUT_SCHEMA_VERSION, config, id, index};
 use serde_json::json;
 use std::path::PathBuf;
@@ -20,7 +20,7 @@ fn scan(root: &Path) -> Result<Scan> {
     if !cfg.has("tests") {
         bail!("module `tests` is not enabled; run `oxispec modules add tests`");
     }
-    let scan = scan_tree(root, &cfg.trace.exclude)?;
+    let scan = scan_tree_with(root, &cfg.trace)?;
     Ok(scan)
 }
 

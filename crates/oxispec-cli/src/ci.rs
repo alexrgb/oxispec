@@ -14,7 +14,7 @@ use oxispec_core::impact::impact;
 use oxispec_core::release::summarize;
 use oxispec_core::report::{Report, Touched, junit, markdown, sarif};
 use oxispec_core::suspect;
-use oxispec_core::trace::scan_tree;
+use oxispec_core::trace::scan_tree_with;
 use oxispec_core::{OUTPUT_SCHEMA_VERSION, Severity, check, config, index};
 use serde_json::json;
 
@@ -47,7 +47,7 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
     // A link between code and a spec that changed since it was confirmed is
     // always reported, as it would be to anyone running `oxispec suspect`.
     if cfg.has("tests") {
-        let scan = scan_tree(root, &cfg.trace.exclude)?;
+        let scan = scan_tree_with(root, &cfg.trace)?;
         let lock = suspect::load(root)?;
         let links = suspect::links(&new, &scan.annotations, &lock);
         diff.new_findings.extend(suspect::findings(&links));
