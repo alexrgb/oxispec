@@ -87,6 +87,7 @@ pub fn differing_ids(current: &Graph, target: &Graph) -> Vec<String> {
     ids.into_iter().collect()
 }
 
+// spec: REQ-ROLLBACK-0001
 /// What to do for each node in `ids`, in the order given.
 pub fn plan(current: &Graph, target: &Graph, ids: &[String]) -> Result<Vec<Action>, RollbackError> {
     let mut actions = Vec::new();
@@ -128,6 +129,7 @@ pub fn plan(current: &Graph, target: &Graph, ids: &[String]) -> Result<Vec<Actio
     Ok(actions)
 }
 
+// spec: REQ-ROLLBACK-0002
 /// The graph as it would be after the actions: the current nodes, with the
 /// restored ones swapped for their old versions.
 pub fn would_be(current: &Graph, target: &Graph, actions: &[Action]) -> Graph {
@@ -187,6 +189,7 @@ mod tests {
         items.iter().map(|s| s.to_string()).collect()
     }
 
+    // verifies: REQ-ROLLBACK-0001.S1
     #[test]
     fn each_kind_of_difference_gets_its_action() {
         let target = graph(&[
@@ -243,6 +246,7 @@ mod tests {
         assert!(!actions[3].changes_the_tree());
     }
 
+    // verifies: REQ-ROLLBACK-0001.S2
     #[test]
     fn an_unknown_node_is_an_error_and_repeats_are_ignored() {
         let g = graph(&[("a.md", text("REQ-A-0001", ""))]);
@@ -254,6 +258,7 @@ mod tests {
         assert_eq!(actions.len(), 1);
     }
 
+    // verifies: REQ-ROLLBACK-0002.S1
     #[test]
     fn the_would_be_graph_swaps_restored_nodes_and_drops_removed_ones() {
         let target = graph(&[
@@ -282,6 +287,7 @@ mod tests {
         );
     }
 
+    // verifies: REQ-ROLLBACK-0002.S2
     #[test]
     fn removing_a_node_that_others_link_to_is_a_new_error() {
         let target = graph(&[("a.md", text("REQ-A-0001", ""))]);
@@ -300,6 +306,7 @@ mod tests {
         assert_eq!(errors[0].code, "E002");
     }
 
+    // verifies: REQ-ROLLBACK-0002.S3
     #[test]
     fn a_rollback_that_changes_nothing_adds_no_errors() {
         let g = graph(&[("a.md", text("REQ-A-0001", ""))]);

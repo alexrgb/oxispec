@@ -1,6 +1,6 @@
 # The project's own specs
 
-OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the parts of the product that are written down as specs, and `oxispec check` and `oxispec coverage` run on them in CI (the `specs` job in `.github/workflows/ci.yml`). It covers the rules of the node file format, change sets, the MCP server, PRDs, API operations, tech debt, releases, risks, test plans, compliance profiles, format profiles and styles, and import. The rest of the documentation is still plain markdown in `docs/`.
+OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the parts of the product that are written down as specs, and `oxispec check` and `oxispec coverage` run on them in CI (the `specs` job in `.github/workflows/ci.yml`). It covers the rules of the node file format, change sets, the MCP server, PRDs, API operations, tech debt, releases, risks, test plans, compliance profiles, format profiles and styles, import, search, diffs, rollback, impact and context packs. The rest of the documentation is still plain markdown in `docs/`.
 
 ## What is there
 
@@ -16,6 +16,11 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-MCP-0001` to `0004` | The read tools answer as the commands do; tools are offered by module and mode; arguments cannot be read as options; an agent can propose a change set but never approve it |
 | `REQ-PRD-0001` | A PRD is made from the nodes |
 | `REQ-API-0001` to `0006` | Operations come from the requirements; a description is compared with them; an operation has a card; removing from the API is breaking; a running service can be compared; an operation says what happens to a caller who may not use it |
+| `REQ-SEARCH-0001`, `0002` | Search finds what is written; the index follows the files |
+| `REQ-DIFF-0001`, `0002` | A diff names each kind of change; graphs are compared by node |
+| `REQ-ROLLBACK-0001`, `0002` | A rollback names an action for each node; it is checked before it is made |
+| `REQ-IMPACT-0001` | A change brings in the nodes that depend on it |
+| `REQ-CONTEXT-0001`, `0002` | Neighbors follow links both ways; a context pack fits a budget |
 | `REQ-COMPLIANCE-0001` to `0003` | Rules grow with the level; a requirement past draft meets the rules of the standard; the compliance settings are checked |
 | `REQ-STYLE-0001`, `0002` | A requirement is worded as its style asks; a node meets its format profile |
 | `REQ-IMPORT-0001`, `0002` | An import reads the specs of other tools; a plan proposes what each file becomes |

@@ -108,6 +108,7 @@ fn requirements(node: &Node) -> BTreeMap<&str, &RequirementBlock> {
         .collect()
 }
 
+// spec: REQ-DIFF-0001
 /// What changed from `old` to `new`, in a fixed order. Empty when the two
 /// are the same as far as OxiSpec can tell.
 pub fn diff_nodes(old: &Node, new: &Node) -> Vec<Change> {
@@ -245,6 +246,7 @@ fn reportable(f: &Finding) -> bool {
     f.severity != Severity::Info
 }
 
+// spec: REQ-DIFF-0002
 /// What changed from `old` to `new`: nodes added, removed and changed, and
 /// the errors and warnings that appeared or went away.
 pub fn diff_graphs(old: &Graph, new: &Graph) -> GraphDiff {
@@ -318,12 +320,14 @@ mod tests {
 
     const BODY: &str = "### Requirement: Login\nThe system SHALL issue a token.\n\n#### Scenario: Valid {#S1}\n- **WHEN** a\n- **THEN** b\n";
 
+    // verifies: REQ-DIFF-0001.S1
     #[test]
     fn identical_nodes_have_no_changes() {
         let a = node("a.md", &requirement("REQ-A-0001", "status: draft\n", BODY));
         assert!(diff_nodes(&a, &a.clone()).is_empty());
     }
 
+    // verifies: REQ-DIFF-0001.S2
     #[test]
     fn every_kind_of_change_is_reported_in_a_fixed_order() {
         let old = node(
@@ -362,6 +366,7 @@ mod tests {
         );
     }
 
+    // verifies: REQ-DIFF-0001.S3
     #[test]
     fn removed_requirements_and_scenarios_are_reported() {
         let old = node("a.md", &requirement("REQ-A-0001", "", BODY));
@@ -386,6 +391,7 @@ mod tests {
         assert!(described.contains(&"requirement removed: Login".to_string()));
     }
 
+    // verifies: REQ-DIFF-0001.S4
     #[test]
     fn a_changed_comment_in_the_frontmatter_is_not_a_change() {
         let old = node("a.md", &requirement("REQ-A-0001", "status: draft\n", BODY));
@@ -400,6 +406,7 @@ mod tests {
         Graph::from_nodes(files.iter().map(|(p, t)| node(p, t)).collect())
     }
 
+    // verifies: REQ-DIFF-0002.S1
     #[test]
     fn graphs_report_added_removed_and_changed_nodes() {
         let old = graph(&[
@@ -433,6 +440,7 @@ mod tests {
         );
     }
 
+    // verifies: REQ-DIFF-0002.S2
     #[test]
     fn graphs_report_new_and_fixed_findings() {
         let broken = requirement("REQ-A-0001", "links:\n  refines: REQ-NOPE-0001\n", BODY);
@@ -450,6 +458,7 @@ mod tests {
         assert_eq!(better.fixed_findings.len(), 1);
     }
 
+    // verifies: REQ-DIFF-0002.S3
     #[test]
     fn moving_a_file_does_not_make_its_findings_new() {
         let broken = requirement("REQ-A-0001", "links:\n  refines: REQ-NOPE-0001\n", BODY);
