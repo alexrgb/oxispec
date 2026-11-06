@@ -58,6 +58,16 @@ fn dechunk(body: &[u8]) -> Result<Vec<u8>> {
 // spec: REQ-API-0005
 /// The body of a 200 response, as text.
 pub fn get(url: &str) -> Result<String> {
+    request("GET", url, &[], None)
+}
+
+/// Posts JSON and returns the body of a 200 response, as text. `headers` are
+/// extra header lines such as `Authorization: Bearer ...`.
+pub fn post_json(url: &str, headers: &[String], body: &str) -> Result<String> {
+    request("POST", url, headers, Some(body))
+}
+
+fn request(method: &str, url: &str, headers: &[String], body: Option<&str>) -> Result<String> {
     let (host, port, path) = split(url)?;
     let addr = (host.as_str(), port)
         .to_socket_addrs()
@@ -66,11 +76,25 @@ pub fn get(url: &str) -> Result<String> {
         .ok_or_else(|| anyhow!("cannot find {host}"))?;
     let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5))
         .with_context(|| format!("cannot connect to {host}:{port}"))?;
-    stream.set_read_timeout(Some(Duration::from_secs(15)))?;
-    write!(
-        stream,
-        "GET {path} HTTP/1.1\r\nHost: {host}\r\nAccept: application/json, application/yaml, */*\r\nUser-Agent: oxispec\r\nConnection: close\r\n\r\n"
-    )?;
+    stream.set_read_timeout(Some(Duration::from_secs(120)))?;
+    let mut head = format!(
+        "{method} {path} HTTP/1.1\r\nHost: {host}\r\nAccept: application/json, application/yaml, */*\r\nUser-Agent: oxispec\r\nConnection: close\r\n"
+    );
+    for h in headers {
+        head.push_str(h);
+        head.push_str("\r\n");
+    }
+    if let Some(body) = body {
+        head.push_str(&format!(
+            "Content-Type: application/json\r\nContent-Length: {}\r\n",
+            body.len()
+        ));
+    }
+    head.push_str("\r\n");
+    stream.write_all(head.as_bytes())?;
+    if let Some(body) = body {
+        stream.write_all(body.as_bytes())?;
+    }
     let mut raw = Vec::new();
     stream
         .take(32 * 1024 * 1024)

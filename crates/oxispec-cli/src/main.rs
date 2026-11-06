@@ -816,6 +816,25 @@ enum ApiAction {
         #[arg(long)]
         json: bool,
     },
+    /// Build or update the search index of the operations: one chunk of text for each, with
+    /// its PRD, decisions, risks, debt and test plans. Kept in .oxispec/cache. Embeds with the
+    /// built-in embedder (words and word pairs), or the service in `api_index.embedder`
+    Index {
+        /// An OpenAPI or Swagger file, or an http:// address, whose text is added to each chunk
+        #[arg(long)]
+        openapi: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// The operations nearest to a query, from the index
+    Search {
+        query: String,
+        /// How many to show
+        #[arg(long, default_value_t = 5)]
+        top: usize,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1113,6 +1132,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let root = project_root(cli.root.as_deref())?;
             match action {
                 ApiAction::Show { target, json } => api::show(&root, &target, json, cache)?,
+                ApiAction::Index { openapi, json } => {
+                    let _lock = lock_project(&root)?;
+                    api::index(&root, openapi.as_deref(), json, cache)?
+                }
+                ApiAction::Search { query, top, json } => api::search(&root, &query, top, json)?,
             }
             Ok(ExitCode::SUCCESS)
         }

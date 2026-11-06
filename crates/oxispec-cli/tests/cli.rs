@@ -6397,6 +6397,98 @@ fn the_languages_of_the_scan_are_chosen_at_init_and_listed() {
     assert!(out.stdout.contains("a.zig"), "{}{}", out.stdout, out.stderr);
 }
 
+// verifies: REQ-APIINDEX-0004.S1
+// verifies: REQ-APIINDEX-0004.S2
+#[test]
+fn the_operations_are_indexed_and_found_with_the_built_in_embedder_and_a_service() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let api = "{\"openapi\":\"3.0.0\",\"info\":{\"title\":\"Shop\"},\"paths\":{\"/orders/{id}\":{\"get\":{\"tags\":[\"orders\"],\"summary\":\"Fetch an order\",\"responses\":{\"200\":{\"description\":\"The order\"}}}},\"/payments\":{\"post\":{\"tags\":[\"payments\"],\"summary\":\"Charge a card\",\"responses\":{\"402\":{\"description\":\"The card is declined\"}}}},\"/health\":{\"get\":{\"tags\":[\"ops\"],\"summary\":\"Report that the service is up\",\"responses\":{\"200\":{\"description\":\"Up\"}}}}}}";
+    fs::write(p.join("api.json"), api).unwrap();
+    assert_eq!(
+        run(
+            p,
+            &["import", "specs", "--from", "openapi", "--dir", "api.json"]
+        )
+        .code,
+        0
+    );
+    let out = run(p, &["api", "search", "fetch an order"]);
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("no index yet"), "{}", out.stderr);
+
+    let out = run(p, &["api", "index", "--openapi", "api.json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("3 added"), "{}", out.stdout);
+    let out = run(p, &["api", "index"]);
+    assert!(
+        out.stdout.contains("3 unchanged") || out.stdout.contains("3 updated"),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["api", "search", "charge a card", "--top", "1"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("POST /payments"), "{}", out.stdout);
+    let out = run(p, &["api", "search", "is the service up", "--json"]);
+    assert!(
+        out.stdout.contains("\"call\": \"GET /health\""),
+        "{}",
+        out.stdout
+    );
+
+    // A service that embeds text: three words are counted, so a query is
+    // nearest the operation that talks about the same one.
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    let handle = std::thread::spawn(move || {
+        for mut request in server.incoming_requests().take(2) {
+            let mut body = String::new();
+            std::io::Read::read_to_string(request.as_reader(), &mut body).unwrap();
+            let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+            let rows: Vec<serde_json::Value> = value["input"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    let t = t.as_str().unwrap().to_lowercase();
+                    let count = |w: &str| t.matches(w).count() as f64 + 0.01;
+                    serde_json::json!({"index": i, "embedding": [count("order"), count("card"), count("service")]})
+                })
+                .collect();
+            let answer = serde_json::json!({"data": rows}).to_string();
+            let _ = request.respond(tiny_http::Response::from_string(answer));
+        }
+    });
+    let config = fs::read_to_string(p.join(".oxispec/config.yaml")).unwrap();
+    fs::write(
+        p.join(".oxispec/config.yaml"),
+        format!("{config}api_index:\n  embedder:\n    url: http://127.0.0.1:{port}/v1/embeddings\n    model: counter\n"),
+    )
+    .unwrap();
+    let out = run(p, &["api", "search", "card"]);
+    assert_ne!(out.code, 0);
+    assert!(
+        out.stderr.contains("run `oxispec api index` again"),
+        "{}",
+        out.stderr
+    );
+    let out = run(p, &["api", "index"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("3 added"), "{}", out.stdout);
+    let out = run(p, &["api", "search", "card", "--top", "1"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("POST /payments"), "{}", out.stdout);
+    handle.join().unwrap();
+
+    // A service that is not there is a clear error.
+    let out = run(p, &["api", "search", "card"]);
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("the embedder"), "{}", out.stderr);
+}
+
 fn project_with_a_standard(p: &Path, standard: &str) {
     git(p, &["init", "-q"]);
     assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);
