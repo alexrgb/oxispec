@@ -20,7 +20,7 @@ it('ends idle sessions [REQ-AUTH-0012.S1]', () => {})
 
 - **`spec: ID`** marks code that implements a requirement. **`verifies: ID`** marks a test. Several IDs can follow, separated by commas: `// spec: REQ-A-0001, REQ-A-0002`. Text after the IDs is ignored. `Spec:` and `Verifies:` work too.
 - **A scenario ID in brackets** (`[REQ-AUTH-0012.S1]`) anywhere on a line counts as `verifies`, which suits test names. It must name a scenario, so plain lists such as `[1, 2]` or `[REQ-A-0001]` are not read.
-- A marker only counts **inside a comment**, in any language that uses `//`, `#`, `/* */`, `--`, `<!-- -->`, `;`, or docstring quotes. There is no parser per language, so a marker in a string that looks like a comment would be read too. IDs must start with capital letters (`REQ`, `ADR`, `CHG`), so prose like `spec: see-above` is left alone.
+- A marker only counts **inside a comment**, in any language that uses `//`, `#`, `/* */`, `--`, `<!-- -->`, `;`, or docstring quotes. There is no parser per language. A marker that stands inside a double-quoted string on its line (`"// spec: REQ-A-0001"`) is not read, but a string that runs over several lines is, and so is an example in a doc comment; leave such files out with `trace.exclude`. IDs must start with capital letters (`REQ`, `ADR`, `CHG`), so prose like `spec: see-above` is left alone.
 - A **scenario can only be named if it has an anchor**: `#### Scenario: Idle admin {#S1}`.
 - **Links in nodes count as well.** A `test-case` node with `links: {verifies: REQ-AUTH-0012.S1}` covers that scenario, like a comment does.
 

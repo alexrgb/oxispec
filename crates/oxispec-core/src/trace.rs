@@ -87,11 +87,39 @@ fn leading_ids(rest: &str) -> Vec<&str> {
     found
 }
 
+/// Whether `at` in `line` falls inside a double-quoted string, judged from the
+/// quotes before it on the same line. A backslash escapes the next character and
+/// `'"'` is not a quote. A string that runs over several lines is not seen.
+fn in_string(line: &str, at: usize) -> bool {
+    let mut inside = false;
+    let mut chars = line[..at].chars().peekable();
+    let mut previous = ' ';
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' if inside => {
+                chars.next();
+            }
+            '"' if previous == '\'' && chars.peek() == Some(&'\'') => {}
+            '"' => inside = !inside,
+            _ => {}
+        }
+        previous = c;
+    }
+    inside
+}
+
 /// Whether what comes before a marker looks like the inside of a comment.
+/// A comment leader inside a string literal does not start a comment, so a
+/// string such as `"// spec: REQ-A-0001"` in a test is not an annotation.
 fn in_comment(before: &str) -> bool {
-    const LEADERS: &[&str] = &["//", "#", "/*", "--", "<!--", "\"\"\"", "'''", ";"];
+    const LEADERS: &[&str] = &["//", "#", "/*", "--", "<!--", ";"];
+    const DOCSTRINGS: &[&str] = &["\"\"\"", "'''"];
     let start = before.trim_start();
-    LEADERS.iter().any(|l| before.contains(l)) || start.starts_with(['*', '%'])
+    start.starts_with(['*', '%'])
+        || DOCSTRINGS.iter().any(|l| before.contains(l))
+        || LEADERS
+            .iter()
+            .any(|l| before.match_indices(l).any(|(i, _)| !in_string(before, i)))
 }
 
 const MARKERS: &[(&str, Kind)] = &[
@@ -458,6 +486,26 @@ def test_idle(): pass
         assert!(scan("let a = [REQ-A-0001.S1, 5];").is_empty());
         assert!(scan("let a = [1, 2, 3];").is_empty());
         assert!(scan("x[i] = y[j]").is_empty());
+    }
+
+    #[test]
+    fn a_marker_inside_a_string_is_not_an_annotation_but_one_after_code_is() {
+        // The fixtures of a test are strings that look like comments.
+        for text in [
+            r#"let code = "// verifies: REQ-A-0001.S1\n#[test]";"#,
+            r##"let t = "# spec: REQ-A-0001";"##,
+            r#"run("-- spec: REQ-A-0001")"#,
+        ] {
+            assert!(scan(text).is_empty(), "{text}");
+        }
+        // A comment after code, with strings before it, still counts.
+        assert_eq!(scan(r#"let u = "http://x"; // spec: REQ-A-0001"#).len(), 1);
+        assert_eq!(scan(r#"let q = '"'; // spec: REQ-A-0001"#).len(), 1);
+        assert_eq!(
+            scan(r#"let s = "a \" b"; // verifies: REQ-A-0001.S1"#).len(),
+            1
+        );
+        assert_eq!(scan("# spec: REQ-A-0001").len(), 1);
     }
 
     #[test]

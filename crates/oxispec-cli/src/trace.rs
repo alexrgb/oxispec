@@ -13,6 +13,8 @@ use std::path::PathBuf;
 
 use crate::git;
 
+// spec: REQ-TRACE-0001
+// spec: REQ-TRACE-0003
 fn scan(root: &Path) -> Result<Scan> {
     let cfg = config::load(root)?;
     if !cfg.has("tests") {
@@ -163,6 +165,7 @@ fn list(title: &str, items: &[String], all: bool) {
     }
 }
 
+// spec: REQ-TRACE-0002
 pub fn coverage_command(root: &Path, options: &CoverageOptions) -> Result<ExitCode> {
     let scan = scan(root)?;
     let graph = index::load(root, options.cache).0;
@@ -325,6 +328,7 @@ fn count(links: &[suspect::Link], state: State) -> usize {
     links.iter().filter(|l| l.state == state).count()
 }
 
+// spec: REQ-SUSPECT-0001
 pub fn suspect_command(
     root: &Path,
     all: bool,
