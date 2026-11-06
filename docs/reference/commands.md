@@ -68,7 +68,7 @@ Usage: oxispec new [OPTIONS] <COMMAND>
 
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
-Subcommands: `requirement`, `adr`, `debt`, `change`, `vocabulary`, `machine`, `architecture`
+Subcommands: `requirement`, `adr`, `debt`, `prd`, `change`, `vocabulary`, `machine`, `architecture`
 
 ### `oxispec new requirement`
 
@@ -106,6 +106,17 @@ Usage: oxispec new debt [OPTIONS] <TITLE>
 - `<TITLE>`
 - `--severity <SEVERITY>`: low, medium, high or critical. Default: `medium`.
 - `--from <FROM>`: The node it arises from; becomes an `arises-from` link.
+- `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
+
+### `oxispec new prd`
+
+A product requirements document. Requirements that `refine` it make up the document `docs prd` writes
+
+```text
+Usage: oxispec new prd [OPTIONS] <TITLE>
+```
+
+- `<TITLE>`
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
 ### `oxispec new change`
@@ -476,7 +487,7 @@ Documentation written from the program: the command reference and the check code
 Usage: oxispec docs [OPTIONS] <COMMAND>
 ```
 
-Subcommands: `reference`
+Subcommands: `reference`, `prd`
 
 ### `oxispec docs reference`
 
@@ -488,6 +499,17 @@ Usage: oxispec docs reference [OPTIONS]
 
 - `--out <OUT>`: Where to write them. Default: `docs/reference`.
 - `--check`
+
+### `oxispec docs prd`
+
+The product requirements document a `prd` node and the requirements that refine it make. Printed, or written with --out. It is a view of the nodes: change them, not the file
+
+```text
+Usage: oxispec docs prd [OPTIONS] <ID>
+```
+
+- `<ID>`
+- `--out <OUT>`: Write the document to this file instead of printing it.
 
 ## `oxispec adr`
 

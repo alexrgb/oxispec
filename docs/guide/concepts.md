@@ -14,7 +14,7 @@ links:
 ---
 ```
 
-Files live where you like, but `oxispec new` puts them in `specs/`: `specs/requirements/<domain>/`, `specs/adr/`, `specs/changes/`, `specs/debt/`.
+Files live where you like, but `oxispec new` puts them in `specs/`: `specs/requirements/<domain>/`, `specs/adr/`, `specs/changes/`, `specs/debt/`, `specs/prd/`.
 
 ## IDs
 

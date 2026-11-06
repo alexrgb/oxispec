@@ -573,6 +573,14 @@ enum DocsAction {
         #[arg(long)]
         check: bool,
     },
+    /// The product requirements document a `prd` node and the requirements that refine it make.
+    /// Printed, or written with --out. It is a view of the nodes: change them, not the file
+    Prd {
+        id: String,
+        /// Write the document to this file instead of printing it
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -705,6 +713,9 @@ enum NewKind {
         #[arg(long)]
         from: Option<String>,
     },
+    /// A product requirements document. Requirements that `refine` it make up the document
+    /// `docs prd` writes
+    Prd { title: String },
     /// A change set: a proposed change to the specs, with a lifecycle
     Change { title: String },
     /// A vocabulary: the typed variables that claims in requirements talk about
@@ -994,6 +1005,21 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 DocsAction::Reference { out, check } => {
                     reference::run(&<Cli as clap::CommandFactory>::command(), &out, check)?
                 }
+                DocsAction::Prd { id, out } => {
+                    let root = project_root(cli.root.as_deref())?;
+                    let cfg = config::load(&root)?;
+                    require_module(&cfg, "specs")?;
+                    let graph = load_graph(&root, cache);
+                    let text = oxispec_core::prd::render(&graph, &root, &id)?;
+                    match out {
+                        Some(path) => {
+                            std::fs::write(&path, &text)
+                                .with_context(|| format!("cannot write {}", path.display()))?;
+                            outln!("wrote {}", path.display());
+                        }
+                        None => outln!("{text}"),
+                    }
+                }
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -1185,6 +1211,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 } => {
                     require_module(&cfg, "debt")?;
                     new_debt(&root, &title, &severity, from.as_deref(), scheme, cache)?
+                }
+                NewKind::Prd { title } => {
+                    require_module(&cfg, "specs")?;
+                    new_prd(&root, &title, scheme, cache)?
                 }
                 NewKind::Change { title } => {
                     require_module(&cfg, "specs")?;
@@ -1976,6 +2006,35 @@ status: proposed
 
 ## Consequences
 ";
+
+const PRD_TEMPLATE: &str = "---
+id: @ID@
+type: prd
+status: draft
+---
+# @ID@: @TITLE@
+
+## Overview
+
+## Users
+
+## Goals
+
+## Non-goals
+
+## Success metrics
+
+## Open questions
+";
+
+fn new_prd(root: &Path, title: &str, scheme: IdScheme, cache: bool) -> Result<(String, PathBuf)> {
+    let id = allocate_id(&load_graph(root, cache), "PRD-", scheme)?;
+    let suffix = id.strip_prefix("PRD-").unwrap_or(&id);
+    let rel = PathBuf::from("specs/prd").join(format!("{suffix}-{}.md", slug(title)?));
+    let body = PRD_TEMPLATE.replace("@ID@", &id).replace("@TITLE@", title);
+    write_new(root, &rel, &body)?;
+    Ok((id, rel))
+}
 
 const CHANGE_TEMPLATE: &str = "---
 id: @ID@

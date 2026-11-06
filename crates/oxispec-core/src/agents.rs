@@ -130,6 +130,12 @@ pub const SKILLS: &[Skill] = &[
         body: include_str!("../skills/manage-debt.md"),
     },
     Skill {
+        name: "oxispec-write-prd",
+        description: "Write a product requirements document as nodes: interview the person, draft the purpose, goals and non-goals, then the requirements with their acceptance scenarios, and show the document before anything is written. Use when asked to write or start a PRD, or to turn an idea into specs.",
+        requires: &["specs"],
+        body: include_str!("../skills/write-prd.md"),
+    },
+    Skill {
         name: "oxispec-import-specs",
         description: "Import the specs, open changes and design notes of OpenSpec, Spec Kit, Kiro or plain markdown, deciding with the person what each file becomes, showing drafts and a dry run before writing. Use when asked to move a project to OxiSpec.",
         requires: &["specs"],

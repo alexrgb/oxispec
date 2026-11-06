@@ -29,7 +29,7 @@ The system MUST expire admin sessions after 15 minutes of inactivity.
 | Key | Meaning |
 |---|---|
 | `id` | Required. Never changes and is never reused. |
-| `type` | Required. `requirement`, `adr`, `decision`, `test-case`, `standard`, `api`, `state-machine`, `diagram`, `term`, `change`, `system`, `container`, `component`, `person`, `deployment-environment` or `release`. Other types give a warning, because later modules add types. |
+| `type` | Required. `requirement`, `adr`, `decision`, `test-case`, `standard`, `api`, `state-machine`, `diagram`, `term`, `change`, `system`, `container`, `component`, `person`, `deployment-environment`, `release`, `debt` or `prd`. Other types give a warning, because later modules add types. |
 | `status` | Optional, free text for now, for example `draft` or `accepted`. |
 | `owner` | Optional, free text for now. |
 | `approved_by`, `approved_on` | Set on [change sets](#change-sets) when they are approved. A name, and a date as `YYYY-MM-DD`. |
