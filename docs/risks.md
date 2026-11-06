@@ -66,8 +66,8 @@ When the project has any risk, `oxispec release check` has the gate `no-critical
 
 ## With an AI agent
 
-The skill `oxispec-manage-risks` records a risk, asks for the likelihood and impact instead of guessing them, links the mitigation, and leaves acceptance to a person.
+The skill `oxispec-review-security` walks a feature or an API through the OWASP API Security Top 10 (or ASVS) and records what it finds as risks for the person to rate. The skill `oxispec-manage-risks` records a risk, asks for the likelihood and impact instead of guessing them, links the mitigation, and leaves acceptance to a person.
 
 ## What is not built
 
-There is no MCP tool for the register yet, no link kind between a risk and a component of the architecture model, and no catalog of risks from a standard such as the OWASP ASVS. Those come after this.
+The register is available to MCP clients as `spec_risks` (when the module is on). There is no link kind between a risk and a component of the architecture model, and no catalog of risks from a standard such as the OWASP ASVS. Those come after this.

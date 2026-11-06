@@ -184,6 +184,7 @@ pub fn parse_requirements(body: &str, line_offset: usize) -> Vec<RequirementBloc
                         anchor,
                         line: n,
                         steps: Vec::new(),
+                        responds: Vec::new(),
                     });
                     in_scenario = true;
                 } else if in_scenario
@@ -215,6 +216,7 @@ pub fn parse_requirements(body: &str, line_offset: usize) -> Vec<RequirementBloc
                     anchor,
                     line: n,
                     steps: Vec::new(),
+                    responds: Vec::new(),
                 });
             }
             in_description = false;
@@ -237,10 +239,28 @@ pub fn parse_requirements(body: &str, line_offset: usize) -> Vec<RequirementBloc
             && let Some(s) = blocks.last_mut().and_then(|b| b.scenarios.last_mut())
         {
             s.steps.push(k.to_string());
+            if let Some(code) = response_code(line) {
+                s.responds.push(code);
+            }
         }
     }
     finish(&mut blocks, &mut statement);
     blocks
+}
+
+/// The status code in a step such as `the API responds with 404: No such order`.
+fn response_code(line: &str) -> Option<String> {
+    let rest = line.split_once("responds with ")?.1.trim_start();
+    let code: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric())
+        .collect();
+    (code.len() == 3
+        && code
+            .bytes()
+            .all(|b| b.is_ascii_digit() || b == b'X' || b == b'x')
+        || code == "default")
+        .then_some(code)
 }
 
 /// The fenced blocks of a node that other modules read.
