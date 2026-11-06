@@ -29,7 +29,7 @@ The system MUST expire admin sessions after 15 minutes of inactivity.
 | Key | Meaning |
 |---|---|
 | `id` | Required. Never changes and is never reused. |
-| `type` | Required. `requirement`, `adr`, `decision`, `test-case`, `standard`, `api`, `state-machine`, `diagram`, `term`, `change`, `system`, `container`, `component`, `person`, `deployment-environment`, `release`, `debt`, `prd` or `risk`. Other types give a warning, because later modules add types. |
+| `type` | Required. `requirement`, `adr`, `decision`, `test-case`, `standard`, `api`, `state-machine`, `diagram`, `term`, `change`, `system`, `container`, `component`, `person`, `deployment-environment`, `release`, `debt`, `prd`, `risk` or `test-plan`. Other types give a warning, because later modules add types. |
 | `status` | Optional, free text for now, for example `draft` or `accepted`. |
 | `owner` | Optional, free text for now. |
 | `approved_by`, `approved_on` | Set on [change sets](#change-sets) when they are approved. A name, and a date as `YYYY-MM-DD`. |
@@ -277,6 +277,7 @@ Codes are stable. A code is never reused.
 | E037 | error | The `compliance:` settings in the config are not valid |
 | E038 | error | A risk has a status, likelihood, impact or date that is not valid (see [risks.md](risks.md)) |
 | E039 | error | A risk is accepted but no person is named in `approved_by` |
+| E040 | error | A test plan has a status or date that is not valid (see [test-plans.md](test-plans.md)) |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |
@@ -296,6 +297,9 @@ Codes are stable. A code is never reused.
 | W017 | warning | A live risk has no owner |
 | W018 | warning | A live risk is past its review date |
 | W019 | warning | A risk is being mitigated but has no `mitigated-by` link |
+| W020 | warning | A test plan covers nothing |
+| W021 | warning | A requirement is accepted and no approved test plan covers it |
+| W022 | warning | A live risk at a high level is covered by no approved test plan |
 | I001 | info | A link to another project is not checked. Shown with `--verbose`. |
 | I002 | info | A claim says nothing that another claim does not already say. Shown with `--verbose`. |
 

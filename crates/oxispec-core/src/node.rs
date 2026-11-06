@@ -191,6 +191,7 @@ pub const KNOWN_TYPES: &[&str] = &[
     "debt",
     "prd",
     "risk",
+    "test-plan",
 ];
 
 /// Link kinds known to this version (design section 4). Others get a
@@ -213,4 +214,5 @@ pub const KNOWN_LINK_KINDS: &[&str] = &[
     "includes",
     "arises-from",
     "mitigated-by",
+    "covers",
 ];

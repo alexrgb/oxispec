@@ -4,7 +4,7 @@ Written by `oxispec docs reference` from the program itself. Do not edit it by h
 
 Every command also accepts `--root <ROOT>` (the project folder; default: the nearest parent with `.oxispec/config.yaml`), `--no-cache` (do not read or write the local index) and `--help`.
 
-Commands: [`init`](#oxispec-init), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`risks`](#oxispec-risks), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`show`](#oxispec-show)
+Commands: [`init`](#oxispec-init), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`show`](#oxispec-show)
 
 ## `oxispec init`
 
@@ -68,7 +68,7 @@ Usage: oxispec new [OPTIONS] <COMMAND>
 
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
-Subcommands: `requirement`, `adr`, `risk`, `debt`, `prd`, `change`, `vocabulary`, `machine`, `architecture`
+Subcommands: `requirement`, `adr`, `test-plan`, `risk`, `debt`, `prd`, `change`, `vocabulary`, `machine`, `architecture`
 
 ### `oxispec new requirement`
 
@@ -93,6 +93,17 @@ Usage: oxispec new adr [OPTIONS] <TITLE>
 
 - `<TITLE>`
 - `--format <FORMAT>`: The format profile to write it in. Default: the one the config chooses for ADRs.
+- `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
+
+### `oxispec new test-plan`
+
+A test plan: what is tested, how, where, and when it is done. Link what it covers with `covers`
+
+```text
+Usage: oxispec new test-plan [OPTIONS] <TITLE>
+```
+
+- `<TITLE>`
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
 ### `oxispec new risk`
@@ -442,6 +453,18 @@ Usage: oxispec serve [OPTIONS]
 - `--listen <ADDRESS>`: Address to listen on. Default: `127.0.0.1:7878`.
 - `--behind-tls-proxy`: Allow a non-local address because a TLS proxy in front encrypts the traffic.
 - `--audit-log <FILE>`: Where to append one JSON line per request. Default: .oxispec/server/audit.jsonl.
+
+## `oxispec test-plan`
+
+Test plans read against the tests: what each covers, which scenarios no test verifies or that fail, and whether what mitigates each risk is tested
+
+```text
+Usage: oxispec test-plan [OPTIONS] [ID]
+```
+
+- `<ID>`: Only this plan.
+- `--strict`: Exit 1 when an approved plan has a gap.
+- `--json`
 
 ## `oxispec risks`
 

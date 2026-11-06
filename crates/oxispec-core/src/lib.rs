@@ -39,6 +39,7 @@ pub mod status;
 pub mod styles;
 pub mod suspect;
 pub mod symbol;
+pub mod testplan;
 pub mod trace;
 
 pub use check::check;

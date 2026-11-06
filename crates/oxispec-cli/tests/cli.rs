@@ -6134,6 +6134,46 @@ fn risks_are_registered_listed_and_accepted_by_a_person() {
     assert_ne!(out.code, 0);
 }
 
+#[test]
+fn a_test_plan_is_read_against_the_tests() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    assert_eq!(
+        run(p, &["new", "requirement", "pay", "Pay by card"]).code,
+        0
+    );
+    let out = run(p, &["new", "test-plan", "Checkout"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("TP-0001"), "{}", out.stdout);
+    let out = run(p, &["link", "TP-0001", "covers", "REQ-PAY-0001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["test-plan"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("REQ-PAY-0001"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("not verified: REQ-PAY-0001.S1"),
+        "{}",
+        out.stdout
+    );
+    // A draft plan has no gaps that fail a strict run; an approved one does.
+    assert_eq!(run(p, &["test-plan", "--strict"]).code, 0);
+    let file = fs::read_dir(p.join("specs/test-plans"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, text.replace("status: draft", "status: approved")).unwrap();
+    assert_eq!(run(p, &["test-plan", "--strict"]).code, 1);
+    let out = run(p, &["test-plan", "--json"]);
+    assert!(out.stdout.contains("\"gaps\": true"), "{}", out.stdout);
+    let out = run(p, &["test-plan", "REQ-PAY-0001"]);
+    assert_ne!(out.code, 0);
+}
+
 fn project_with_a_standard(p: &Path, standard: &str) {
     git(p, &["init", "-q"]);
     assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);
