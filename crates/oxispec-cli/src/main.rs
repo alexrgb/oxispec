@@ -573,6 +573,21 @@ enum DocsAction {
         #[arg(long)]
         check: bool,
     },
+    /// An OpenAPI skeleton made from the requirements that are titled as calls, such as
+    /// `GET /orders/{id}`. It has no schemas or security. With --against, compare a file with
+    /// the requirements instead and exit 1 when they differ
+    Openapi {
+        /// Write the skeleton to this file instead of printing it
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Compare this OpenAPI or Swagger file (JSON or YAML) with the requirements
+        #[arg(long)]
+        against: Option<PathBuf>,
+        #[arg(long, default_value = "API")]
+        title: String,
+        #[arg(long, default_value = "0.1.0")]
+        version: String,
+    },
     /// The product requirements document a `prd` node and the requirements that refine it make.
     /// Printed, or written with --out. It is a view of the nodes: change them, not the file
     Prd {
@@ -1004,6 +1019,61 @@ fn run(cli: Cli) -> Result<ExitCode> {
             match action {
                 DocsAction::Reference { out, check } => {
                     reference::run(&<Cli as clap::CommandFactory>::command(), &out, check)?
+                }
+                DocsAction::Openapi {
+                    out,
+                    against,
+                    title,
+                    version,
+                } => {
+                    let root = project_root(cli.root.as_deref())?;
+                    let cfg = config::load(&root)?;
+                    require_module(&cfg, "specs")?;
+                    let graph = load_graph(&root, cache);
+                    let ops = oxispec_core::api::operations(&graph, &root)?;
+                    if let Some(file) = against {
+                        let doc = oxispec_core::api::load(&file)?;
+                        let d = oxispec_core::api::drift(&ops, &doc);
+                        for c in &d.only_in_requirements {
+                            outln!("only in the requirements: {c}");
+                        }
+                        for c in &d.only_in_description {
+                            outln!("only in {}: {c}", file.display());
+                        }
+                        for (c, missing, extra) in &d.codes {
+                            outln!(
+                                "{c}: requirements state {} that the file lacks; the file has {} that they do not",
+                                if missing.is_empty() {
+                                    "nothing".into()
+                                } else {
+                                    missing.join(", ")
+                                },
+                                if extra.is_empty() {
+                                    "nothing".into()
+                                } else {
+                                    extra.join(", ")
+                                }
+                            );
+                        }
+                        if d.is_empty() {
+                            outln!(
+                                "{} and the requirements agree on {} operation(s)",
+                                file.display(),
+                                ops.len()
+                            );
+                            return Ok(ExitCode::SUCCESS);
+                        }
+                        return Ok(ExitCode::FAILURE);
+                    }
+                    let text = oxispec_core::api::render(&ops, &title, &version);
+                    match out {
+                        Some(path) => {
+                            std::fs::write(&path, &text)
+                                .with_context(|| format!("cannot write {}", path.display()))?;
+                            outln!("wrote {} ({} operation(s))", path.display(), ops.len());
+                        }
+                        None => outln!("{text}"),
+                    }
                 }
                 DocsAction::Prd { id, out } => {
                     let root = project_root(cli.root.as_deref())?;

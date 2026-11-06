@@ -3,6 +3,7 @@
 pub mod access;
 pub mod adr;
 pub mod agents;
+pub mod api;
 pub mod architecture;
 pub mod change;
 pub mod check;

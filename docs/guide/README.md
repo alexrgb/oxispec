@@ -8,6 +8,7 @@ How to use the `oxispec` binary. Start with the first page, then take the one th
 | [Concepts](concepts.md) | Nodes, IDs, links, modules and what `check` looks at |
 | [Writing requirements](requirements.md) | Requirements and scenarios, decisions, change sets, review |
 | [Writing a PRD](writing-a-prd.md) | A product requirements document made from the nodes |
+| [Describing an API](writing-an-api.md) | Operations as requirements, an OpenAPI skeleton, and a check of the real file |
 | [Code and tests](trace-and-coverage.md) | Tie code and tests to requirements and see what is not covered |
 | [Moving from another tool](importing.md) | OpenSpec, Spec Kit, Kiro, plain markdown, a PRD or an OpenAPI file |
 | [Checks in CI](ci-checks.md) | Fail pull requests on new problems, with reports |

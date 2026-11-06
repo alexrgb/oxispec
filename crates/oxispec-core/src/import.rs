@@ -10,7 +10,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-mod sources;
+pub(crate) mod sources;
 use sources::{find_openapi, prd};
 
 pub const NAMES: &[&str] = &["openspec", "speckit", "kiro", "markdown", "prd", "openapi"];
