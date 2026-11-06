@@ -218,6 +218,7 @@ pub fn summarize(new: &Graph, diff: &GraphDiff) -> Summary {
     summary
 }
 
+// spec: REQ-RELEASE-0001
 /// The version a release should have, from the previous one and the size of
 /// the changes. Before 1.0 a breaking change bumps the minor version, as in
 /// docs/versioning.md. `None` when nothing changed since a previous release.
@@ -260,6 +261,7 @@ pub fn included_change_sets<'a>(new: &'a Graph, diff: &GraphDiff) -> Vec<&'a Nod
         .collect()
 }
 
+// spec: REQ-RELEASE-0003
 /// The release notes: the body of the manifest after its heading.
 pub fn notes(base: Option<&Version>, summary: &Summary, change_sets: &[&Node]) -> String {
     let mut out = String::new();
@@ -337,6 +339,7 @@ pub struct Candidate<'a> {
     pub trace: Option<TraceFacts>,
 }
 
+// spec: REQ-RELEASE-0002
 /// Runs the gates. The release can go ahead when no blocking gate failed.
 pub fn gates(candidate: &Candidate) -> Vec<Gate> {
     let Candidate {
@@ -622,6 +625,7 @@ mod tests {
         assert_eq!(v("1.2.3"), v("v1.2.3"));
     }
 
+    // verifies: REQ-RELEASE-0001.S1
     #[test]
     fn a_breaking_change_bumps_the_minor_version_before_one_point_zero() {
         let base = v("0.3.1");
@@ -631,6 +635,7 @@ mod tests {
         assert_eq!(suggest(Some(&base), Bump::None), None);
     }
 
+    // verifies: REQ-RELEASE-0001.S2
     #[test]
     fn from_one_point_zero_the_bump_follows_semver() {
         let base = v("1.4.2");
@@ -640,6 +645,7 @@ mod tests {
         assert_eq!(suggest(None, Bump::Patch), Some(v("0.1.0")));
     }
 
+    // verifies: REQ-RELEASE-0001.S3
     #[test]
     fn changes_are_sorted_into_the_right_bump() {
         let old = graph(&[
@@ -708,6 +714,7 @@ mod tests {
         assert_eq!(included_change_sets(&new, &diff)[0].id, "CHG-0001");
     }
 
+    // verifies: REQ-RELEASE-0003.S1
     #[test]
     fn notes_list_sections_that_have_content() {
         let summary = Summary {
@@ -737,6 +744,7 @@ mod tests {
         parse_file_text(Path::new("r.md"), &text).0.unwrap()
     }
 
+    // verifies: REQ-RELEASE-0002.S1
     #[test]
     fn gates_pass_for_a_clean_release_and_fail_for_each_problem() {
         let old = graph(&[("a.md", req("REQ-A-0001", "", REQ))]);
@@ -796,6 +804,7 @@ mod tests {
         assert!(can_release(&all), "{all:?}");
     }
 
+    // verifies: REQ-RELEASE-0002.S2
     #[test]
     fn unapproved_change_sets_and_errors_block_a_release() {
         let old = graph(&[("a.md", req("REQ-A-0001", "", REQ))]);
@@ -860,6 +869,7 @@ mod tests {
         assert!(!gate(&all, "has-changes").passed);
     }
 
+    // verifies: REQ-RELEASE-0002.S3
     #[test]
     fn suspect_links_and_failing_tests_block_a_release() {
         let new = graph(&[("a.md", req("REQ-A-0001", "", REQ))]);
@@ -925,6 +935,7 @@ mod tests {
         assert!(can_release(&old), "{old:?}");
     }
 
+    // verifies: REQ-RELEASE-0002.S4
     #[test]
     fn the_first_release_needs_no_changes_or_base() {
         let new = graph(&[("a.md", req("REQ-A-0001", "", REQ))]);
