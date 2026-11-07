@@ -51,6 +51,7 @@ fn new_secret() -> Result<String> {
     Ok(format!("{TOKEN_PREFIX}{hex}"))
 }
 
+// spec: REQ-SERVE-0001
 pub fn token_add(root: &Path, name: &str, types: Vec<String>, json: bool) -> Result<()> {
     let mut store = Store::load(root)?;
     let secret = new_secret()?;
@@ -141,6 +142,9 @@ impl Audit {
     }
 }
 
+// spec: REQ-SERVE-0002
+// spec: REQ-SERVE-0003
+// spec: REQ-SERVE-0004
 pub fn serve(root: &Path, options: &ServeOptions) -> Result<()> {
     let addr: SocketAddr = options
         .listen

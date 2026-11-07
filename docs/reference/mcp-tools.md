@@ -17,6 +17,17 @@ Arguments:
 - `status` (string, optional): Only this status, for example accepted.
 - `type` (string, optional): Only this node type, for example requirement or adr.
 
+## `spec_api_search`
+
+Find the operations of the API (requirements titled `GET /orders`) nearest in meaning to a question, best first, each with its call, requirement, score and the text it was indexed from. Needs the index built with `oxispec api index`; an error says so when it is missing or made with another embedder.
+
+Read only.
+
+Arguments:
+
+- `query` (string, required): What the operation does, in words.
+- `top` (integer, optional, default 5, 1 to 50)
+
 ## `spec_get`
 
 One node: its text, its links, and the nodes that link to it.

@@ -142,6 +142,7 @@ fn project_with_two_requirements_and_an_adr(p: &Path) {
     assert_eq!(run(p, &["new", "adr", "Use Postgres"]).code, 0);
 }
 
+// verifies: REQ-LINK-0001.S1
 #[test]
 fn link_command_adds_links_and_checks_the_target() {
     let dir = tempfile::tempdir().unwrap();
@@ -180,6 +181,7 @@ fn link_command_adds_links_and_checks_the_target() {
     assert!(text.contains("links:\n  decided-by:\n    - ADR-0001\n"));
 }
 
+// verifies: REQ-LINK-0001.S2
 #[test]
 fn link_command_refuses_bad_input() {
     let dir = tempfile::tempdir().unwrap();
@@ -669,6 +671,7 @@ fn project_with_history(p: &Path) {
     git(p, &["commit", "-q", "-m", "rename the file"]);
 }
 
+// verifies: REQ-HISTORY-0001.S1
 #[test]
 fn history_lists_each_change_and_follows_a_renamed_file() {
     let dir = tempfile::tempdir().unwrap();
@@ -713,6 +716,7 @@ fn history_lists_each_change_and_follows_a_renamed_file() {
     assert!(out.stdout.contains("text changed"), "{}", out.stdout);
 }
 
+// verifies: REQ-HISTORY-0001.S2
 #[test]
 fn history_json_and_limit() {
     let dir = tempfile::tempdir().unwrap();
@@ -745,6 +749,7 @@ fn history_json_and_limit() {
     );
 }
 
+// verifies: REQ-HISTORY-0001.S3
 #[test]
 fn history_of_a_deleted_node_is_found_with_at() {
     let dir = tempfile::tempdir().unwrap();
@@ -923,6 +928,7 @@ fn revisions_can_be_branches_tags_hashes_or_dates() {
     }
 }
 
+// verifies: REQ-HISTORY-0002.S1
 #[test]
 fn history_commands_need_a_git_repository_and_at_excludes_changed() {
     let dir = tempfile::tempdir().unwrap();
@@ -947,6 +953,7 @@ fn history_commands_need_a_git_repository_and_at_excludes_changed() {
     assert!(out.stderr.contains("cannot be used with"), "{}", out.stderr);
 }
 
+// verifies: REQ-HISTORY-0002.S2
 #[test]
 fn history_in_a_repository_without_commits_says_so() {
     let dir = tempfile::tempdir().unwrap();
@@ -4153,6 +4160,7 @@ fn hostile_files_never_make_a_command_panic() {
     assert!(check.stdout.contains("E023"), "{}", check.stdout);
 }
 
+// verifies: REQ-LINK-0002.S1
 #[test]
 fn links_added_at_the_same_time_to_one_file_are_all_kept() {
     let dir = tempfile::tempdir().unwrap();
@@ -4659,6 +4667,7 @@ fn make_token(p: &Path, name: &str, types: Option<&str>) -> String {
     out.stdout.trim().to_string()
 }
 
+// verifies: REQ-SERVE-0001.S1
 #[test]
 fn tokens_are_created_listed_and_revoked_without_keeping_the_secret() {
     let dir = tempfile::tempdir().unwrap();
@@ -4684,6 +4693,7 @@ fn tokens_are_created_listed_and_revoked_without_keeping_the_secret() {
     assert!(!run(p, &["token", "list"]).stdout.contains("ci  "));
 }
 
+// verifies: REQ-SERVE-0002.S1
 #[test]
 fn serve_refuses_to_start_without_tokens_or_on_an_open_address() {
     let dir = tempfile::tempdir().unwrap();
@@ -4699,6 +4709,7 @@ fn serve_refuses_to_start_without_tokens_or_on_an_open_address() {
     assert!(out.stderr.contains("--behind-tls-proxy"), "{}", out.stderr);
 }
 
+// verifies: REQ-SERVE-0003.S1
 #[test]
 fn the_http_server_needs_a_token_and_answers_the_protocol() {
     let dir = tempfile::tempdir().unwrap();
@@ -4761,6 +4772,7 @@ fn the_http_server_needs_a_token_and_answers_the_protocol() {
     assert_eq!(http(&server, "POST", "/mcp", &headers, &big).0, 413);
 }
 
+// verifies: REQ-SERVE-0004.S1
 #[test]
 fn a_limited_token_sees_only_its_types_and_nothing_that_reveals_the_rest() {
     let dir = tempfile::tempdir().unwrap();
@@ -4891,6 +4903,7 @@ fn a_limited_token_sees_only_its_types_and_nothing_that_reveals_the_rest() {
     );
 }
 
+// verifies: REQ-SERVE-0003.S2
 #[test]
 fn a_revoked_token_stops_working_and_every_request_is_audited() {
     let dir = tempfile::tempdir().unwrap();
@@ -6395,6 +6408,66 @@ fn the_languages_of_the_scan_are_chosen_at_init_and_listed() {
     fs::write(p.join("a.zig"), "// spec: REQ-A-0001\n").unwrap();
     let out = run(p, &["trace"]);
     assert!(out.stdout.contains("a.zig"), "{}{}", out.stdout, out.stderr);
+}
+
+// verifies: REQ-MCP-0005.S1
+#[test]
+fn the_operations_are_searched_through_an_mcp_tool() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let api = "{\"openapi\":\"3.0.0\",\"info\":{\"title\":\"Shop\"},\"paths\":{\"/orders/{id}\":{\"get\":{\"tags\":[\"orders\"],\"summary\":\"Fetch an order\",\"responses\":{\"200\":{\"description\":\"The order\"}}}},\"/payments\":{\"post\":{\"tags\":[\"payments\"],\"summary\":\"Charge a card\",\"responses\":{\"402\":{\"description\":\"The card is declined\"}}}}}}";
+    fs::write(p.join("api.json"), api).unwrap();
+    assert_eq!(
+        run(
+            p,
+            &["import", "specs", "--from", "openapi", "--dir", "api.json"]
+        )
+        .code,
+        0
+    );
+    assert!(debt_tool_names(p).contains(&"spec_api_search".to_string()));
+    let (is_error, text) = call_tool(
+        p,
+        "spec_api_search",
+        serde_json::json!({"query": "charge a card"}),
+    );
+    assert!(is_error && text.contains("oxispec api index"), "{text}");
+    assert_eq!(run(p, &["api", "index"]).code, 0);
+    let (is_error, text) = call_tool(
+        p,
+        "spec_api_search",
+        serde_json::json!({"query": "charge a card", "top": 1}),
+    );
+    assert!(!is_error, "{text}");
+    let found: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(found["hits"][0]["call"], "POST /payments", "{text}");
+}
+
+// verifies: REQ-MCP-0005.S2
+#[test]
+fn a_limited_token_is_not_offered_the_operation_search() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    project_with_two_requirements_and_an_adr(p);
+    let adr_only = make_token(p, "adr-only", Some("adr"));
+    let server = start_server(p, &[]);
+    let (_, tools) = mcp_http(&server, &adr_only, "tools/list", serde_json::json!({}));
+    assert!(!tools.to_string().contains("spec_api_search"), "{tools}");
+    let (_, reply) = mcp_http(
+        &server,
+        &adr_only,
+        "tools/call",
+        serde_json::json!({"name": "spec_api_search", "arguments": {"query": "orders"}}),
+    );
+    assert!(
+        reply["error"]["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("unknown tool"),
+        "{reply}"
+    );
 }
 
 // verifies: REQ-APIINDEX-0004.S1

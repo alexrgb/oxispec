@@ -33,7 +33,7 @@ Add `"--read-only"` to `args` to leave out the one tool that writes.
 
 ## Tools
 
-The tools, their arguments and the module each one needs are listed in [the generated reference](reference/mcp-tools.md), written from the server itself. In short: `spec_search`, `spec_get`, `spec_neighbors`, `spec_context`, `spec_check`, `spec_status`, `spec_history`, `spec_diff` and `spec_trace` read the specs, `spec_debt`, `spec_risks`, `spec_architecture`, `spec_machine` and `spec_claims` read what their modules add, and `spec_propose_change` writes a draft change set. Each read tool runs the code of the command with `--json` (`spec_get` is `show --json` plus the text of the node, `spec_check` is `check --json`, and so on).
+The tools, their arguments and the module each one needs are listed in [the generated reference](reference/mcp-tools.md), written from the server itself. In short: `spec_search`, `spec_api_search` (the operations of an API, found by meaning, from the index of `oxispec api index`), `spec_get`, `spec_neighbors`, `spec_context`, `spec_check`, `spec_status`, `spec_history`, `spec_diff` and `spec_trace` read the specs, `spec_debt`, `spec_risks`, `spec_architecture`, `spec_machine` and `spec_claims` read what their modules add, and `spec_propose_change` writes a draft change set. Each read tool runs the code of the command with `--json` (`spec_get` is `show --json` plus the text of the node, `spec_check` is `check --json`, and so on).
 
 Tool names use underscores, not dots, because some clients do not accept dots. The read tools run the same code as the `--json` commands, so an agent and a person get the same answers, and the JSON has the same `schema_version`.
 

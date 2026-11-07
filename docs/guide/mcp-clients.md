@@ -23,7 +23,7 @@ The entry starts `oxispec mcp` as the client needs it, in the project folder. Th
 
 ## What the client gets
 
-Read tools: `spec_search`, `spec_get`, `spec_neighbors`, `spec_context`, `spec_check`, `spec_status`, `spec_history`, `spec_diff`, `spec_trace`, and, when their modules are on, `spec_debt`, `spec_risks`, `spec_architecture`, `spec_machine` and `spec_claims`. They give the same answers as the commands with `--json`. One tool writes: `spec_propose_change` creates a draft change set. It cannot approve, and nothing is committed. `--read-only` removes it. Every tool with its arguments is in the [MCP tools reference](../reference/mcp-tools.md).
+Read tools: `spec_search`, `spec_api_search`, `spec_get`, `spec_neighbors`, `spec_context`, `spec_check`, `spec_status`, `spec_history`, `spec_diff`, `spec_trace`, and, when their modules are on, `spec_debt`, `spec_risks`, `spec_architecture`, `spec_machine` and `spec_claims`. They give the same answers as the commands with `--json`. One tool writes: `spec_propose_change` creates a draft change set. It cannot approve, and nothing is committed. `--read-only` removes it. Every tool with its arguments is in the [MCP tools reference](../reference/mcp-tools.md).
 
 ## One server for a team
 

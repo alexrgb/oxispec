@@ -13,10 +13,13 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-FORMAT-0005` | Scenario anchors are unique and valid |
 | `REQ-FORMAT-0006` | Reverse links are computed |
 | `REQ-CHANGE-0001`, `0002` | A change set follows a lifecycle; approval is recorded and can be withdrawn |
-| `REQ-MCP-0001` to `0004` | The read tools answer as the commands do; tools are offered by module and mode; arguments cannot be read as options; an agent can propose a change set but never approve it |
+| `REQ-MCP-0001` to `0005` | The read tools answer as the commands do; tools are offered by module and mode; arguments cannot be read as options; an agent can propose a change set but never approve it; an agent can search the operations |
 | `REQ-PRD-0001` | A PRD is made from the nodes |
 | `REQ-APIINDEX-0001` to `0004` | Each operation has a chunk of text; the index follows the operations; a query finds the nearest operations; the index is built and searched from the command line |
 | `REQ-API-0001` to `0006` | Operations come from the requirements; a description is compared with them; an operation has a card; removing from the API is breaking; a running service can be compared; an operation says what happens to a caller who may not use it |
+| `REQ-LINK-0001`, `0002` | A link is added to the node and nothing else changes; links added at the same time are all kept |
+| `REQ-HISTORY-0001`, `0002` | History follows a node through git; history needs a git repository |
+| `REQ-SERVE-0001` to `0004` | A token keeps only a hash; the server refuses an unsafe start; every request needs a token and is audited; a limited token sees only its types |
 | `REQ-TRACE-0001` to `0004` | Annotations are read from comments; coverage is counted from annotations; only a real comment is an annotation; the languages of the scan are configured |
 | `REQ-SUSPECT-0001` | A link goes suspect when either side changes |
 | `REQ-SEARCH-0001`, `0002` | Search finds what is written; the index follows the files |

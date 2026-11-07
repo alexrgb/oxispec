@@ -2007,6 +2007,8 @@ fn modules_command(explicit: Option<&Path>, action: ModulesAction) -> Result<()>
     }
 }
 
+// spec: REQ-LINK-0001
+// spec: REQ-LINK-0002
 fn link_command(root: &Path, from: &str, kind: &str, to: &str, cache: bool) -> Result<()> {
     let graph = load_graph(root, cache);
     let parsed = id::parse(from).with_context(|| format!("{from:?} is not a valid id"))?;
