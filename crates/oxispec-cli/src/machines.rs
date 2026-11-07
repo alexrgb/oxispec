@@ -33,6 +33,7 @@ pub struct Output {
     pub json: bool,
 }
 
+// spec: REQ-MACHINE-0002
 pub fn machine_command(
     root: &Path,
     id: Option<&str>,

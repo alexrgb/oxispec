@@ -690,6 +690,7 @@ fn properties(machine: &Machine, out: &mut Vec<Finding>) {
     }
 }
 
+// spec: REQ-MACHINE-0001
 pub fn check(graph: &Graph) -> Vec<Finding> {
     let analysis = analyze(graph);
     let mut findings = analysis.findings.clone();

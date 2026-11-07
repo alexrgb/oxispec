@@ -530,6 +530,8 @@ fn completeness(model: &Model, out: &mut Vec<Finding>) {
     }
 }
 
+// spec: REQ-ARCHITECTURE-0001
+// spec: REQ-ARCHITECTURE-0003
 pub fn check(graph: &Graph) -> Vec<Finding> {
     let analysis = analyze(graph);
     let mut findings = analysis.findings.clone();
