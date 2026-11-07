@@ -1417,6 +1417,7 @@ fn overrides_of(graph: &Graph) -> BTreeMap<&str, BTreeSet<&str>> {
 }
 
 /// Conflicts and lints over the claims that count.
+// spec: REQ-CLAIMS-0001
 pub fn conflicts(graph: &Graph, analysis: &Analysis) -> Vec<Finding> {
     let overrides = overrides_of(graph);
     let mut by_subject: BTreeMap<&str, Vec<&Claim>> = BTreeMap::new();

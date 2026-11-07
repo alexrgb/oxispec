@@ -10,6 +10,8 @@ use oxispec_core::{Graph, OUTPUT_SCHEMA_VERSION, config, index};
 
 use crate::git;
 
+// spec: REQ-CLAIMS-0002
+// spec: REQ-MODULES-0001
 pub fn claims_command(
     root: &Path,
     variable: Option<&str>,

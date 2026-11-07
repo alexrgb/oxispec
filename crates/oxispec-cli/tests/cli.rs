@@ -1925,6 +1925,7 @@ fn search_without_a_cache_leaves_nothing_behind() {
     assert_eq!(run(p, &["search", "   "]).code, 2);
 }
 
+// verifies: REQ-SITE-0001.S1, REQ-SITE-0001.S2
 #[test]
 fn site_builds_a_page_per_node_linked_by_id() {
     let dir = tempfile::tempdir().unwrap();
@@ -1972,6 +1973,7 @@ fn site_builds_a_page_per_node_linked_by_id() {
     assert!(out.stderr.contains("folder of its own"), "{}", out.stderr);
 }
 
+// verifies: REQ-SITE-0002.S1
 #[test]
 fn site_at_a_revision_shows_the_specs_as_they_were() {
     let dir = tempfile::tempdir().unwrap();
@@ -1992,6 +1994,7 @@ fn site_at_a_revision_shows_the_specs_as_they_were() {
     assert!(page.contains("status-draft"), "{page}");
 }
 
+// verifies: REQ-SITE-0003.S1
 #[test]
 fn site_releases_builds_every_version_with_a_picker_and_changes() {
     let dir = tempfile::tempdir().unwrap();
@@ -2350,6 +2353,7 @@ const JUNIT_FAIL: &str = r#"<?xml version="1.0"?>
 <testcase classname="auth" name="idle"><failure message="boom"/></testcase>
 </testsuite></testsuites>"#;
 
+// verifies: REQ-RESULTS-0001.S1
 #[test]
 fn imported_test_results_say_which_scenarios_pass() {
     let dir = tempfile::tempdir().unwrap();
@@ -3361,6 +3365,7 @@ fn add_claims(p: &Path, slug: &str, claims: &str) {
     .unwrap();
 }
 
+// verifies: REQ-CLAIMS-0001.S1
 #[test]
 fn check_finds_a_conflict_between_claims_and_an_overrides_link_settles_it() {
     let dir = tempfile::tempdir().unwrap();
@@ -3414,6 +3419,7 @@ fn a_claim_that_cannot_be_read_is_an_error_with_the_reason() {
     assert!(out.stdout.contains("auth/loose.md:14"), "{}", out.stdout);
 }
 
+// verifies: REQ-CLAIMS-0002.S1
 #[test]
 fn claims_lists_the_vocabulary_with_its_claims_and_the_share_of_requirements() {
     let dir = tempfile::tempdir().unwrap();
@@ -3495,6 +3501,7 @@ fn ci_reports_a_new_conflict_once_and_not_again_after_it_is_merged() {
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
 }
 
+// verifies: REQ-MODULES-0001.S1
 #[test]
 fn claims_need_their_module() {
     let dir = tempfile::tempdir().unwrap();
@@ -3510,6 +3517,7 @@ fn claims_need_their_module() {
     assert!(p.join("specs/vocabulary").is_dir());
 }
 
+// verifies: REQ-MODULES-0001.S2
 #[test]
 fn mcp_offers_the_claims_tool_with_its_module() {
     let dir = tempfile::tempdir().unwrap();
@@ -3581,6 +3589,7 @@ fn machine_project(p: &Path, properties: &str) {
     .unwrap();
 }
 
+// verifies: REQ-MACHINE-0001.S1
 #[test]
 fn a_new_machine_passes_check_and_a_broken_property_comes_with_its_path() {
     let dir = tempfile::tempdir().unwrap();
@@ -3619,6 +3628,7 @@ fn a_new_machine_passes_check_and_a_broken_property_comes_with_its_path() {
     );
 }
 
+// verifies: REQ-MACHINE-0002.S1
 #[test]
 fn machine_lists_shows_draws_and_writes_tests() {
     let dir = tempfile::tempdir().unwrap();
@@ -3724,6 +3734,7 @@ fn ci_reports_a_new_broken_property_once() {
     assert_eq!(json(&out)["existing_findings"], 1);
 }
 
+// verifies: REQ-MODULES-0001.S1
 #[test]
 fn machines_need_their_module() {
     let dir = tempfile::tempdir().unwrap();
@@ -3739,6 +3750,7 @@ fn machines_need_their_module() {
     assert!(p.join("specs/machines").is_dir());
 }
 
+// verifies: REQ-MODULES-0001.S2
 #[test]
 fn mcp_offers_the_machine_tool_with_its_module() {
     let dir = tempfile::tempdir().unwrap();
@@ -3834,6 +3846,7 @@ fn architecture_project(p: &Path) {
     );
 }
 
+// verifies: REQ-ARCHITECTURE-0001.S1
 #[test]
 fn new_architecture_writes_elements_and_a_container_needs_its_parent() {
     let dir = tempfile::tempdir().unwrap();
@@ -3865,6 +3878,7 @@ fn new_architecture_writes_elements_and_a_container_needs_its_parent() {
     );
 }
 
+// verifies: REQ-ARCHITECTURE-0002.S1
 #[test]
 fn architecture_lists_and_draws_views_from_one_model() {
     let dir = tempfile::tempdir().unwrap();
@@ -3926,6 +3940,7 @@ fn architecture_lists_and_draws_views_from_one_model() {
     assert!(out.stderr.contains("is of a container"), "{}", out.stderr);
 }
 
+// verifies: REQ-ARCHITECTURE-0003.S1
 #[test]
 fn a_broken_architecture_rule_names_the_path_and_ci_reports_it_once() {
     let dir = tempfile::tempdir().unwrap();
@@ -3960,6 +3975,7 @@ fn a_broken_architecture_rule_names_the_path_and_ci_reports_it_once() {
     assert_eq!(json(&out)["existing_findings"], 1);
 }
 
+// verifies: REQ-MODULES-0001.S1
 #[test]
 fn architecture_needs_its_module() {
     let dir = tempfile::tempdir().unwrap();
@@ -3978,6 +3994,7 @@ fn architecture_needs_its_module() {
     assert!(p.join("architecture/model").is_dir());
 }
 
+// verifies: REQ-MODULES-0001.S2
 #[test]
 fn mcp_offers_the_architecture_tool_with_its_module() {
     let dir = tempfile::tempdir().unwrap();

@@ -108,6 +108,9 @@ fn guard_out(root: &Path, out: &Path) -> Result<()> {
     Ok(())
 }
 
+// spec: REQ-SITE-0001
+// spec: REQ-SITE-0002
+// spec: REQ-SITE-0003
 pub fn site_command(root: &Path, args: &SiteArgs) -> Result<()> {
     config::load(root)?;
     guard_out(root, &args.out)?;

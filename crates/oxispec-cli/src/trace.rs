@@ -448,6 +448,7 @@ pub fn confirm_command(
 }
 
 /// `oxispec results import`: read test results from files and keep them.
+// spec: REQ-RESULTS-0001
 pub fn results_import(root: &Path, files: &[PathBuf], replace: bool) -> Result<()> {
     scan_module(root)?;
     let mut stored = if replace {

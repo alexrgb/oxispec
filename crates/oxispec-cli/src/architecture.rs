@@ -46,6 +46,7 @@ fn load(root: &Path, at: Option<&str>, cache: bool) -> Result<(Model, Option<git
     Ok((architecture::analyze(&graph).model.clone(), revision))
 }
 
+// spec: REQ-ARCHITECTURE-0002
 pub fn list(root: &Path, at: Option<&str>, json: bool, cache: bool) -> Result<ExitCode> {
     let (model, revision) = load(root, at, cache)?;
     if json {
