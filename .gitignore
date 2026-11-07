@@ -1,3 +1,7 @@
 /target
 .oxispec/cache/
 .DS_Store
+
+# Editors
+.idea/
+.vscode/
