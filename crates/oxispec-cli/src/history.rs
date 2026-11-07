@@ -69,6 +69,8 @@ fn revision_json(revision: &Revision) -> serde_json::Value {
     json!({"commit": revision.oid, "short": revision.short, "subject": revision.subject})
 }
 
+// spec: REQ-HISTORY-0001
+// spec: REQ-HISTORY-0002
 pub fn history_command(
     root: &Path,
     id: &str,

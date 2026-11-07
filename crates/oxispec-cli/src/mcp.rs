@@ -280,6 +280,16 @@ impl Server<'_> {
                 false,
             ),
             tool(
+                "spec_api_search",
+                "Find the operations of the API (requirements titled `GET /orders`) nearest in meaning to a question, best first, each with its call, requirement, score and the text it was indexed from. Needs the index built with `oxispec api index`; an error says so when it is missing or made with another embedder.",
+                json!({
+                    "query": {"type": "string", "description": "What the operation does, in words."},
+                    "top": {"type": "integer", "minimum": 1, "maximum": 50, "default": 5},
+                }),
+                &["query"],
+                false,
+            ),
+            tool(
                 "spec_get",
                 "One node: its text, its links, and the nodes that link to it.",
                 json!({"id": id_property, "at": rev}),
@@ -459,6 +469,12 @@ impl Server<'_> {
                     return without_index_counts(&out);
                 }
                 Ok(out)
+            }
+            // spec: REQ-MCP-0005
+            "spec_api_search" => {
+                let query = text_arg(args, "query")?;
+                let top = number_arg(args, "top", 5, 1, 50)?.to_string();
+                self.cli(&["api", "search", "--json", "--top", &top, "--", &query])
             }
             "spec_get" => self.get(
                 &node_id(args, "id")?,
