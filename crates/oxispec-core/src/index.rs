@@ -254,6 +254,7 @@ static MEMO: Mutex<Option<Memo>> = Mutex::new(None);
 static MEMO_ON: AtomicBool = AtomicBool::new(false);
 /// Set when something under the project may have changed since the memo was built.
 static DIRTY: AtomicBool = AtomicBool::new(true);
+// spec: REQ-MCP-0008
 static WATCHER: Mutex<Option<notify::RecommendedWatcher>> = Mutex::new(None);
 static WATCHING: AtomicBool = AtomicBool::new(false);
 

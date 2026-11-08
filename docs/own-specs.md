@@ -38,6 +38,9 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-FORMATS-0001` | A format profile shapes a node |
 | `REQ-TAGS-0001` | A tag names a revision of the specs |
 | `REQ-ROBUSTNESS-0001`, `0002` | No input makes a command panic; commands that write at the same time do not collide |
+| `REQ-ROLLBACK-0003`, `0004` | A rollback is refused when it would do harm; it puts nodes back without committing |
+| `REQ-REVISIONS-0001` | A revision can be named in many ways |
+| `REQ-DOCS-0001` | The reference is written from the program |
 | `REQ-TRACE-0001` to `0004` | Annotations are read from comments; coverage is counted from annotations; only a real comment is an annotation; the languages of the scan are configured |
 | `REQ-SUSPECT-0001` | A link goes suspect when either side changes |
 | `REQ-SEARCH-0001`, `0002` | Search finds what is written; the index follows the files |

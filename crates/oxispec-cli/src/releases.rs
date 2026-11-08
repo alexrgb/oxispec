@@ -399,6 +399,7 @@ pub fn publish(root: &Path, version: &str, json_output: bool) -> Result<bool> {
 }
 
 /// `oxispec release list`: the manifests, and whether each is published.
+// spec: REQ-RELEASE-0004
 pub fn list(root: &Path, json_output: bool, cache: bool) -> Result<()> {
     let cfg = config::load(root)?;
     require_releases(&cfg)?;

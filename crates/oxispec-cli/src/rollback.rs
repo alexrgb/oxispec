@@ -31,6 +31,8 @@ fn is_safe(path: &Path) -> bool {
     path.components().all(|c| matches!(c, Component::Normal(_)))
 }
 
+// spec: REQ-ROLLBACK-0003
+// spec: REQ-ROLLBACK-0004
 pub fn rollback_command(root: &Path, options: &Options<'_>) -> Result<()> {
     config::load(root)?;
     if options.all && !options.ids.is_empty() {

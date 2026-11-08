@@ -342,6 +342,8 @@ pub struct Candidate<'a> {
 
 // spec: REQ-RELEASE-0002
 /// Runs the gates. The release can go ahead when no blocking gate failed.
+// spec: REQ-COMPLIANCE-0004
+// spec: REQ-TRACE-0006
 pub fn gates(candidate: &Candidate) -> Vec<Gate> {
     let Candidate {
         version,

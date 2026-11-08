@@ -307,6 +307,7 @@ pub fn scan_tree(root: &Path, exclude: &[String]) -> Result<Scan, Error> {
 
 /// Like [`scan_tree`], with the project's whole `trace` settings: the
 /// languages it scans and how it reads their comments.
+// spec: REQ-TRACE-0005
 pub fn scan_tree_with(root: &Path, config: &TraceConfig) -> Result<Scan, Error> {
     let languages = Languages::from_config(config).map_err(Error::Languages)?;
     let overrides = exclusions(root, &config.exclude)?;

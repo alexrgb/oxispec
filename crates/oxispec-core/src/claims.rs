@@ -1433,6 +1433,7 @@ pub fn conflicts(graph: &Graph, analysis: &Analysis) -> Vec<Finding> {
 }
 
 /// All findings from claims: unreadable ones, then conflicts and lints.
+// spec: REQ-CLAIMS-0003
 pub fn check(graph: &Graph) -> Vec<Finding> {
     let analysis = analyze(graph);
     let mut findings = analysis.findings.clone();

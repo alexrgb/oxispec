@@ -271,6 +271,7 @@ pub fn builtin() -> Vec<Profile> {
 
 /// The profiles a project can use: the built-in ones and its own valid ones.
 /// A custom profile that is not valid is left out and reported as E031.
+// spec: REQ-FORMATS-0002
 pub fn available(config: &Config) -> (Vec<Profile>, Vec<Finding>) {
     let mut profiles = builtin();
     let mut problems = Vec::new();
@@ -406,6 +407,8 @@ impl Formats {
 
 impl Profile {
     /// The text of a new node, with `@ID@`, `@TITLE@` and `@DATE@` still to fill in.
+    // spec: REQ-ADR-0004
+    // spec: REQ-STYLE-0003
     pub fn template(&self) -> String {
         if self.ty == "requirement" {
             return self.requirement_template();

@@ -116,6 +116,7 @@ pub fn has_commits(root: &Path) -> Result<bool> {
 /// Turns what a person typed into a commit. Accepts anything git does (a
 /// branch, a tag, `HEAD~3`, a hash), `date:YYYY-MM-DD` for the last commit
 /// on or before that day, and a spec release tag without its `specs-` prefix.
+// spec: REQ-REVISIONS-0001
 pub fn resolve_rev(root: &Path, spec: &str) -> Result<Revision> {
     require_repository(root, "history commands")?;
     let oid = if let Some(date) = spec.strip_prefix("date:") {

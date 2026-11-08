@@ -94,6 +94,7 @@ pub fn change_status(
     Ok(())
 }
 
+// spec: REQ-CHANGE-0004
 pub fn change_list(
     root: &Path,
     status: Option<&str>,
