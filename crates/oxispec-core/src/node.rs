@@ -153,6 +153,9 @@ pub struct Node {
     /// `architecture` blocks, read by [`crate::architecture`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub architecture: Vec<TextBlock>,
+    /// `entity` blocks, read by [`crate::entities`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub entities: Vec<TextBlock>,
     /// Headings of level 2 and 3 outside code blocks.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub headings: Vec<Heading>,
@@ -195,6 +198,7 @@ pub const KNOWN_TYPES: &[&str] = &[
     "prd",
     "risk",
     "test-plan",
+    "entity",
 ];
 
 /// Link kinds known to this version (design section 4). Others get a
@@ -218,4 +222,5 @@ pub const KNOWN_LINK_KINDS: &[&str] = &[
     "arises-from",
     "mitigated-by",
     "covers",
+    "about",
 ];

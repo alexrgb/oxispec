@@ -194,6 +194,10 @@ pub const CODES: &[(&str, &str)] = &[
     ),
     ("E040", "A test plan has a status or date that is not valid"),
     (
+        "E041",
+        "An entity block cannot be read, has no name, or shares its name with another entity",
+    ),
+    (
         "W012",
         "A decision is superseded by another, but its status still says it is in force",
     ),
@@ -223,6 +227,7 @@ pub const CODES: &[(&str, &str)] = &[
         "W023",
         "An operation states no 401 or 403 response, though other operations do",
     ),
+    ("W024", "A node is `about` something that is not an entity"),
     ("I001", "A link to another project is not checked"),
     (
         "I002",

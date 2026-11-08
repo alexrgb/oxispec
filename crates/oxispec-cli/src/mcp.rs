@@ -369,6 +369,16 @@ impl Server<'_> {
                 &[],
                 false,
             ));
+            tools.push(tool(
+                "spec_entities",
+                "The entities the specs are about (orders, users, sessions) with their typed attributes, and for each the nodes that depend on it: those that link to it with `about` or another link, those whose claims use its attributes, and the nodes that link to those. Use it before changing a requirement or an entity, to see what else the change touches.",
+                json!({
+                    "id": {"type": "string", "description": "Only this entity, for example ENT-0001. Without it, every entity with the number of dependents."},
+                    "depth": {"type": "integer", "minimum": 1, "maximum": 5, "default": 2, "description": "How many links away a dependency is followed"},
+                }),
+                &[],
+                false,
+            ));
         }
         if self.cfg.has("architecture") {
             tools.push(tool(
@@ -534,6 +544,16 @@ impl Server<'_> {
                 let variable = optional_variable(args, "variable")?;
                 if let Some(variable) = &variable {
                     cmd.extend(["--var", variable]);
+                }
+                self.cli(&cmd)
+            }
+            // spec: REQ-ENTITY-0006
+            "spec_entities" => {
+                let depth = number_arg(args, "depth", 2, 1, 5)?.to_string();
+                let mut cmd = vec!["entities", "--json", "--depth", &depth];
+                let node = optional_id(args, "id")?;
+                if let Some(node) = &node {
+                    cmd.push(node);
                 }
                 self.cli(&cmd)
             }

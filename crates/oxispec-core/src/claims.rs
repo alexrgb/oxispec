@@ -204,10 +204,10 @@ pub struct Vocabulary {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Spec {
+pub(crate) struct Spec {
     #[serde(rename = "type")]
-    kind: Kind,
-    values: Option<Vec<String>>,
+    pub(crate) kind: Kind,
+    pub(crate) values: Option<Vec<String>>,
 }
 
 fn is_word(text: &str) -> bool {
@@ -222,7 +222,7 @@ fn is_reserved(text: &str) -> bool {
     RESERVED.contains(&text.to_ascii_lowercase().as_str())
 }
 
-fn variable_from(name: &str, spec: Spec, node: &str) -> Result<Variable, String> {
+pub(crate) fn variable_from(name: &str, spec: Spec, node: &str) -> Result<Variable, String> {
     if !is_word(name) || name.contains('-') || is_reserved(name) {
         return Err(format!(
             "`{name}` is not a variable name: use letters, digits, `_` and `.`, and not a keyword"
@@ -297,6 +297,7 @@ fn read_vocabulary(graph: &Graph, out: &mut Vec<Finding>) -> Vocabulary {
                 }
             }
         }
+        crate::entities::declare(node, &mut vocab, out);
     }
     vocab
 }
@@ -931,7 +932,7 @@ fn compute(graph: &Graph) -> Analysis {
     if !graph
         .nodes
         .iter()
-        .any(|n| !n.claims.is_empty() || !n.vocabulary.is_empty())
+        .any(|n| !n.claims.is_empty() || !n.vocabulary.is_empty() || !n.entities.is_empty())
     {
         return analysis;
     }

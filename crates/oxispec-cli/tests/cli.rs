@@ -7006,3 +7006,202 @@ fn every_relative_link_in_the_guide_and_the_reference_points_at_a_file() {
     }
     assert!(checked >= 20, "only {checked} links were checked");
 }
+
+/// A project with an entity `order` (ENT-0001) that has two attributes, and a requirement that is
+/// about it and one that claims something about `order.total`. The first commit is on `main`.
+fn entity_project(p: &Path) {
+    git(p, &["init", "-q", "-b", "main"]);
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    let out = run(p, &["new", "entity", "Order"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("ENT-0001"), "{}", out.stdout);
+    let file = p.join("specs/entities/0001-order.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        text.replace(
+            "#  total: {type: int}\n#  status: {type: enum, values: [open, paid, shipped]}",
+            "  total: {type: int}\n  status: {type: enum, values: [open, paid, shipped]}",
+        ),
+    )
+    .unwrap();
+    run(p, &["new", "requirement", "orders", "Pay an order"]);
+    let out = run(p, &["link", "REQ-ORDERS-0001", "about", "ENT-0001"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    run(p, &["new", "requirement", "orders", "Limit an order"]);
+    let limit = p.join("specs/requirements/orders/limit-an-order.md");
+    let text = fs::read_to_string(&limit).unwrap();
+    fs::write(
+        &limit,
+        format!(
+            "{}\n```claims\norder.total <= 1000\n```\n",
+            text.replace("status: draft", "status: accepted")
+        ),
+    )
+    .unwrap();
+    commit_all(p, "an order entity");
+    git(p, &["checkout", "-q", "-b", "feature"]);
+}
+
+// verifies: REQ-ENTITY-0004.S1
+// verifies: REQ-ENTITY-0004.S2
+#[test]
+fn entities_are_made_listed_and_followed_to_what_depends_on_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    entity_project(p);
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+
+    let out = run(p, &["entities"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("ENT-0001  order"), "{}", out.stdout);
+    assert!(out.stdout.contains("order.total  int"), "{}", out.stdout);
+    assert!(
+        out.stdout
+            .contains("order.status  enum: open, paid, shipped"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("2 depend on it"), "{}", out.stdout);
+
+    let out = run(p, &["entities", "ENT-0001"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("REQ-ORDERS-0001"), "{}", out.stdout);
+    assert!(out.stdout.contains("(about ENT-0001)"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("(claims order.total)"),
+        "{}",
+        out.stdout
+    );
+
+    let v = json(&run(p, &["entities", "ENT-0001", "--json"]));
+    assert_eq!(v["schema_version"], 1);
+    assert_eq!(v["entities"][0]["attributes"]["total"]["type"], "int");
+    assert_eq!(v["entities"][0]["affected"].as_array().unwrap().len(), 2);
+    assert_eq!(v["entities"][0]["affected"][0]["distance"], 1);
+
+    let out = run(p, &["entities", "ENT-0099"]);
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("no entity ENT-0099"), "{}", out.stderr);
+
+    let other = tempfile::tempdir().unwrap();
+    assert_eq!(run(other.path(), &["init", "--preset", "minimal"]).code, 0);
+    for args in [&["entities"][..], &["new", "entity", "Order"][..]] {
+        let out = run(other.path(), args);
+        assert_eq!(out.code, 2, "{args:?}");
+        assert!(out.stderr.contains("consistency"), "{}", out.stderr);
+    }
+}
+
+// verifies: REQ-ENTITY-0005.S1
+#[test]
+fn ci_says_what_an_entity_change_touches_and_whether_it_can_break_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    entity_project(p);
+    // Nothing changed in the entity: nothing is said about it.
+    let out = run(p, &["ci", "--base", "main", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert_eq!(json(&out)["entities"].as_array().unwrap().len(), 0);
+
+    // A new value is compatible, and a removed attribute is not.
+    let file = p.join("specs/entities/0001-order.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        text.replace("shipped]", "shipped, returned]")
+            .replace("  total: {type: int}\n", ""),
+    )
+    .unwrap();
+    let out = run(p, &["ci", "--base", "main", "--json"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    let v = json(&out);
+    let e = &v["entities"][0];
+    assert_eq!(e["id"], "ENT-0001");
+    let kinds: Vec<(&str, bool)> = e["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| {
+            (
+                c["kind"].as_str().unwrap(),
+                c["breaking"].as_bool().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        [("values-added", false), ("attribute-removed", true)],
+        "{e}"
+    );
+    let depends: Vec<&str> = e["affected"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(depends, ["REQ-ORDERS-0001", "REQ-ORDERS-0002"], "{e}");
+    // The claim on the attribute that is gone is an error of its own, which is what fails the run.
+    assert!(
+        v["new_findings"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("order.total"),
+        "{v}"
+    );
+
+    let out = run(p, &["ci", "--base", "main"]);
+    assert!(
+        out.stdout.contains("entity ENT-0001 (order) [breaking]"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("2 depend on it"), "{}", out.stdout);
+    let md = p.join("report.md");
+    run(
+        p,
+        &["ci", "--base", "main", "--markdown", md.to_str().unwrap()],
+    );
+    let comment = fs::read_to_string(md).unwrap();
+    assert!(comment.contains("1 entity changed"), "{comment}");
+    assert!(comment.contains("`ENT-0001` (order)"), "{comment}");
+    assert!(comment.contains("`REQ-ORDERS-0002`"), "{comment}");
+}
+
+// verifies: REQ-ENTITY-0006.S1
+#[test]
+fn mcp_offers_the_entities_tool_with_the_consistency_module() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    entity_project(p);
+    let listed = |p: &Path| {
+        tool_names(&mcp(
+            p,
+            &[],
+            &[
+                rpc(
+                    1,
+                    "initialize",
+                    serde_json::json!({"protocolVersion": "2025-06-18"}),
+                ),
+                rpc(2, "tools/list", serde_json::json!({})),
+            ],
+        ))
+    };
+    assert!(listed(p).contains(&"spec_entities".to_string()));
+    let (is_error, text) = call_tool(p, "spec_entities", serde_json::json!({"id": "ENT-0001"}));
+    assert!(!is_error, "{text}");
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["entities"][0]["name"], "order");
+    assert_eq!(v["entities"][0]["affected"].as_array().unwrap().len(), 2);
+    let (is_error, _) = call_tool(p, "spec_entities", serde_json::json!({"id": "--json"}));
+    assert!(is_error);
+    let (is_error, _) = call_tool(p, "spec_entities", serde_json::json!({"depth": 9}));
+    assert!(is_error);
+
+    let other = tempfile::tempdir().unwrap();
+    assert_eq!(run(other.path(), &["init", "--preset", "minimal"]).code, 0);
+    assert_eq!(run(other.path(), &["modules", "add", "mcp"]).code, 0);
+    assert!(!listed(other.path()).contains(&"spec_entities".to_string()));
+}

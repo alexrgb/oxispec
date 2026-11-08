@@ -93,6 +93,10 @@ If one variable's claims meet in more than 4096 combinations, the checker looks 
 
 Tested on 4,000 claims on one variable: a check takes about 1.5 seconds. A project without claims pays nothing.
 
+## Entities
+
+The variables of a thing that many requirements talk about can be declared on an [entity](entities.md) instead, as `ENTITY.ATTRIBUTE`. A change to the entity then shows what depends on it.
+
 ## Not yet
 
 - Claims about state machines, APIs and architecture rules (later iterations).
