@@ -14,3 +14,7 @@ The system SHALL add the MCP server to the config files of Claude Code, Cursor, 
 #### Scenario: Refusal {#S2}
 - **WHEN** a client is unknown or a file has comments it cannot merge
 - **THEN** the command exits with 2 and says to edit by hand, and no other file is written and the file is unchanged
+
+```claims
+exit.refusal == 2
+```

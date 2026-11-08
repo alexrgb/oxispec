@@ -4,6 +4,7 @@ modules:
 - specs
 - tests
 - adrs
+- consistency
 - debt
 - ci
 topology: single

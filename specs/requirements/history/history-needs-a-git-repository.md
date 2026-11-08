@@ -14,3 +14,7 @@ The system SHALL say that a git repository is needed for the commands that read 
 #### Scenario: No commits {#S2}
 - **WHEN** a node exists in a repository without commits
 - **THEN** history says it was created and not committed
+
+```claims
+exit.refusal == 2
+```

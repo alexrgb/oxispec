@@ -22,3 +22,7 @@ The system SHALL put a node, or every node with `--all`, back to how it was at a
 #### Scenario: Bad input {#S4}
 - **WHEN** no node is named, a node and `--all` are given together, a node or a revision does not exist, or the folder is not a repository
 - **THEN** the command exits with 2 and says what is wrong (name the nodes, not both, no such node, unknown revision, needs a git repository), and no file changes
+
+```claims
+exit.refusal == 2
+```

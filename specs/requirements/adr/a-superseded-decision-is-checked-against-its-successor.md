@@ -10,3 +10,8 @@ The system SHALL warn when a decision that a later decision supersedes does not 
 #### Scenario: A successor {#S1}
 - **WHEN** a decision supersedes another that is still marked accepted
 - **THEN** `check` warns and passes, `check --strict` fails, and after the first is marked superseded it passes
+
+```claims
+for strict: warnings.fail
+for not strict: not warnings.fail
+```

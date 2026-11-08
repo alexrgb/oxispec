@@ -72,3 +72,19 @@ Nothing is left out of the scan (`trace.exclude` is empty). For Rust, Go, TypeSc
 ## Publishing
 
 `oxispec site --out public` builds a page for each of these nodes, with what links to each. Publishing it needs a host and a decision about the repository's visibility, which is not made yet.
+
+## Claims in the project's own specs
+
+The project uses its own claims too. The vocabulary `VOC-0001` ([specs/vocabulary](../specs/vocabulary/0001-words-of-the-oxispec-specs.md)) declares a few variables, and 13 requirements carry a `claims` block for values that the specs state in words in several places:
+
+| Variable | Says | Where |
+|---|---|---|
+| `exit.refusal` | A command that refuses bad input exits with 2 | `REQ-PROJECT-0003`, `REQ-CHECKING-0001`, `REQ-HISTORY-0002`, `REQ-ROLLBACK-0004`, `REQ-CONNECT-0001` |
+| `exit.findings` | A check that finds errors exits with 1 | `REQ-LINK-0003`, `REQ-CLAIMS-0003`, `REQ-FORMATS-0002`, `REQ-SUSPECT-0002` |
+| `mcp.resources_page_size` | A page of MCP resources has 500 nodes | `REQ-MCP-0007` |
+| `warnings.fail` | A warning fails `check` and `ci` only with `--strict` | `REQ-ADR-0003`, `REQ-CI-0001` |
+| `serve.starts` | The server does not start without a token, or on an open address without a TLS proxy | `REQ-SERVE-0002` |
+
+The `specs` job in CI runs `oxispec check`, so a requirement that changes one of these values without the others is an error (E019), as it should be: the exit codes are a promise to scripts. A trial run confirmed it: changing one of the `exit.findings` claims to 2 gave `E019` naming both requirements, and restoring it gave a clean check.
+
+Only 13 of the 126 requirements have claims. A claim says one thing about one variable, so it fits a number, a flag or a choice that is repeated, and not most of what the requirements say. They are added where a value is stated twice.

@@ -14,3 +14,7 @@ The system SHALL write a decision in the profile the config or `--format` names,
 #### Scenario: An unknown profile {#S2}
 - **WHEN** the config names a profile that does not exist
 - **THEN** `check` exits with 1 and reports E031 against `.oxispec/config.yaml`
+
+```claims
+exit.findings == 1
+```

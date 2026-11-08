@@ -14,3 +14,8 @@ The system SHALL report, with `oxispec ci`, only the errors and warnings a chang
 #### Scenario: Warnings {#S2}
 - **WHEN** a change adds only a warning
 - **THEN** the run passes and says there is a new warning, and with `--strict` it fails
+
+```claims
+for strict: warnings.fail
+for not strict: not warnings.fail
+```

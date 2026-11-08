@@ -10,3 +10,7 @@ The system SHALL report with E009 a link to a scenario that the node does not ha
 #### Scenario: A missing scenario {#S1}
 - **WHEN** a node links to `REQ-AUTH-0001.S9` and the requirement has no such scenario
 - **THEN** `check` exits with 1 and reports E009 with `S9`
+
+```claims
+exit.findings == 1
+```
