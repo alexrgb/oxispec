@@ -533,6 +533,7 @@ fn field<'a>(node: &'a Node, name: &str) -> Option<&'a str> {
 }
 
 // spec: REQ-STYLE-0002
+// spec: REQ-FORMATS-0001
 pub fn check(graph: &Graph) -> Vec<Finding> {
     let formats = &graph.formats;
     let mut out = formats.problems.clone();
@@ -602,6 +603,7 @@ pub fn check(graph: &Graph) -> Vec<Finding> {
 /// decision is superseded when a decision that is in force links `supersedes`
 /// to it, and not otherwise. A successor that is still proposed or was rejected
 /// has not replaced anything yet.
+// spec: REQ-ADR-0003
 fn superseded(graph: &Graph, out: &mut Vec<Finding>) {
     let uses_it = |node: &Node| {
         graph

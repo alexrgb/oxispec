@@ -245,6 +245,7 @@ pub fn diff_command(
 
 /// `oxispec tag`: with a name, creates the tag `specs-<name>`. Without one,
 /// lists the spec tags.
+// spec: REQ-TAGS-0001
 pub fn tag_command(
     root: &Path,
     name: Option<&str>,

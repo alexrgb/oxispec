@@ -26,6 +26,7 @@ fn run(dir: &Path, args: &[&str]) -> Out {
     }
 }
 
+// verifies: REQ-PROJECT-0001.S1
 #[test]
 fn init_new_check_show_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
@@ -78,6 +79,7 @@ fn init_new_check_show_roundtrip() {
     assert!(out.stdout.contains("\"errors\": 1"));
 }
 
+// verifies: REQ-PROJECT-0002.S1
 #[test]
 fn modules_follow_dependency_rules() {
     let dir = tempfile::tempdir().unwrap();
@@ -101,6 +103,7 @@ fn modules_follow_dependency_rules() {
     assert!(out.stderr.contains("module `specs` is not enabled"));
 }
 
+// verifies: REQ-PROJECT-0002.S2
 #[test]
 fn init_rejects_a_preset_that_leaves_out_a_needed_module() {
     let dir = tempfile::tempdir().unwrap();
@@ -112,6 +115,7 @@ fn init_rejects_a_preset_that_leaves_out_a_needed_module() {
     assert!(out.stderr.contains("needs it"), "{}", out.stderr);
 }
 
+// verifies: REQ-PROJECT-0003.S1
 #[test]
 fn commands_outside_a_project_explain_what_to_do() {
     let dir = tempfile::tempdir().unwrap();
@@ -237,6 +241,7 @@ fn check_reports_a_link_to_a_missing_scenario() {
     assert!(out.stdout.contains("{#S9}"), "{}", out.stdout);
 }
 
+// verifies: REQ-ROBUSTNESS-0002.S2
 #[test]
 fn random_ids_do_not_collide() {
     let dir = tempfile::tempdir().unwrap();
@@ -277,6 +282,7 @@ fn random_ids_do_not_collide() {
     assert!(out.stdout.contains("REQ-ORD-0001"), "{}", out.stdout);
 }
 
+// verifies: REQ-CHECKING-0002.S1
 #[test]
 fn json_output_carries_a_schema_version() {
     let dir = tempfile::tempdir().unwrap();
@@ -296,6 +302,7 @@ fn json_output_carries_a_schema_version() {
     }
 }
 
+// verifies: REQ-PROJECT-0003.S2
 #[test]
 fn a_project_written_by_a_newer_oxispec_is_refused() {
     let dir = tempfile::tempdir().unwrap();
@@ -313,6 +320,7 @@ fn a_project_written_by_a_newer_oxispec_is_refused() {
     }
 }
 
+// verifies: REQ-PROJECT-0001.S2
 #[test]
 fn a_project_from_iteration_one_without_format_still_works() {
     let dir = tempfile::tempdir().unwrap();
@@ -355,6 +363,7 @@ fn age_markdown_files(dir: &Path) {
     }
 }
 
+// verifies: REQ-INDEX-0001.S1
 #[test]
 fn index_parses_files_once_and_then_reuses_them() {
     let dir = tempfile::tempdir().unwrap();
@@ -396,6 +405,7 @@ fn index_parses_files_once_and_then_reuses_them() {
     );
 }
 
+// verifies: REQ-INDEX-0001.S2
 #[test]
 fn commands_give_the_same_answers_with_and_without_the_cache() {
     let dir = tempfile::tempdir().unwrap();
@@ -421,6 +431,7 @@ fn commands_give_the_same_answers_with_and_without_the_cache() {
     assert!(cold.stdout.contains("E002"), "{}", cold.stdout);
 }
 
+// verifies: REQ-INDEX-0001.S3
 #[test]
 fn no_cache_leaves_no_cache_behind_and_index_refuses_it() {
     let dir = tempfile::tempdir().unwrap();
@@ -436,6 +447,7 @@ fn no_cache_leaves_no_cache_behind_and_index_refuses_it() {
     assert!(out.stderr.contains("--no-cache"), "{}", out.stderr);
 }
 
+// verifies: REQ-INDEX-0001.S4
 #[test]
 fn a_damaged_cache_is_replaced_without_an_error() {
     let dir = tempfile::tempdir().unwrap();
@@ -514,6 +526,7 @@ fn committed_project_with_an_old_error(p: &Path) {
     git(p, &["commit", "-q", "-m", "base"]);
 }
 
+// verifies: REQ-CHECKING-0001.S1
 #[test]
 fn check_changed_reports_only_what_the_change_touches() {
     let dir = tempfile::tempdir().unwrap();
@@ -577,6 +590,7 @@ fn check_changed_reports_only_what_the_change_touches() {
     assert_eq!(report["errors"], 1);
 }
 
+// verifies: REQ-CHECKING-0001.S2
 #[test]
 fn check_changed_can_compare_with_an_older_commit() {
     let dir = tempfile::tempdir().unwrap();
@@ -606,6 +620,7 @@ fn check_changed_can_compare_with_an_older_commit() {
     assert!(out.stderr.contains("unknown git ref"), "{}", out.stderr);
 }
 
+// verifies: REQ-CHECKING-0001.S3
 #[test]
 fn check_changed_in_a_repository_without_commits_checks_everything() {
     let dir = tempfile::tempdir().unwrap();
@@ -622,6 +637,7 @@ fn check_changed_in_a_repository_without_commits_checks_everything() {
     );
 }
 
+// verifies: REQ-CHECKING-0001.S3
 #[test]
 fn check_changed_outside_a_git_repository_explains_itself() {
     let dir = tempfile::tempdir().unwrap();
@@ -1207,6 +1223,7 @@ fn rollback_explains_bad_input() {
     assert!(out.stderr.contains("git repository"), "{}", out.stderr);
 }
 
+// verifies: REQ-TAGS-0001.S1
 #[test]
 fn tags_name_revisions_and_work_with_at() {
     let dir = tempfile::tempdir().unwrap();
@@ -1265,6 +1282,7 @@ fn tags_name_revisions_and_work_with_at() {
     assert!(out.stderr.contains("give it a name"), "{}", out.stderr);
 }
 
+// verifies: REQ-TAGS-0001.S2
 #[test]
 fn a_tag_says_when_spec_changes_are_left_out() {
     let dir = tempfile::tempdir().unwrap();
@@ -1697,6 +1715,7 @@ fn ci_project(p: &Path) {
     git(p, &["checkout", "-q", "-b", "feature"]);
 }
 
+// verifies: REQ-CI-0001.S1
 #[test]
 fn ci_reports_only_what_the_change_introduced() {
     let dir = tempfile::tempdir().unwrap();
@@ -1744,6 +1763,7 @@ fn ci_reports_only_what_the_change_introduced() {
     );
 }
 
+// verifies: REQ-CI-0002.S1
 #[test]
 fn ci_writes_sarif_junit_and_a_pull_request_comment() {
     let dir = tempfile::tempdir().unwrap();
@@ -1805,6 +1825,7 @@ fn ci_writes_sarif_junit_and_a_pull_request_comment() {
     );
 }
 
+// verifies: REQ-CI-0001.S2
 #[test]
 fn ci_warnings_fail_only_with_strict() {
     let dir = tempfile::tempdir().unwrap();
@@ -1827,6 +1848,7 @@ fn ci_warnings_fail_only_with_strict() {
     assert_eq!(run(p, &["ci", "--base", "main", "--strict"]).code, 1);
 }
 
+// verifies: REQ-CI-0003.S1
 #[test]
 fn ci_compares_with_where_the_branch_started_not_with_newer_work_on_the_base() {
     let dir = tempfile::tempdir().unwrap();
@@ -1851,6 +1873,7 @@ fn ci_compares_with_where_the_branch_started_not_with_newer_work_on_the_base() {
     assert_eq!(added[0]["id"], "REQ-AUTH-0003");
 }
 
+// verifies: REQ-CI-0003.S2
 #[test]
 fn ci_explains_a_missing_base() {
     let dir = tempfile::tempdir().unwrap();
@@ -2537,6 +2560,7 @@ fn skill_files(root: &Path) -> Vec<std::path::PathBuf> {
     found
 }
 
+// verifies: REQ-AGENTS-0001.S1
 #[test]
 fn init_writes_skills_for_the_four_clients() {
     let dir = tempfile::tempdir().unwrap();
@@ -2564,6 +2588,7 @@ fn init_writes_skills_for_the_four_clients() {
     assert_eq!(out.code, 0, "{}", out.stdout);
 }
 
+// verifies: REQ-AGENTS-0001.S2
 #[test]
 fn init_can_choose_the_clients_or_none() {
     let dir = tempfile::tempdir().unwrap();
@@ -2606,6 +2631,7 @@ fn init_can_choose_the_clients_or_none() {
     assert!(out.stderr.contains("`agents` module"), "{}", out.stderr);
 }
 
+// verifies: REQ-AGENTS-0002.S1
 #[test]
 fn a_project_without_the_agents_module_writes_nothing() {
     let dir = tempfile::tempdir().unwrap();
@@ -2623,6 +2649,7 @@ fn a_project_without_the_agents_module_writes_nothing() {
     assert!(!p.join(".claude/skills/oxispec-write-adr").exists());
 }
 
+// verifies: REQ-AGENTS-0002.S2
 #[test]
 fn update_keeps_hand_edits_and_check_reports_drift() {
     let dir = tempfile::tempdir().unwrap();
@@ -2687,6 +2714,7 @@ fn update_keeps_hand_edits_and_check_reports_drift() {
     assert_eq!(run(p, &["agents", "check"]).code, 0);
 }
 
+// verifies: REQ-AGENTS-0002.S3
 #[test]
 fn project_notes_are_added_and_refresh_unedited_files() {
     let dir = tempfile::tempdir().unwrap();
@@ -2730,6 +2758,7 @@ fn project_notes_are_added_and_refresh_unedited_files() {
     assert_eq!(run(p, &["agents", "check"]).code, 0);
 }
 
+// verifies: REQ-AGENTS-0003.S1
 #[test]
 fn export_writes_the_layouts_other_tools_read() {
     let dir = tempfile::tempdir().unwrap();
@@ -2781,6 +2810,7 @@ fn export_writes_the_layouts_other_tools_read() {
     assert!(!other.path().join("skills/oxispec-release").exists());
 }
 
+// verifies: REQ-AGENTS-0003.S2
 #[test]
 fn the_published_skills_folder_matches_the_generator() {
     let generated = tempfile::tempdir().unwrap();
@@ -2843,6 +2873,7 @@ fn invocations(text: &str) -> Vec<String> {
     found
 }
 
+// verifies: REQ-AGENTS-0003.S3
 #[test]
 fn every_command_a_skill_names_exists() {
     let dir = tempfile::tempdir().unwrap();
@@ -4057,6 +4088,7 @@ fn the_library_dependency_version_matches_the_release_version() {
     );
 }
 
+// verifies: REQ-ROBUSTNESS-0002.S1
 #[test]
 fn new_commands_running_at_once_get_different_ids() {
     let dir = tempfile::tempdir().unwrap();
@@ -4091,6 +4123,7 @@ fn new_commands_running_at_once_get_different_ids() {
     assert_eq!(v["nodes"], 32, "{v}");
 }
 
+// verifies: REQ-ROBUSTNESS-0001.S2
 #[test]
 fn a_closed_pipe_ends_the_program_quietly() {
     use std::process::Stdio;
@@ -4109,6 +4142,7 @@ fn a_closed_pipe_ends_the_program_quietly() {
     assert!(!stderr.contains("panicked"), "{stderr}");
 }
 
+// verifies: REQ-ROBUSTNESS-0001.S1
 #[test]
 fn hostile_files_never_make_a_command_panic() {
     let dir = tempfile::tempdir().unwrap();
@@ -4209,6 +4243,7 @@ fn links_added_at_the_same_time_to_one_file_are_all_kept() {
     assert_eq!(links.len(), 8, "{v}");
 }
 
+// verifies: REQ-AGENTS-0001.S3
 #[test]
 fn agents_list_names_clients_and_skills_and_bad_client_names_are_refused() {
     let dir = tempfile::tempdir().unwrap();
@@ -4265,6 +4300,7 @@ fn agents_list_names_clients_and_skills_and_bad_client_names_are_refused() {
     assert_eq!(fs::read_to_string(&skill).unwrap(), "my own text\n");
 }
 
+// verifies: REQ-AGENTS-0001.S2
 #[test]
 fn init_refuses_unknown_clients_and_none_combined_with_others() {
     let dir = tempfile::tempdir().unwrap();
@@ -4321,6 +4357,7 @@ fn a_small_budget_leaves_related_nodes_as_pointers() {
     assert_eq!(out.code, 2);
 }
 
+// verifies: REQ-CONNECT-0001.S1
 #[test]
 fn connect_writes_the_mcp_entry_and_keeps_other_settings() {
     let dir = tempfile::tempdir().unwrap();
@@ -4354,6 +4391,7 @@ fn connect_writes_the_mcp_entry_and_keeps_other_settings() {
     );
 }
 
+// verifies: REQ-CONNECT-0001.S2
 #[test]
 fn connect_refuses_unknown_clients_and_files_it_cannot_merge() {
     let dir = tempfile::tempdir().unwrap();
@@ -4374,6 +4412,7 @@ fn connect_refuses_unknown_clients_and_files_it_cannot_merge() {
     );
 }
 
+// verifies: REQ-STATUS-0001.S1
 #[test]
 fn status_summarizes_the_project_in_text_and_json() {
     let dir = tempfile::tempdir().unwrap();
@@ -4991,6 +5030,7 @@ fn a_revoked_token_stops_working_and_every_request_is_audited() {
     );
 }
 
+// verifies: REQ-CONNECT-0002.S1
 #[test]
 fn connect_can_point_clients_at_a_running_server_without_writing_a_token() {
     let dir = tempfile::tempdir().unwrap();
@@ -5044,6 +5084,7 @@ fn project_with_light_adrs(p: &Path) {
     fs::write(&config, format!("{text}{LIGHT_ADR}")).unwrap();
 }
 
+// verifies: REQ-FORMATS-0001.S1
 #[test]
 fn a_profile_shapes_new_and_check_enforces_it() {
     let dir = tempfile::tempdir().unwrap();
@@ -5081,6 +5122,7 @@ fn a_profile_shapes_new_and_check_enforces_it() {
     assert!(out.stdout.contains("\"E028\"") && out.stdout.contains("ADR-0001"));
 }
 
+// verifies: REQ-FORMATS-0001.S2
 #[test]
 fn formats_list_and_show_describe_the_profiles() {
     let dir = tempfile::tempdir().unwrap();
@@ -5279,6 +5321,7 @@ fn the_adr_formats_write_their_templates_and_hold_new_records_to_them() {
     );
 }
 
+// verifies: REQ-ADR-0003.S1
 #[test]
 fn a_superseded_decision_is_checked_against_its_successor() {
     let dir = tempfile::tempdir().unwrap();
@@ -5326,6 +5369,7 @@ fn a_superseded_decision_is_checked_against_its_successor() {
 
 const OLD_NYGARD: &str = "---\nid: ADR-0001\ntype: adr\nstatus: accepted\ndate: 2026-01-02\n---\n# ADR-0001: Use Postgres\n\n## Context\n\nWe need transactions.\n\n## Decision\n\nWe will use Postgres.\n\n## Consequences\n\nOps must run it.\n";
 
+// verifies: REQ-ADR-0001.S1
 #[test]
 fn adr_convert_rewrites_a_decision_and_a_second_run_changes_nothing() {
     let dir = tempfile::tempdir().unwrap();
@@ -5362,6 +5406,7 @@ fn adr_convert_rewrites_a_decision_and_a_second_run_changes_nothing() {
     );
 }
 
+// verifies: REQ-ADR-0001.S2
 #[test]
 fn adr_convert_refuses_what_is_not_an_adr_or_a_format() {
     let dir = tempfile::tempdir().unwrap();
@@ -5384,6 +5429,7 @@ fn adr_convert_refuses_what_is_not_an_adr_or_a_format() {
 const TOOLS_ONE: &str = "# 1. Record architecture decisions\n\nDate: 2016-02-12\n\n## Status\n\nSuperceded by [2. Use Rust](0002-use-rust.md)\n\n## Context\n\nWe need to record decisions.\n\n## Decision\n\nWe will record them.\n\n## Consequences\n\nSee the article.\n";
 const TOOLS_TWO: &str = "# 2. Use Rust\n\nDate: 2016-03-01\n\n## Status\n\nAccepted\n\nSupercedes [1. Record architecture decisions](0001-record-architecture-decisions.md)\n\n## Context\n\nSpeed.\n\n## Decision\n\nRust.\n\n## Consequences\n\nSlower builds.\n";
 
+// verifies: REQ-ADR-0002.S1
 #[test]
 fn import_adr_brings_in_adr_tools_records_that_then_pass_check() {
     let dir = tempfile::tempdir().unwrap();
@@ -5442,6 +5488,7 @@ fn import_adr_brings_in_adr_tools_records_that_then_pass_check() {
     );
 }
 
+// verifies: REQ-ADR-0002.S1
 #[test]
 fn import_adr_reads_madr_and_log4brains_and_new_link_kinds_are_known() {
     let dir = tempfile::tempdir().unwrap();

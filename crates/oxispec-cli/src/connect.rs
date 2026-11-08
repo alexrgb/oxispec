@@ -7,6 +7,8 @@ use anyhow::{Context, Result, bail};
 use oxispec_core::config;
 use oxispec_core::connect::{self, Outcome, TARGETS, Target, Transport};
 
+// spec: REQ-CONNECT-0001
+// spec: REQ-CONNECT-0002
 pub fn connect_command(
     root: &Path,
     asked: &[String],

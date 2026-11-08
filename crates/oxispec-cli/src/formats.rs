@@ -13,6 +13,7 @@ fn describe(profile: &Profile, chosen: bool) -> serde_json::Value {
     value
 }
 
+// spec: REQ-FORMATS-0001
 pub fn list(root: &Path, json: bool) -> Result<()> {
     let cfg = config::load(root)?;
     let (profiles, problems) = formats::available(&cfg);

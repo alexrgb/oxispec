@@ -975,6 +975,8 @@ enum ReleaseAction {
     },
 }
 
+// spec: REQ-PROJECT-0003
+// spec: REQ-ROBUSTNESS-0001
 fn main() -> ExitCode {
     // `oxispec ... | head` closes our output early. `outln!` panics on that, and the
     // panic message is noise: stop quietly, as other command line tools do.
@@ -1790,6 +1792,7 @@ fn ensure_module_dirs(root: &Path, cfg: &Config) -> Result<()> {
     Ok(())
 }
 
+// spec: REQ-PROJECT-0001
 fn init(
     dir: &Path,
     preset: &str,
@@ -1934,6 +1937,7 @@ fn warn_planned(names: &[String]) {
     }
 }
 
+// spec: REQ-PROJECT-0002
 fn modules_command(explicit: Option<&Path>, action: ModulesAction) -> Result<()> {
     match action {
         ModulesAction::List => {
@@ -2081,6 +2085,7 @@ fn load_graph(root: &Path, cache: bool) -> Graph {
     index::load(root, cache).0
 }
 
+// spec: REQ-INDEX-0001
 fn index_command(root: &Path, rebuild: bool, json: bool) -> Result<()> {
     config::load(root)?;
     if rebuild {
@@ -2115,6 +2120,8 @@ fn index_command(root: &Path, rebuild: bool, json: bool) -> Result<()> {
     Ok(())
 }
 
+// spec: REQ-CHECKING-0001
+// spec: REQ-CHECKING-0002
 fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<ExitCode> {
     config::load(root)?;
     let revision = options
@@ -2693,6 +2700,7 @@ impl Drop for ProjectLock {
     }
 }
 
+// spec: REQ-ROBUSTNESS-0002
 fn lock_project(root: &Path) -> Result<ProjectLock> {
     let dir = root.join(oxispec_core::index::CACHE_DIR);
     fs::create_dir_all(&dir)?;

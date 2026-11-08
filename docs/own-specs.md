@@ -27,6 +27,17 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-ARCHITECTURE-0001` to `0003` | Elements keep their structure; views come from one model; a broken rule names its path |
 | `REQ-MODULES-0001` | A command needs its module, and so does its MCP tool |
 | `REQ-LIBRARY-0001` | The examples of the library run |
+| `REQ-PROJECT-0001` to `0003` | A project starts and its first nodes pass the checks; modules follow their dependencies; a command says what to do outside a project |
+| `REQ-INDEX-0001` | The local index is reused and never changes an answer |
+| `REQ-CHECKING-0001`, `0002` | Check can look only at what a change touches; JSON output says which schema it has |
+| `REQ-CI-0001` to `0003` | `ci` reports only what the change introduced; it writes reports for the tools around it; it compares with where the branch started |
+| `REQ-AGENTS-0001` to `0003` | Skills are written for the chosen clients; they do not drift and hand edits are kept; they can be exported and name real commands |
+| `REQ-CONNECT-0001`, `0002` | `connect` adds the server to the clients' config; it can point at a running server |
+| `REQ-STATUS-0001` | `status` summarizes the project |
+| `REQ-ADR-0001` to `0003` | A decision can be converted; decisions are imported from other tools; a superseded decision is checked against its successor |
+| `REQ-FORMATS-0001` | A format profile shapes a node |
+| `REQ-TAGS-0001` | A tag names a revision of the specs |
+| `REQ-ROBUSTNESS-0001`, `0002` | No input makes a command panic; commands that write at the same time do not collide |
 | `REQ-TRACE-0001` to `0004` | Annotations are read from comments; coverage is counted from annotations; only a real comment is an annotation; the languages of the scan are configured |
 | `REQ-SUSPECT-0001` | A link goes suspect when either side changes |
 | `REQ-SEARCH-0001`, `0002` | Search finds what is written; the index follows the files |
