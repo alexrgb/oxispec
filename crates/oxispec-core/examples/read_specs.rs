@@ -50,9 +50,11 @@ fn main() {
     ]);
 
     for node in &graph.nodes {
-        // A requirement is named by its blocks; a decision, by its heading.
-        let title = node.title.as_deref().unwrap_or("");
-        println!("{}  {}  {}", node.id, node.ty, title);
+        // A decision has a heading. A requirement is named by its blocks, listed below.
+        match node.title.as_deref() {
+            Some(title) => println!("{}  {}  {title}", node.id, node.ty),
+            None => println!("{}  {}", node.id, node.ty),
+        }
         for (kind, targets) in &node.links {
             println!("    {kind} -> {}", targets.join(", "));
         }
