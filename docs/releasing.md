@@ -38,10 +38,30 @@ You can try the whole build without publishing: `dist plan` shows what a tag wou
 Do this before the first tag. The workflow fails, with a message that names the missing piece, until it is done.
 
 1. **Make the repository public**, or accept that releases stay private. Build provenance (`github-attestations`) needs a public repository or a plan that supports it for private ones. *Done: the repository is public.*
-2. **crates.io:** sign in with GitHub, create an API token that is allowed only to publish new crates and versions, and store it as the repository secret `CARGO_REGISTRY_TOKEN`. The names `oxispec` and `oxispec-core` were free when this was written. The first publish claims them, so check again.
-3. **npm:** create an account with two-factor authentication, create an *automation* token that can publish, and store it as the secret `NPM_TOKEN`. The name `oxispec` was free when this was written. A scoped name such as `@oxispec/oxispec` needs an npm organization, and then `npm-scope = "@oxispec"` goes in `dist-workspace.toml`.
-4. **Homebrew:** create the repository `alexrgb/homebrew-tap` (empty is fine), and a fine-grained personal access token with write access to its contents only. Store it as the secret `HOMEBREW_TAP_TOKEN`.
-5. In the repository settings, allow GitHub Actions to create releases (workflow permissions: read and write), and protect tags that match `v*` so only maintainers can create them.
+2. **crates.io.** Sign in at crates.io with GitHub and make sure the email of the account is verified (publishing needs it). Open Account Settings, API Tokens, and create a token with the scopes `publish-new` and `publish-update`, and an expiry you will remember to renew. Then store it, pasting the token when `gh` asks for it:
+
+   ```bash
+   gh secret set CARGO_REGISTRY_TOKEN --repo alexrgb/oxispec
+   ```
+
+   The names `oxispec` and `oxispec-core` were free on 2026-11-08. The first publish claims them, so check again on the day.
+3. **npm.** Create an account at npmjs.com and turn on two-factor authentication. Create an access token that can publish packages **without a one-time code**, because the workflow cannot type one (npm calls this an *automation* token, or a granular token with write access that bypasses two-factor authentication when publishing). The package `oxispec` does not exist yet, so the token has to be allowed to publish new packages, not only existing ones. The pages of npm have changed more than once, so use the wording on the screen as the guide. Then:
+
+   ```bash
+   gh secret set NPM_TOKEN --repo alexrgb/oxispec
+   ```
+
+   The name `oxispec` was free on 2026-11-08. A scoped name such as `@oxispec/oxispec` needs an npm organization, and then `npm-scope = "@oxispec"` goes in `dist-workspace.toml`.
+4. **Homebrew.** Create the repository `alexrgb/homebrew-tap` on GitHub, public, empty or with a README. Then create a fine-grained personal access token (Settings, Developer settings, Personal access tokens, Fine-grained tokens) whose resource owner is `alexrgb`, with access to **only** that repository and the permission *Contents: Read and write*. Give it an expiry. Store it:
+
+   ```bash
+   gh secret set HOMEBREW_TAP_TOKEN --repo alexrgb/oxispec
+   ```
+
+   The formula goes into the folder `Formula` of the tap, and users install with `brew install alexrgb/tap/oxispec`.
+5. **Repository settings.** In Settings, Actions, General, set the workflow permissions to read and write, so the workflow can create the release. In Settings, Rules, add a ruleset for the tags that match `v*` that restricts who can create, move and delete them, so only you can make a release.
+
+   A check that the secrets are there: `gh api repos/alexrgb/oxispec/actions/secrets --jq '[.secrets[].name]'` lists their names (never their values).
 
 Tokens are secrets of the repository, never of a pull request from a fork, and the release workflow only runs for tags.
 
@@ -58,7 +78,7 @@ Checked on 2026-11-08, before the first release. Repeat the checks on the day, s
 | Secret `NPM_TOKEN` | **Not set** | the same |
 | Secret `HOMEBREW_TAP_TOKEN` | **Not set** | the same |
 | Repository `alexrgb/homebrew-tap` | **Does not exist** | `gh repo view alexrgb/homebrew-tap` |
-| Tag protection for `v*` | Not checked | repository settings, Rules |
+| Tag protection for `v*` | Not checked | Settings, Rules |
 
 ## Before the first tag
 

@@ -8,19 +8,53 @@ Agent-first spec engine in Rust. Specs, ADRs, test cases, standards, API contrac
 
 ## Install
 
-Releases are not published yet, so for now build from source. When the first one is out, these will work (see [docs/releasing.md](docs/releasing.md)):
+**From source** works today. You need Rust 1.89 or newer and a C compiler (the parsers of tree-sitter are C):
 
 ```bash
-brew install alexrgb/tap/oxispec           # Homebrew
-npm install -g oxispec                     # npm
-cargo install oxispec                      # crates.io
-curl -LsSf https://github.com/alexrgb/oxispec/releases/latest/download/oxispec-installer.sh | sh
+git clone https://github.com/alexrgb/oxispec
+cd oxispec
+cargo install --path crates/oxispec-cli
+oxispec --version
 ```
+
+**A ready-made binary** is built for each release (see [docs/releasing.md](docs/releasing.md)), for macOS on Apple silicon and Intel, Linux on x86_64 and arm64, and Windows on x86_64. Nothing is published yet, and these commands work once version 0.1.0 is out. Pick one:
+
+```bash
+# macOS and Linux
+curl -LsSf https://github.com/alexrgb/oxispec/releases/latest/download/oxispec-installer.sh | sh
+brew install alexrgb/tap/oxispec           # Homebrew
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/alexrgb/oxispec/releases/latest/download/oxispec-installer.ps1 | iex"
+
+# Anywhere with Node
+npm install -g oxispec                     # or run it once with: npx oxispec --help
+
+# Anywhere with Rust (builds from source, so it needs a C compiler)
+cargo install oxispec
+```
+
+The shell and PowerShell installers put `oxispec` in `$CARGO_HOME/bin` (usually `~/.cargo/bin`), so that folder has to be on your `PATH`. Update with the same tool you installed with: `brew upgrade oxispec`, `npm update -g oxispec`, `cargo install oxispec` again, or run the installer again. Or download an archive from the [releases page](https://github.com/alexrgb/oxispec/releases) and put the binary where you like.
+
+Each archive has a checksum file and a build provenance attestation, so you can check that it was built from this repository by its workflow:
+
+```bash
+gh attestation verify oxispec-aarch64-apple-darwin.tar.xz --repo alexrgb/oxispec
+```
+
+The binaries are not signed for macOS or Windows. Downloaded in a browser, macOS may ask you to allow the first run. The installers and Homebrew do not trigger that.
+
+Then, in a folder of your project:
+
+```bash
+oxispec init --preset standard     # or: oxispec init --help
+```
+
+and read the [user guide](docs/guide/getting-started.md).
 
 ## Try it
 
 ```bash
-cargo install --path crates/oxispec-cli
 oxispec init --preset standard
 oxispec new requirement auth "Admin session timeout"
 oxispec new adr "Use Postgres"
