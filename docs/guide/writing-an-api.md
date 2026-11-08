@@ -90,6 +90,37 @@ api_index:
 
 The service must have the OpenAI-compatible embeddings API. Only plain `http://` works, which suits a model on your machine or in your network, and keeps the text of private specs there. A different embedder, or a different model, makes the next `api index` embed everything again, and `api search` refuses an index made by another embedder.
 
+### A model on your machine
+
+`oxispec` does not run a model and does not ship one, so the binary stays small. It asks a service that does. The model stays loaded in that service between your commands, so a search takes a moment and nothing is loaded each time. Two common ways to run one:
+
+**Ollama.** Install it, pull an embedding model, and let it run in the background:
+
+```bash
+ollama pull nomic-embed-text
+```
+
+and set `url: http://localhost:11434/v1/embeddings` and `model: nomic-embed-text` as above. By default Ollama unloads a model after a few minutes without use, and the next request loads it again. To keep it loaded, set the keep-alive time of the service (the variable `OLLAMA_KEEP_ALIVE`, where `-1` means never unload) before it starts.
+
+**llama.cpp, from a model file.** `llama-server` loads the file you name and serves it:
+
+```bash
+llama-server -m /path/to/model.gguf --embedding --port 8080
+```
+
+and set `url: http://localhost:8080/v1/embeddings`. The model stays loaded while the process runs. Use a model made for embeddings, not a chat model.
+
+Flags and names change between versions of these programs, so check them against the version you have. What `oxispec` needs from the service is only the OpenAI-compatible `POST /v1/embeddings`, over plain `http://`. A quick check that the service answers, before you index:
+
+```bash
+curl -s http://localhost:11434/v1/embeddings -H 'Content-Type: application/json' \
+  -d '{"model": "nomic-embed-text", "input": ["hello"]}'
+```
+
+The reply has `data[0].embedding`, a list of numbers. If it does, `oxispec api index` will work. If the service is not running when you index or search, `oxispec` stops with an error that names the address, and nothing in the index changes.
+
+`oxispec` does not start or stop the service for you. The vectors are stored in `.oxispec/cache/api-index.json`, so the service is needed only to index and to embed the question when you search.
+
 ## Security
 
 `oxispec check` warns (W023) about an operation that has no scenario responding with `401` or `403`, but only in a project where some other operation has one. A project that has not started to model who may call gets no warnings. Once it has, an operation that never says what happens to a caller who may not use it shows up, which is where broken access control tends to hide. An operation whose statement says it is `public` is left alone: `The API SHALL provide \`GET /health\`: a public check.`
