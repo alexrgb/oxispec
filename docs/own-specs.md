@@ -55,7 +55,7 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-TESTPLAN-0001`, `0002` | A test plan is checked; a plan is read against the tests |
 | `REQ-RISK-0001` to `0005` | A risk has valid fields; the level is worked out; a risk is accepted by a person; the register is ordered; a critical risk holds a release back |
 | `REQ-DEBT-0001` to `0004` | A debt item has valid fields; a live item is held to account; the backlog is ordered; limits count live items |
-| `REQ-RELEASE-0001` to `0003` | The suggested version follows SemVer; gates hold a release back; release notes list what changed |
+| `REQ-RELEASE-0001` to `0006` | The suggested version follows SemVer; gates hold a release back; release notes list what changed; releases need their module and a repository; the library has the version of the release; each published crate carries the license texts |
 | `ADR-0001` to `ADR-0004` | Why files are the source of truth, why IDs do not depend on paths, why reverse links are not stored, why the MCP server has no tool that approves |
 
 Each scenario is verified by an existing unit test, which carries a `// verifies: REQ-FORMAT-000N.SM` comment, and the code that does the work carries `// spec: REQ-FORMAT-000N`. `oxispec trace REQ-FORMAT-0004` shows the ties.

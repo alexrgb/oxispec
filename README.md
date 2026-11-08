@@ -2,7 +2,7 @@
 
 Agent-first spec engine in Rust. Specs, ADRs, test cases, standards, API contracts and diagrams are nodes in one linked graph, with history, consistency checks and an MCP server for AI agents.
 
-**Status: early.** The design is written and the first iteration is under way. See [docs/design.md](docs/design.md) for the full design and [docs/iterations.md](docs/iterations.md) for the plan and what is built so far.
+**Status: early, not yet released.** The core, history, CI, trace, claims, state machines, architecture, entities, the MCP server and more are built; see [docs/iterations.md](docs/iterations.md) for what each iteration added and [docs/design.md](docs/design.md) for the design and what is still ahead. Version 0.1.0 is being prepared, and the file format, the command line and the JSON outputs may change before 1.0 ([docs/versioning.md](docs/versioning.md)).
 
 **New here?** Read the [user guide](docs/guide/README.md). Every command is in the [command reference](docs/reference/commands.md).
 
