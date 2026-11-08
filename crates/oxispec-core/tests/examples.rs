@@ -2,18 +2,22 @@
 
 use std::process::Command;
 
-/// `cargo test` builds the examples before it runs the tests of a package, and
-/// puts them next to the folder of the test binaries.
+/// Runs an example through cargo itself, so that the test does not depend on where cargo
+/// puts the build (that differs between versions of cargo).
 fn run(name: &str) -> String {
-    let exe = std::env::current_exe().unwrap();
-    let dir = exe.parent().unwrap().parent().unwrap().join("examples");
-    let mut path = dir.join(name);
-    if cfg!(windows) {
-        path.set_extension("exe");
-    }
-    let out = Command::new(&path)
+    let manifest = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
+    let out = Command::new(env!("CARGO"))
+        .args([
+            "run",
+            "--quiet",
+            "--locked",
+            "--manifest-path",
+            manifest,
+            "--example",
+            name,
+        ])
         .output()
-        .unwrap_or_else(|e| panic!("cannot run {}: {e}", path.display()));
+        .unwrap_or_else(|e| panic!("cannot run cargo: {e}"));
     assert!(
         out.status.success(),
         "{name} failed: {}",
