@@ -7410,3 +7410,21 @@ fn a_node_about_an_entity_is_reviewed_again_when_the_entity_changes() {
     let out = run(p, &["ci", "--base", "main", "--strict"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
 }
+
+// spec: REQ-RELEASE-0006
+// verifies: REQ-RELEASE-0006.S1
+#[test]
+fn each_published_crate_carries_the_license_texts_of_the_project() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for crate_dir in ["crates/oxispec-core", "crates/oxispec-cli"] {
+        for license in ["LICENSE-MIT", "LICENSE-APACHE"] {
+            let own = fs::read_to_string(root.join(crate_dir).join(license))
+                .unwrap_or_else(|e| panic!("{crate_dir} has no {license}: {e}"));
+            let project = fs::read_to_string(root.join(license)).unwrap();
+            assert_eq!(
+                own, project,
+                "{crate_dir}/{license} differs from the project's"
+            );
+        }
+    }
+}

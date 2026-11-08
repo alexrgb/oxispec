@@ -37,13 +37,37 @@ You can try the whole build without publishing: `dist plan` shows what a tag wou
 
 Do this before the first tag. The workflow fails, with a message that names the missing piece, until it is done.
 
-1. **Make the repository public**, or accept that releases stay private. Build provenance (`github-attestations`) needs a public repository or a plan that supports it for private ones.
+1. **Make the repository public**, or accept that releases stay private. Build provenance (`github-attestations`) needs a public repository or a plan that supports it for private ones. *Done: the repository is public.*
 2. **crates.io:** sign in with GitHub, create an API token that is allowed only to publish new crates and versions, and store it as the repository secret `CARGO_REGISTRY_TOKEN`. The names `oxispec` and `oxispec-core` were free when this was written. The first publish claims them, so check again.
 3. **npm:** create an account with two-factor authentication, create an *automation* token that can publish, and store it as the secret `NPM_TOKEN`. The name `oxispec` was free when this was written. A scoped name such as `@oxispec/oxispec` needs an npm organization, and then `npm-scope = "@oxispec"` goes in `dist-workspace.toml`.
 4. **Homebrew:** create the repository `alexrgb/homebrew-tap` (empty is fine), and a fine-grained personal access token with write access to its contents only. Store it as the secret `HOMEBREW_TAP_TOKEN`.
 5. In the repository settings, allow GitHub Actions to create releases (workflow permissions: read and write), and protect tags that match `v*` so only maintainers can create them.
 
 Tokens are secrets of the repository, never of a pull request from a fork, and the release workflow only runs for tags.
+
+### Where it stands
+
+Checked on 2026-11-08, before the first release. Repeat the checks on the day, since a name can be taken in between.
+
+| Piece | State | How to check |
+|---|---|---|
+| Repository public | Done | `gh repo view alexrgb/oxispec --json visibility` |
+| `oxispec` and `oxispec-core` on crates.io | Both names free | `curl -s -o /dev/null -w '%{http_code}' https://crates.io/api/v1/crates/oxispec` (404 means free) |
+| `oxispec` on npm | Free | `curl -s -o /dev/null -w '%{http_code}' https://registry.npmjs.org/oxispec` (404 means free) |
+| Secret `CARGO_REGISTRY_TOKEN` | **Not set** | `gh api repos/alexrgb/oxispec/actions/secrets --jq '[.secrets[].name]'` |
+| Secret `NPM_TOKEN` | **Not set** | the same |
+| Secret `HOMEBREW_TAP_TOKEN` | **Not set** | the same |
+| Repository `alexrgb/homebrew-tap` | **Does not exist** | `gh repo view alexrgb/homebrew-tap` |
+| Tag protection for `v*` | Not checked | repository settings, Rules |
+
+## Before the first tag
+
+1. The setup above is done, and the three secrets are listed.
+2. The last pull request on `main` has a green CI, including the `dist` and `package` jobs.
+3. `cargo publish --dry-run -p oxispec-core --locked` passes. The same for `oxispec` can only pass once `oxispec-core` is on crates.io, because it depends on that exact version: it is the reason the crates are published in that order.
+4. `dist plan` shows the five platforms and the four installers.
+5. The release pull request (`release/v0.1.0`) is merged: the changelog has the version and the date of the day the tag is made, and `Cargo.toml` and `Cargo.lock` agree.
+6. A person tags the merge commit. Nothing here tags for you.
 
 ## When something goes wrong
 

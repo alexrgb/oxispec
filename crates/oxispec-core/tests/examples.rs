@@ -3,14 +3,14 @@
 use std::process::Command;
 
 /// Runs an example through cargo itself, so that the test does not depend on where cargo
-/// puts the build (that differs between versions of cargo).
+/// puts the build (that differs between versions of cargo). It does not pass `--locked`: the
+/// crate as published has no lock file, and this test still has to run from it.
 fn run(name: &str) -> String {
     let manifest = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
     let out = Command::new(env!("CARGO"))
         .args([
             "run",
             "--quiet",
-            "--locked",
             "--manifest-path",
             manifest,
             "--example",
