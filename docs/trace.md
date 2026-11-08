@@ -33,7 +33,11 @@ trace:
   exclude: ["vendor/**", "**/*.generated.*"]
 ```
 
-### Languages
+### Entities
+
+A `spec:` comment can name an entity (`ENT-0001`) as well as a requirement. The code it is above is then the code that represents the entity, and `oxispec entities` shows it. See [entities.md](entities.md#say-which-code-represents-it).
+
+## Languages
 
 By default every text file is scanned. To scan only the languages of your project, name them, either at `oxispec init --languages rust,python` or in the config:
 

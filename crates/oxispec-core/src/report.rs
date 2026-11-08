@@ -171,6 +171,22 @@ pub fn markdown(report: &Report) -> String {
                 e.name,
                 cell(&what.join("; "))
             );
+            if !e.code.is_empty() {
+                let places: Vec<String> = e
+                    .code
+                    .iter()
+                    .take(5)
+                    .map(|c| {
+                        format!(
+                            "`{}:{}`{}",
+                            c.path.display(),
+                            c.line,
+                            c.symbol.as_ref().map_or(String::new(), |s| format!(" {s}"))
+                        )
+                    })
+                    .collect();
+                let _ = writeln!(out, "  - represented in code by {}", places.join(", "));
+            }
             if e.affected.is_empty() {
                 out.push_str("  - nothing depends on it yet\n");
             } else {

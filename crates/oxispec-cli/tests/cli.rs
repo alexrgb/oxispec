@@ -7205,3 +7205,122 @@ fn mcp_offers_the_entities_tool_with_the_consistency_module() {
     assert_eq!(run(other.path(), &["modules", "add", "mcp"]).code, 0);
     assert!(!listed(other.path()).contains(&"spec_entities".to_string()));
 }
+
+// verifies: REQ-ENTITY-0007.S1
+// verifies: REQ-ENTITY-0008.S1
+#[test]
+fn the_code_that_represents_an_entity_is_shown_and_missing_fields_are_warned_about() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    entity_project(p);
+    fs::create_dir_all(p.join("src")).unwrap();
+    fs::write(
+        p.join("src/order.rs"),
+        "// spec: ENT-0001\npub struct Order {\n    pub total: i64,\n}\n",
+    )
+    .unwrap();
+    commit_all(p, "the order struct");
+
+    let out = run(p, &["entities", "ENT-0001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout
+            .contains("code  src/order.rs:1  Order (struct_item)  fields: total"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("no field for `order.status`"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("no field for `order.total`"),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["entities"]);
+    assert!(out.stdout.contains("1 places in code"), "{}", out.stdout);
+
+    let v = json(&run(p, &["entities", "ENT-0001", "--json"]));
+    assert_eq!(v["entities"][0]["code"][0]["symbol"], "Order");
+    assert_eq!(v["entities"][0]["code"][0]["fields"][0], "total");
+    assert_eq!(v["entities"][0]["missing_in_code"][0], "status");
+
+    // `ci` warns about the attribute the code has no field for. It is a warning, so it fails
+    // the run only with --strict.
+    let out = run(p, &["ci", "--base", "main", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let v = json(&out);
+    let warned = v["new_findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|f| f["code"] == "W025" && f["message"].as_str().unwrap().contains("`status`"));
+    assert!(warned, "{v}");
+    assert_eq!(run(p, &["ci", "--base", "main", "--strict"]).code, 1);
+
+    // Naming the field in the code settles it, in the case of the language too.
+    fs::write(
+        p.join("src/order.rs"),
+        "// spec: ENT-0001\npub struct Order {\n    pub total: i64,\n    pub Status: String,\n}\n",
+    )
+    .unwrap();
+    let v = json(&run(p, &["entities", "ENT-0001", "--json"]));
+    assert_eq!(
+        v["entities"][0]["missing_in_code"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+
+    // When the entity changes, `ci` names the code that represents it.
+    let file = p.join("specs/entities/0001-order.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, text.replace("  total: {type: int}\n", "")).unwrap();
+    let out = run(p, &["ci", "--base", "main"]);
+    assert!(
+        out.stdout.contains("code: src/order.rs:1 Order"),
+        "{}",
+        out.stdout
+    );
+    let v = json(&run(p, &["ci", "--base", "main", "--json"]));
+    assert_eq!(v["entities"][0]["code"][0]["path"], "src/order.rs");
+}
+
+// verifies: REQ-ENTITY-0007.S2
+#[test]
+fn code_that_represents_an_entity_is_suspect_when_either_side_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    entity_project(p);
+    fs::create_dir_all(p.join("src")).unwrap();
+    fs::write(
+        p.join("src/order.rs"),
+        "// spec: ENT-0001\npub struct Order {\n    pub total: i64,\n    pub status: String,\n}\n",
+    )
+    .unwrap();
+    assert_eq!(run(p, &["confirm", "--all"]).code, 0);
+    let out = run(p, &["suspect"]);
+    assert!(out.stdout.contains("1 ok, 0 suspect"), "{}", out.stdout);
+
+    // The struct changes.
+    fs::write(
+        p.join("src/order.rs"),
+        "// spec: ENT-0001\npub struct Order {\n    pub total: i64,\n    pub status: String,\n    pub note: String,\n}\n",
+    )
+    .unwrap();
+    let out = run(p, &["suspect"]);
+    assert!(out.stdout.contains("ENT-0001"), "{}", out.stdout);
+    assert!(out.stdout.contains("0 ok, 1 suspect"), "{}", out.stdout);
+    assert_eq!(run(p, &["confirm", "ENT-0001"]).code, 0);
+    assert!(run(p, &["suspect"]).stdout.contains("1 ok, 0 suspect"));
+
+    // The entity changes.
+    let file = p.join("specs/entities/0001-order.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, text.replace("shipped]", "shipped, returned]")).unwrap();
+    let out = run(p, &["suspect"]);
+    assert!(out.stdout.contains("0 ok, 1 suspect"), "{}", out.stdout);
+}

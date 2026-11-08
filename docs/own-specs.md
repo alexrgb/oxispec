@@ -41,7 +41,7 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-ROLLBACK-0003`, `0004` | A rollback is refused when it would do harm; it puts nodes back without committing |
 | `REQ-REVISIONS-0001` | A revision can be named in many ways |
 | `REQ-DOCS-0001` | The reference is written from the program |
-| `REQ-ENTITY-0001` to `0006` | An entity declares its attributes; what depends on it is found; a change says what can break; entities are made and listed from the command line; `ci` says what a change touches; an agent can ask |
+| `REQ-ENTITY-0001` to `0008` | An entity declares its attributes; what depends on it is found; a change says what can break; entities are made and listed from the command line; `ci` says what a change touches; an agent can ask; the code that represents an entity is known; an attribute with no field in the code is warned about |
 | `REQ-TRACE-0001` to `0004` | Annotations are read from comments; coverage is counted from annotations; only a real comment is an annotation; the languages of the scan are configured |
 | `REQ-SUSPECT-0001` | A link goes suspect when either side changes |
 | `REQ-SEARCH-0001`, `0002` | Search finds what is written; the index follows the files |

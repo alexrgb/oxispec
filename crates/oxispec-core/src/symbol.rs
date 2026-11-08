@@ -25,6 +25,10 @@ pub struct Symbol {
     pub end_line: usize,
     /// Hash of the code, without comments and indentation.
     pub hash: String,
+    /// The names of the fields, for a struct, class, interface or object type. These are
+    /// what an entity's attributes are looked for in. Empty for other code.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -210,8 +214,68 @@ fn normalized(node: Node, source: &[u8]) -> String {
         .join("\n")
 }
 
+/// The names of the members that hold data, for the kinds of code that define a type.
+fn fields_of(node: Node, source: &[u8]) -> Vec<String> {
+    // Rust: `struct S { a: T }`. Go: `type S struct { a T }`.
+    // TypeScript: `interface S { a: T }`, `class S { a: T }`, `type S = { a: T }`.
+    // JavaScript: `class S { a = 1 }`.
+    let mut bodies: Vec<Node> = Vec::new();
+    match node.kind() {
+        "struct_item" | "interface_declaration" | "class_declaration" => {
+            bodies.extend(node.child_by_field_name("body"));
+        }
+        "type_alias_declaration" => {
+            bodies.extend(node.child_by_field_name("value"));
+        }
+        "type_declaration" => {
+            let mut cursor = node.walk();
+            for spec in node.named_children(&mut cursor) {
+                if let Some(ty) = spec.child_by_field_name("type")
+                    && ty.kind() == "struct_type"
+                {
+                    let mut inner = ty.walk();
+                    bodies.extend(
+                        ty.named_children(&mut inner)
+                            .filter(|c| c.kind() == "field_declaration_list"),
+                    );
+                }
+            }
+        }
+        _ => {}
+    }
+    let mut names = Vec::new();
+    for body in bodies {
+        let mut cursor = body.walk();
+        for member in body.named_children(&mut cursor) {
+            if !matches!(
+                member.kind(),
+                "field_declaration"
+                    | "property_signature"
+                    | "public_field_definition"
+                    | "field_definition"
+            ) {
+                continue;
+            }
+            // Go can name several fields in one declaration.
+            let mut inner = member.walk();
+            let named: Vec<Node> = member
+                .children_by_field_name("name", &mut inner)
+                .chain(member.child_by_field_name("property"))
+                .collect();
+            for name in named {
+                let name = text(name, source).trim_matches(['"', '\'']).to_string();
+                if !name.is_empty() {
+                    names.push(name);
+                }
+            }
+        }
+    }
+    names
+}
+
 fn symbol_of(lang: Lang, node: Node, source: &[u8]) -> Symbol {
     Symbol {
+        fields: fields_of(node, source),
         name: name_of(lang, node, source),
         kind: node.kind().to_string(),
         start_line: node.start_position().row + 1,
@@ -422,5 +486,43 @@ mod tests {
             .map(|s| s.as_ref().unwrap().name.as_str())
             .collect();
         assert_eq!(names, ["a", "b"]);
+    }
+}
+
+#[cfg(test)]
+mod tests_of_fields {
+    use super::*;
+
+    fn fields(path: &str, text: &str, line: usize) -> Vec<String> {
+        bind(Path::new(path), text, &[line])
+            .pop()
+            .unwrap()
+            .map_or(Vec::new(), |s| s.fields)
+    }
+
+    // verifies: REQ-ENTITY-0007.S3
+    #[test]
+    fn the_fields_of_a_type_are_found_in_each_language() {
+        let rust = "// spec: ENT-0001\nstruct Order {\n    total: i64,\n    pub status: String,\n}\n\n// spec: ENT-0001\nstruct Unit;\n\n// spec: ENT-0001\nstruct Pair(i64, i64);\n";
+        assert_eq!(fields("a.rs", rust, 1), ["total", "status"]);
+        assert!(fields("a.rs", rust, 7).is_empty());
+        assert!(fields("a.rs", rust, 10).is_empty());
+
+        let go =
+            "// spec: ENT-0001\ntype Order struct {\n\tTotal int\n\tA, B string\n\tio.Reader\n}\n";
+        assert_eq!(fields("a.go", go, 1), ["Total", "A", "B"]);
+
+        let ts = "// spec: ENT-0001\ninterface Order {\n  total: number;\n  status?: string;\n}\n\n// spec: ENT-0001\nclass Cart {\n  items: string[] = [];\n  private note = '';\n  add() {}\n}\n\n// spec: ENT-0001\ntype Line = {\n  sku: string;\n};\n";
+        assert_eq!(fields("a.ts", ts, 1), ["total", "status"]);
+        assert_eq!(fields("a.ts", ts, 7), ["items", "note"]);
+        assert_eq!(fields("a.ts", ts, 14), ["sku"]);
+
+        let js =
+            "// spec: ENT-0001\nclass Order {\n  total = 0;\n  status = 'open';\n  pay() {}\n}\n";
+        assert_eq!(fields("a.js", js, 1), ["total", "status"]);
+
+        // A function has no fields.
+        let func = "// spec: ENT-0001\nfn pay() {\n    let total = 1;\n}\n";
+        assert!(fields("a.rs", func, 1).is_empty());
     }
 }
