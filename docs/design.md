@@ -49,7 +49,7 @@ A team should adopt only what it needs. OxiSpec is split into **modules**. The c
 | `adrs` | ADR nodes, status, supersede links | core |
 | `decisions` | Lightweight decision log | core |
 | `standards` | Code standards with linter bindings | core |
-| `api` | OpenAPI and AsyncAPI import, operation nodes | core |
+| `api` | AsyncAPI import, operation nodes of their own. OpenAPI import, generation and the `oxispec api` commands are built on `specs` and need no module of this name | core |
 | `diagrams` | Mermaid, PlantUML, D2 nodes and renderers | core |
 | `architecture` | C4 model (context, container, component, dynamic) and deployment model, views, architecture rules, importers | core |
 | `statemachines` | State machine DSL, checks, generated tests | specs |
@@ -58,7 +58,7 @@ A team should adopt only what it needs. OxiSpec is split into **modules**. The c
 | `ci` | `oxispec ci`: graph diff, impact analysis, merge request reports and comments, index snapshots | core |
 | `agents` | Skills and rules for AI clients, per-agent overlays | core |
 | `mcp` | MCP server | core |
-| `server` | Hosted web app, RBAC and ABAC, audit log | core |
+| `server` | Hosted web app, OIDC and policies. `oxispec serve` (read-only MCP over HTTP with tokens and an audit log) is built and needs only `mcp` | core |
 
 **Presets** give a quick start:
 
@@ -980,16 +980,16 @@ The IR and file format stay language-neutral, so a second implementation (for ex
 
 ## 22. Roadmap
 
-| Phase | Deliverable | Result |
-|---|---|---|
-| 0 | Storage adapter traits with the `files` store, node and edge model, file format, parser, L0 validators, module system with presets, local index, `oxispec check --changed`, CLI: `init`, `modules`, `new`, `link`, `check`, `show` | Usable on a single repo, adopt only what you need |
-| 1 | Revision store (SQLite adapter), tantivy text search, `diff`, `at`, `rollback`, change sets, release manifest and gates, `oxispec ci` (graph diff, impact analysis, pull request reports; GitHub first, then GitLab), index snapshots, static site renderer | History, releases and hosting without auth |
-| 2 | Go, Node and Rust scanners, test result import, coverage and suspect links, release pinning to code and package versions, version bump suggestion | Trace IDs, code sync and reproducible releases |
-| 3 | Skill and agent-client generators, MCP server (read, propose), scopes, digest and context packs | Agent-first use |
-| 4 | Claims, solver, state machine DSL and checks, architecture model with C4 views and deployment views, architecture rules | Exact consistency, living architecture docs |
-| 5 | Server mode, OIDC, Cedar policies, audit log, code and infrastructure importers for drift checks, Postgres store, vector adapters (lancedb, pgvector, qdrant) | Shared hosted specs with access control, architecture drift detection |
-| 6 | L3 natural language pipeline, LLM provider adapters, golden-set CI | Full consistency checking |
-| 7 | Workspaces: dependencies and lockfile, release bundles, registry, repo manifests and central ingestion, federated search and MCP gateway, downstream checks, topology presets for domains and multi-repo | Multi-project and organization use |
+| Phase | Deliverable | Result | Status |
+|---|---|---|---|
+| 0 | Storage adapter traits with the `files` store, node and edge model, file format, parser, L0 validators, module system with presets, local index, `oxispec check --changed`, CLI: `init`, `modules`, `new`, `link`, `check`, `show` | Usable on a single repo, adopt only what you need | **Built**, except the storage adapter traits: the code reads and writes files directly |
+| 1 | Revision store (SQLite adapter), tantivy text search, `diff`, `at`, `rollback`, change sets, release manifest and gates, `oxispec ci` (graph diff, impact analysis, pull request reports; GitHub first, then GitLab), index snapshots, static site renderer | History, releases and hosting without auth | **Built**, except the SQLite revision store (git history is read directly, and it has been enough), index snapshots, and GitLab reports for `ci` (GitHub Actions, SARIF, JUnit and a pull request comment exist) |
+| 2 | Go, Node and Rust scanners, test result import, coverage and suspect links, release pinning to code and package versions, version bump suggestion | Trace IDs, code sync and reproducible releases | **Built**, except release pinning to code and package versions. The version bump suggestion exists |
+| 3 | Skill and agent-client generators, MCP server (read, propose), scopes, digest and context packs | Agent-first use | **Built**, except scopes (`.oxispec/scope.yaml`) and the digest |
+| 4 | Claims, solver, state machine DSL and checks, architecture model with C4 views and deployment views, architecture rules | Exact consistency, living architecture docs | **Built** |
+| 5 | Server mode, OIDC, Cedar policies, audit log, code and infrastructure importers for drift checks, Postgres store, vector adapters (lancedb, pgvector, qdrant) | Shared hosted specs with access control, architecture drift detection | **Partly built**: `oxispec serve` over HTTP with bearer tokens, tokens limited to node types, and an audit log. Not built: OIDC, Cedar policies, importers for drift checks, the Postgres store, vector adapters (the API index has its own file store) |
+| 6 | L3 natural language pipeline, LLM provider adapters, golden-set CI | Full consistency checking | Not built |
+| 7 | Workspaces: dependencies and lockfile, release bundles, registry, repo manifests and central ingestion, federated search and MCP gateway, downstream checks, topology presets for domains and multi-repo | Multi-project and organization use | Not built |
 
 Phases 0 to 4 ship as a CLI plus MCP server with no hosted server (decided). Server mode starts in phase 5.
 

@@ -47,7 +47,7 @@ pub const MODULES: &[ModuleInfo] = &[
     },
     ModuleInfo {
         name: "api",
-        description: "OpenAPI and AsyncAPI import",
+        description: "AsyncAPI import and operation nodes of their own. OpenAPI import, generation and `oxispec api` need only `specs`",
         needs: &["core"],
         implemented: false,
     },
@@ -113,7 +113,7 @@ pub const MODULES: &[ModuleInfo] = &[
     },
     ModuleInfo {
         name: "server",
-        description: "Hosted web app, RBAC and ABAC",
+        description: "Hosted web app, OIDC and policies. `oxispec serve` needs only `mcp`",
         needs: &["core"],
         implemented: false,
     },
