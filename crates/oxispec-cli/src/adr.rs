@@ -25,6 +25,7 @@ pub(crate) fn adr_profile(cfg: &Config, name: Option<&str>) -> Result<Profile> {
     }
 }
 
+// spec: REQ-ADR-0001
 pub fn convert(
     root: &Path,
     ids: &[String],
@@ -125,6 +126,7 @@ pub struct ImportOptions<'a> {
     pub json: bool,
 }
 
+// spec: REQ-ADR-0002
 pub fn import(root: &Path, opts: &ImportOptions, cache: bool) -> Result<()> {
     let ImportOptions {
         from,

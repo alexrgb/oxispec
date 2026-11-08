@@ -8,6 +8,7 @@ use oxispec_core::{Graph, OUTPUT_SCHEMA_VERSION, check, config, index};
 
 use crate::git;
 
+// spec: REQ-STATUS-0001
 pub fn status_command(root: &Path, at: Option<&str>, json: bool, cache: bool) -> Result<()> {
     config::load(root)?;
     let revision = at.map(|spec| git::resolve_rev(root, spec)).transpose()?;

@@ -131,6 +131,7 @@ fn apply(root: &Path, plan: &[Planned], force: bool, dry_run: bool) -> Result<Ta
 }
 
 /// `oxispec init`: writes skills for the clients the project chose.
+// spec: REQ-AGENTS-0001
 pub fn write_after_init(root: &Path, cfg: &Config) -> Result<()> {
     // No clients means `--agents none`.
     if !cfg.has("agents") || cfg.agents.is_empty() {
@@ -151,6 +152,7 @@ pub fn write_after_init(root: &Path, cfg: &Config) -> Result<()> {
     Ok(())
 }
 
+// spec: REQ-AGENTS-0002
 pub fn update(root: &Path, asked: &[String], force: bool, dry_run: bool) -> Result<ExitCode> {
     let cfg = config::load(root)?;
     need_agents(&cfg)?;
@@ -277,6 +279,7 @@ pub fn list(root: &Path, json: bool) -> Result<()> {
 
 /// Writes the skills in the layout another tool reads. With `all`, every skill and
 /// no project notes, which needs no project: that is how `skills/` in this repository is made.
+// spec: REQ-AGENTS-0003
 pub fn export(root: Option<&Path>, to: ExportTarget, out: &Path, all: bool) -> Result<()> {
     let (skills, notes) = if all {
         (SKILLS.iter().collect::<Vec<_>>(), String::new())
