@@ -26,6 +26,7 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the p
 | `REQ-MACHINE-0001`, `0002` | A state machine is checked with its properties; it is shown, drawn and turned into tests |
 | `REQ-ARCHITECTURE-0001` to `0003` | Elements keep their structure; views come from one model; a broken rule names its path |
 | `REQ-MODULES-0001` | A command needs its module, and so does its MCP tool |
+| `REQ-LIBRARY-0001` | The examples of the library run |
 | `REQ-TRACE-0001` to `0004` | Annotations are read from comments; coverage is counted from annotations; only a real comment is an annotation; the languages of the scan are configured |
 | `REQ-SUSPECT-0001` | A link goes suspect when either side changes |
 | `REQ-SEARCH-0001`, `0002` | Search finds what is written; the index follows the files |
