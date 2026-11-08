@@ -32,6 +32,7 @@ fn shown(root: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 
+// spec: REQ-IMPORT-0003
 pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
     let cfg = config::load(root)?;
     require_module(&cfg, "specs")?;
@@ -559,6 +560,7 @@ pub fn plan_show(
     Ok(())
 }
 
+// spec: REQ-IMPORT-0004
 pub fn apply(root: &Path, dry_run: bool, json: bool, cache: bool) -> Result<()> {
     let plan = read_plan(root)?;
     let outs = build(root, &plan, cache)?;

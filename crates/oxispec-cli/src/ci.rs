@@ -40,6 +40,8 @@ fn write_report(path: &Path, text: &str) -> Result<()> {
 // spec: REQ-CI-0001
 // spec: REQ-CI-0002
 // spec: REQ-CI-0003
+// spec: REQ-CI-0004
+// spec: REQ-SUSPECT-0002
 pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
     let cfg = config::load(root)?;
     let base = git::merge_base(root, &options.base)?;

@@ -136,6 +136,7 @@ pub(crate) fn tool_catalog() -> Vec<(Value, Option<String>)> {
         .collect()
 }
 
+// spec: REQ-MCP-0006
 pub fn serve(root: &Path, read_only: bool) -> Result<()> {
     let server = Server::new(root, read_only)?;
     let stdin = std::io::stdin();
@@ -567,6 +568,7 @@ impl Server<'_> {
                 }
                 self.cli(&cmd)
             }
+            // spec: REQ-RISK-0006
             "spec_risks" => {
                 let mut cmd = vec!["risks", "--json"];
                 let status = optional_word(args, "status")?;
@@ -608,6 +610,7 @@ impl Server<'_> {
 
     /// Runs this same program with `--json`. Exit code 1 means findings, which is an answer.
     /// One page of node resources, `RESOURCE_PAGE` at a time. The cursor is an offset.
+    // spec: REQ-MCP-0007
     fn resources(&self, params: &Value, policy: &Policy) -> Result<Value> {
         let start = match params.get("cursor").and_then(Value::as_str) {
             None => 0,

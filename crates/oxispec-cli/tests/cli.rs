@@ -219,6 +219,7 @@ fn link_command_refuses_bad_input() {
     assert!(!text.contains("links:"), "{text}");
 }
 
+// verifies: REQ-LINK-0003.S1
 #[test]
 fn check_reports_a_link_to_a_missing_scenario() {
     let dir = tempfile::tempdir().unwrap();
@@ -787,6 +788,7 @@ fn history_of_a_deleted_node_is_found_with_at() {
     assert_eq!(out.code, 2, "the node does not exist at HEAD");
 }
 
+// verifies: REQ-REVISIONS-0001.S2
 #[test]
 fn show_and_check_can_look_at_an_older_revision() {
     let dir = tempfile::tempdir().unwrap();
@@ -829,6 +831,8 @@ fn show_and_check_can_look_at_an_older_revision() {
     assert!(report["at"]["commit"].as_str().unwrap().len() >= 40);
 }
 
+// verifies: REQ-DIFF-0002.S1
+// verifies: REQ-DIFF-0002.S2
 #[test]
 fn diff_reports_nodes_and_findings() {
     let dir = tempfile::tempdir().unwrap();
@@ -888,6 +892,7 @@ fn diff_reports_nodes_and_findings() {
     assert_eq!(report["changed"][0]["changes"][0]["change"], "link_added");
 }
 
+// verifies: REQ-REVISIONS-0001.S1
 #[test]
 fn revisions_can_be_branches_tags_hashes_or_dates() {
     let dir = tempfile::tempdir().unwrap();
@@ -1006,6 +1011,7 @@ fn git_status(p: &Path) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
+// verifies: REQ-ROLLBACK-0004.S1
 #[test]
 fn rollback_restores_a_node_and_its_old_path_without_committing() {
     let dir = tempfile::tempdir().unwrap();
@@ -1062,6 +1068,7 @@ fn rollback_restores_a_node_and_its_old_path_without_committing() {
     );
 }
 
+// verifies: REQ-ROLLBACK-0004.S3
 #[test]
 fn rollback_dry_run_and_json_change_nothing() {
     let dir = tempfile::tempdir().unwrap();
@@ -1089,6 +1096,7 @@ fn rollback_dry_run_and_json_change_nothing() {
     assert!(git_status(p).is_empty());
 }
 
+// verifies: REQ-ROLLBACK-0003.S1
 #[test]
 fn rollback_refuses_to_break_links_unless_forced() {
     let dir = tempfile::tempdir().unwrap();
@@ -1126,6 +1134,7 @@ fn rollback_refuses_to_break_links_unless_forced() {
     );
 }
 
+// verifies: REQ-ROLLBACK-0003.S2
 #[test]
 fn rollback_refuses_to_lose_uncommitted_work_unless_forced() {
     let dir = tempfile::tempdir().unwrap();
@@ -1149,6 +1158,7 @@ fn rollback_refuses_to_lose_uncommitted_work_unless_forced() {
     assert!(!file.exists());
 }
 
+// verifies: REQ-ROLLBACK-0004.S2
 #[test]
 fn rollback_recreates_deleted_nodes_and_all_restores_everything() {
     let dir = tempfile::tempdir().unwrap();
@@ -1178,6 +1188,7 @@ fn rollback_recreates_deleted_nodes_and_all_restores_everything() {
     );
 }
 
+// verifies: REQ-ROLLBACK-0004.S4
 #[test]
 fn rollback_explains_bad_input() {
     let dir = tempfile::tempdir().unwrap();
@@ -1326,6 +1337,7 @@ fn project_with_a_change_set(p: &Path) {
     );
 }
 
+// verifies: REQ-CHANGE-0001.S1
 #[test]
 fn a_change_set_moves_through_its_lifecycle_and_records_the_approval() {
     let dir = tempfile::tempdir().unwrap();
@@ -1403,6 +1415,7 @@ fn a_change_set_moves_through_its_lifecycle_and_records_the_approval() {
     assert!(out.stdout.contains("already draft"), "{}", out.stdout);
 }
 
+// verifies: REQ-CHANGE-0002.S1
 #[test]
 fn approving_needs_a_name_from_git_or_from_the_command() {
     let dir = tempfile::tempdir().unwrap();
@@ -1433,6 +1446,7 @@ fn approving_needs_a_name_from_git_or_from_the_command() {
     );
 }
 
+// verifies: REQ-CHANGE-0003.S1
 #[test]
 fn hand_edited_change_sets_are_checked() {
     let dir = tempfile::tempdir().unwrap();
@@ -1452,6 +1466,7 @@ fn hand_edited_change_sets_are_checked() {
     assert!(out.stdout.contains("E012"), "{}", out.stdout);
 }
 
+// verifies: REQ-CHANGE-0001.S2
 #[test]
 fn change_commands_refuse_nodes_and_statuses_that_do_not_fit() {
     let dir = tempfile::tempdir().unwrap();
@@ -1479,6 +1494,7 @@ fn change_commands_refuse_nodes_and_statuses_that_do_not_fit() {
     }
 }
 
+// verifies: REQ-CHANGE-0004.S1
 #[test]
 fn change_list_json_has_what_a_release_needs() {
     let dir = tempfile::tempdir().unwrap();
@@ -1519,6 +1535,7 @@ fn release_tags(p: &Path) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
+// verifies: REQ-RELEASE-0002.S4
 #[test]
 fn a_first_release_is_prepared_checked_and_published() {
     let dir = tempfile::tempdir().unwrap();
@@ -1577,6 +1594,7 @@ fn a_first_release_is_prepared_checked_and_published() {
     assert!(out.stderr.contains("nothing has changed"), "{}", out.stderr);
 }
 
+// verifies: REQ-RELEASE-0002.S2
 #[test]
 fn a_release_waits_for_its_change_sets_to_be_approved() {
     let dir = tempfile::tempdir().unwrap();
@@ -1627,6 +1645,8 @@ fn a_release_waits_for_its_change_sets_to_be_approved() {
     assert!(release_tags(p).contains("specs-v0.2.0"));
 }
 
+// verifies: REQ-RELEASE-0001.S1
+// verifies: REQ-RELEASE-0001.S3
 #[test]
 fn removing_a_requirement_is_breaking_and_a_low_version_only_warns() {
     let dir = tempfile::tempdir().unwrap();
@@ -1668,6 +1688,7 @@ fn removing_a_requirement_is_breaking_and_a_low_version_only_warns() {
     assert_eq!(run(p, &["release", "prepare", "0.1.0"]).code, 2);
 }
 
+// verifies: REQ-RELEASE-0004.S1
 #[test]
 fn releases_need_the_module_and_a_repository() {
     let dir = tempfile::tempdir().unwrap();
@@ -1889,6 +1910,8 @@ fn ci_explains_a_missing_base() {
     assert_eq!(out.code, 2);
 }
 
+// verifies: REQ-SEARCH-0001.S1
+// verifies: REQ-SEARCH-0002.S1
 #[test]
 fn search_finds_nodes_and_keeps_its_index_up_to_date() {
     let dir = tempfile::tempdir().unwrap();
@@ -1935,6 +1958,7 @@ fn search_finds_nodes_and_keeps_its_index_up_to_date() {
     assert_eq!(run(p, &["search", "inactive", "--rebuild"]).code, 0);
 }
 
+// verifies: REQ-INDEX-0001.S3
 #[test]
 fn search_without_a_cache_leaves_nothing_behind() {
     let dir = tempfile::tempdir().unwrap();
@@ -2095,6 +2119,7 @@ fn trace_project(p: &Path) {
     .unwrap();
 }
 
+// verifies: REQ-TRACE-0002.S1
 #[test]
 fn coverage_and_trace_follow_spec_and_verifies_comments() {
     let dir = tempfile::tempdir().unwrap();
@@ -2171,6 +2196,7 @@ fn coverage_and_trace_follow_spec_and_verifies_comments() {
     );
 }
 
+// verifies: REQ-TRACE-0002.S2
 #[test]
 fn coverage_reports_annotations_that_point_at_nothing() {
     let dir = tempfile::tempdir().unwrap();
@@ -2195,6 +2221,7 @@ fn coverage_reports_annotations_that_point_at_nothing() {
     assert!(out.stdout.contains("--> src/more.rs:1"), "{}", out.stdout);
 }
 
+// verifies: REQ-TRACE-0005.S1
 #[test]
 fn trace_leaves_out_excluded_paths_markdown_and_ignored_files() {
     let dir = tempfile::tempdir().unwrap();
@@ -2223,6 +2250,7 @@ fn trace_leaves_out_excluded_paths_markdown_and_ignored_files() {
     assert!(out.stdout.contains("2 annotations in"), "{}", out.stdout);
 }
 
+// verifies: REQ-MODULES-0001.S1
 #[test]
 fn trace_needs_the_tests_module() {
     let dir = tempfile::tempdir().unwrap();
@@ -2235,6 +2263,7 @@ fn trace_needs_the_tests_module() {
     }
 }
 
+// verifies: REQ-SUSPECT-0001.S2
 #[test]
 fn links_go_suspect_when_the_code_or_the_spec_changes_until_confirmed() {
     let dir = tempfile::tempdir().unwrap();
@@ -2333,6 +2362,7 @@ fn links_go_suspect_when_the_code_or_the_spec_changes_until_confirmed() {
     assert_eq!(run(p, &["suspect", "--strict"]).code, 0);
 }
 
+// verifies: REQ-SUSPECT-0002.S1
 #[test]
 fn ci_reports_suspect_links_until_they_are_confirmed() {
     let dir = tempfile::tempdir().unwrap();
@@ -2451,6 +2481,7 @@ fn imported_test_results_say_which_scenarios_pass() {
     assert_eq!(run(p, &["results", "import", "missing.xml"]).code, 2);
 }
 
+// verifies: REQ-RELEASE-0002.S3
 #[test]
 fn a_release_waits_for_confirmed_links_and_passing_tests() {
     let dir = tempfile::tempdir().unwrap();
@@ -2531,6 +2562,7 @@ fn a_release_waits_for_confirmed_links_and_passing_tests() {
     assert!(release_tags(p).contains("specs-v0.2.0"));
 }
 
+// verifies: REQ-TRACE-0006.S1
 #[test]
 fn a_project_without_trace_annotations_has_no_trace_gates() {
     let dir = tempfile::tempdir().unwrap();
@@ -3093,6 +3125,7 @@ fn mcp_speaks_the_protocol_and_lists_tools_by_module() {
     assert!(!tool_names(&replies).contains(&"spec_trace".to_string()));
 }
 
+// verifies: REQ-MCP-0006.S1
 #[test]
 fn mcp_needs_its_module_and_answers_bad_messages_with_errors() {
     let dir = tempfile::tempdir().unwrap();
@@ -3300,6 +3333,7 @@ fn mcp_proposes_a_draft_change_set_and_never_approves() {
     assert_eq!(replies[0]["error"]["code"], -32602);
 }
 
+// verifies: REQ-CONTEXT-0002.S1
 #[test]
 fn context_fills_a_budget_nearest_first_and_lists_what_did_not_fit() {
     let dir = tempfile::tempdir().unwrap();
@@ -3436,6 +3470,7 @@ fn check_finds_a_conflict_between_claims_and_an_overrides_link_settles_it() {
     assert_eq!(out.code, 0, "{}", out.stdout);
 }
 
+// verifies: REQ-CLAIMS-0003.S1
 #[test]
 fn a_claim_that_cannot_be_read_is_an_error_with_the_reason() {
     let dir = tempfile::tempdir().unwrap();
@@ -3493,6 +3528,7 @@ fn claims_lists_the_vocabulary_with_its_claims_and_the_share_of_requirements() {
     assert!(out.stderr.contains("no variable `nope`"), "{}", out.stderr);
 }
 
+// verifies: REQ-CI-0004.S1
 #[test]
 fn ci_reports_a_new_conflict_once_and_not_again_after_it_is_merged() {
     let dir = tempfile::tempdir().unwrap();
@@ -3733,6 +3769,7 @@ fn machine_lists_shows_draws_and_writes_tests() {
     assert_eq!(out.code, 2);
 }
 
+// verifies: REQ-CI-0004.S2
 #[test]
 fn ci_reports_a_new_broken_property_once() {
     let dir = tempfile::tempdir().unwrap();
@@ -4075,6 +4112,8 @@ fn mcp_offers_the_architecture_tool_with_its_module() {
     assert!(!names.contains(&"spec_architecture".to_string()));
 }
 
+// spec: REQ-RELEASE-0005
+// verifies: REQ-RELEASE-0005.S1
 #[test]
 fn the_library_dependency_version_matches_the_release_version() {
     let manifest =
@@ -4325,6 +4364,7 @@ fn init_refuses_unknown_clients_and_none_combined_with_others() {
     assert!(!p.join(".claude").exists());
 }
 
+// verifies: REQ-CONTEXT-0002.S2
 #[test]
 fn a_small_budget_leaves_related_nodes_as_pointers() {
     let dir = tempfile::tempdir().unwrap();
@@ -4434,6 +4474,7 @@ fn status_summarizes_the_project_in_text_and_json() {
     assert_eq!(run(outside.path(), &["status"]).code, 2);
 }
 
+// verifies: REQ-MCP-0007.S1
 #[test]
 fn mcp_offers_nodes_as_resources_and_a_few_prompts() {
     let dir = tempfile::tempdir().unwrap();
@@ -4514,6 +4555,7 @@ fn mcp_offers_nodes_as_resources_and_a_few_prompts() {
     assert!(by(11).get("error").is_some());
 }
 
+// verifies: REQ-MCP-0008.S1
 #[test]
 fn a_running_mcp_server_sees_edits_made_after_it_cached_the_graph() {
     use std::io::{BufRead, BufReader, Write};
@@ -4585,6 +4627,7 @@ fn a_running_mcp_server_sees_edits_made_after_it_cached_the_graph() {
     assert!(child.wait().unwrap().success());
 }
 
+// verifies: REQ-MCP-0007.S2
 #[test]
 fn mcp_resources_come_in_pages_that_cover_every_node_once() {
     let dir = tempfile::tempdir().unwrap();
@@ -5166,6 +5209,7 @@ fn formats_list_and_show_describe_the_profiles() {
     );
 }
 
+// verifies: REQ-FORMATS-0002.S1
 #[test]
 fn new_adr_can_pick_a_profile_and_refuses_one_for_another_type() {
     let dir = tempfile::tempdir().unwrap();
@@ -5192,6 +5236,7 @@ fn new_adr_can_pick_a_profile_and_refuses_one_for_another_type() {
     assert_eq!(out.code, 2);
 }
 
+// verifies: REQ-FORMATS-0002.S2
 #[test]
 fn a_config_that_names_an_unknown_profile_fails_check_with_e031() {
     let dir = tempfile::tempdir().unwrap();
@@ -5206,6 +5251,7 @@ fn a_config_that_names_an_unknown_profile_fails_check_with_e031() {
     assert!(out.stdout.contains("E031") && out.stdout.contains(".oxispec/config.yaml"));
 }
 
+// verifies: REQ-MCP-0008.S2
 #[test]
 fn a_running_mcp_server_sees_a_change_to_the_format_profiles() {
     use std::io::{BufRead, BufReader, Write};
@@ -5262,6 +5308,7 @@ fn a_running_mcp_server_sees_a_change_to_the_format_profiles() {
     assert!(applied, "the server never applied the new profile");
 }
 
+// verifies: REQ-ADR-0004.S1
 #[test]
 fn the_adr_formats_write_their_templates_and_hold_new_records_to_them() {
     let dir = tempfile::tempdir().unwrap();
@@ -5547,6 +5594,7 @@ fn import_adr_reads_madr_and_log4brains_and_new_link_kinds_are_known() {
     );
 }
 
+// verifies: REQ-DEBT-0003.S1
 #[test]
 fn debt_is_created_listed_by_severity_and_moved_along() {
     let dir = tempfile::tempdir().unwrap();
@@ -5619,6 +5667,8 @@ fn today_utc() -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
+// verifies: REQ-DEBT-0001.S1
+// verifies: REQ-DEBT-0002.S2
 #[test]
 fn debt_that_is_late_is_reported_and_bad_input_is_refused() {
     let dir = tempfile::tempdir().unwrap();
@@ -5654,6 +5704,7 @@ fn debt_that_is_late_is_reported_and_bad_input_is_refused() {
     }
 }
 
+// verifies: REQ-DEBT-0004.S1
 #[test]
 fn a_release_can_be_held_to_a_limit_on_debt() {
     let dir = tempfile::tempdir().unwrap();
@@ -5700,6 +5751,8 @@ fn a_release_can_be_held_to_a_limit_on_debt() {
     );
 }
 
+// verifies: REQ-MODULES-0001.S1
+// verifies: REQ-MODULES-0001.S2
 #[test]
 fn debt_needs_its_module_and_an_mcp_client_can_read_the_backlog() {
     let dir = tempfile::tempdir().unwrap();
@@ -5727,6 +5780,7 @@ fn debt_needs_its_module_and_an_mcp_client_can_read_the_backlog() {
     assert!(is_error);
 }
 
+// verifies: REQ-RISK-0006.S1
 #[test]
 fn the_risk_register_is_an_mcp_tool_when_the_module_is_on() {
     let dir = tempfile::tempdir().unwrap();
@@ -5782,6 +5836,7 @@ fn choose_requirement_style(p: &Path, style: &str) {
     fs::write(&config, format!("{text}formats:\n  requirement: {style}\n")).unwrap();
 }
 
+// verifies: REQ-STYLE-0003.S1
 #[test]
 fn each_requirement_style_writes_a_template_that_passes_its_own_check() {
     for style in ["shall", "ears", "gherkin", "user-story"] {
@@ -5809,6 +5864,7 @@ fn each_requirement_style_writes_a_template_that_passes_its_own_check() {
     }
 }
 
+// verifies: REQ-STYLE-0003.S2
 #[test]
 fn format_on_new_requirement_overrides_the_config_and_refuses_other_types() {
     let dir = tempfile::tempdir().unwrap();
@@ -5847,6 +5903,7 @@ fn requirement_file(p: &Path, name: &str, body: &str) {
     .unwrap();
 }
 
+// verifies: REQ-STYLE-0001.S1
 #[test]
 fn ears_holds_a_requirement_to_one_of_its_patterns() {
     let dir = tempfile::tempdir().unwrap();
@@ -5875,6 +5932,7 @@ fn ears_holds_a_requirement_to_one_of_its_patterns() {
     assert!(out.stdout.contains("REQ-AUTH-0002"), "{}", out.stdout);
 }
 
+// verifies: REQ-STYLE-0001.S2
 #[test]
 fn a_user_story_needs_no_shall_but_still_needs_acceptance_criteria() {
     let dir = tempfile::tempdir().unwrap();
@@ -5905,6 +5963,7 @@ fn a_user_story_needs_no_shall_but_still_needs_acceptance_criteria() {
     );
 }
 
+// verifies: REQ-STYLE-0001.S3
 #[test]
 fn gherkin_scenarios_in_a_fence_are_covered_and_checked() {
     let dir = tempfile::tempdir().unwrap();
@@ -5932,6 +5991,7 @@ fn gherkin_scenarios_in_a_fence_are_covered_and_checked() {
     assert!(!out.stdout.contains("E009"), "{}", out.stdout);
 }
 
+// verifies: REQ-STYLE-0003.S3
 #[test]
 fn a_custom_profile_can_have_a_style_and_a_bad_style_is_e031() {
     let dir = tempfile::tempdir().unwrap();
@@ -5964,6 +6024,7 @@ fn import_project(p: &Path) {
     assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
 }
 
+// verifies: REQ-IMPORT-0001.S1
 #[test]
 fn import_specs_brings_in_openspec_and_lists_what_it_leaves_out() {
     let dir = tempfile::tempdir().unwrap();
@@ -6001,6 +6062,8 @@ fn import_specs_brings_in_openspec_and_lists_what_it_leaves_out() {
     assert_ne!(again.code, 0);
 }
 
+// verifies: REQ-IMPORT-0001.S2
+// verifies: REQ-IMPORT-0001.S3
 #[test]
 fn import_specs_reads_kiro_and_spec_kit_and_marks_what_needs_filling_in() {
     let dir = tempfile::tempdir().unwrap();
@@ -6043,6 +6106,7 @@ fn import_specs_reads_kiro_and_spec_kit_and_marks_what_needs_filling_in() {
     assert!(text.contains("<outcome>"), "{text}");
 }
 
+// verifies: REQ-IMPORT-0003.S1
 #[test]
 fn import_specs_takes_plain_markdown_and_refuses_unknown_sources() {
     let dir = tempfile::tempdir().unwrap();
@@ -6071,6 +6135,8 @@ fn import_specs_takes_plain_markdown_and_refuses_unknown_sources() {
     assert!(out.stderr.contains("unknown source"), "{}", out.stderr);
 }
 
+// verifies: REQ-IMPORT-0001.S4
+// verifies: REQ-IMPORT-0001.S5
 #[test]
 fn import_specs_reads_a_prd_and_an_openapi_description() {
     let dir = tempfile::tempdir().unwrap();
@@ -6114,6 +6180,7 @@ fn import_specs_reads_a_prd_and_an_openapi_description() {
     assert_eq!(run(p, &["check"]).code, 0);
 }
 
+// verifies: REQ-PRD-0001.S1
 #[test]
 fn a_prd_is_written_as_nodes_and_read_as_a_document() {
     let dir = tempfile::tempdir().unwrap();
@@ -6140,6 +6207,7 @@ fn a_prd_is_written_as_nodes_and_read_as_a_document() {
     assert!(out.stderr.contains("not a prd"), "{}", out.stderr);
 }
 
+// verifies: REQ-API-0002.S1
 #[test]
 fn openapi_is_made_from_requirements_and_a_file_is_compared_with_them() {
     let dir = tempfile::tempdir().unwrap();
@@ -6186,6 +6254,7 @@ fn openapi_is_made_from_requirements_and_a_file_is_compared_with_them() {
     assert!(out.stdout.contains("GET /health"), "{}", out.stdout);
 }
 
+// verifies: REQ-RISK-0003.S1
 #[test]
 fn risks_are_registered_listed_and_accepted_by_a_person() {
     let dir = tempfile::tempdir().unwrap();
@@ -6245,6 +6314,7 @@ fn risks_are_registered_listed_and_accepted_by_a_person() {
     assert_ne!(out.code, 0);
 }
 
+// verifies: REQ-TESTPLAN-0002.S1
 #[test]
 fn a_test_plan_is_read_against_the_tests() {
     let dir = tempfile::tempdir().unwrap();
@@ -6406,6 +6476,7 @@ fn an_operation_card_and_a_running_service_are_read() {
     );
 }
 
+// verifies: REQ-TRACE-0004.S1
 #[test]
 fn the_languages_of_the_scan_are_chosen_at_init_and_listed() {
     let dir = tempfile::tempdir().unwrap();
@@ -6641,6 +6712,8 @@ fn project_with_a_standard(p: &Path, standard: &str) {
     fs::write(&config, format!("{text}compliance:\n{standard}")).unwrap();
 }
 
+// verifies: REQ-COMPLIANCE-0002.S1
+// verifies: REQ-COMPLIANCE-0002.S2
 #[test]
 fn a_standard_asks_for_tests_and_sign_offs_until_they_exist() {
     let dir = tempfile::tempdir().unwrap();
@@ -6684,6 +6757,7 @@ fn a_standard_asks_for_tests_and_sign_offs_until_they_exist() {
     );
 }
 
+// verifies: REQ-COMPLIANCE-0001.S1
 #[test]
 fn compliance_lists_standards_and_a_higher_level_asks_for_more() {
     let dir = tempfile::tempdir().unwrap();
@@ -6710,6 +6784,7 @@ fn compliance_lists_standards_and_a_higher_level_asks_for_more() {
     assert!(out.stdout.contains("E037"), "{}", out.stdout);
 }
 
+// verifies: REQ-COMPLIANCE-0004.S1
 #[test]
 fn a_release_is_held_until_the_compliance_rules_are_met() {
     let dir = tempfile::tempdir().unwrap();
@@ -6745,6 +6820,9 @@ fn openspec_with_a_change(p: &Path) {
     );
 }
 
+// verifies: REQ-IMPORT-0002.S1
+// verifies: REQ-IMPORT-0002.S2
+// verifies: REQ-IMPORT-0002.S3
 #[test]
 fn an_import_plan_is_looked_at_changed_and_only_then_applied() {
     let dir = tempfile::tempdir().unwrap();
@@ -6813,6 +6891,7 @@ fn an_import_plan_is_looked_at_changed_and_only_then_applied() {
     assert!(!check.stdout.contains("E002"), "{}", check.stdout);
 }
 
+// verifies: REQ-IMPORT-0004.S1
 #[test]
 fn a_skipped_item_is_not_written_and_an_empty_plan_is_refused() {
     let dir = tempfile::tempdir().unwrap();
@@ -6842,6 +6921,7 @@ fn a_skipped_item_is_not_written_and_an_empty_plan_is_refused() {
     assert!(!p.join("specs/changes").read_dir().unwrap().any(|_| true));
 }
 
+// verifies: REQ-DOCS-0001.S2
 #[test]
 fn the_committed_reference_matches_the_program() {
     let dir = tempfile::tempdir().unwrap();
@@ -6863,6 +6943,8 @@ fn the_committed_reference_matches_the_program() {
     );
 }
 
+// verifies: REQ-DOCS-0001.S1
+// verifies: REQ-DOCS-0001.S2
 #[test]
 fn docs_reference_writes_the_commands_and_the_codes_and_check_notices_a_change() {
     let dir = tempfile::tempdir().unwrap();
@@ -6898,6 +6980,7 @@ fn docs_reference_writes_the_commands_and_the_codes_and_check_notices_a_change()
     assert!(out.stderr.contains("out of date"), "{}", out.stderr);
 }
 
+// verifies: REQ-DOCS-0001.S3
 #[test]
 fn every_relative_link_in_the_guide_and_the_reference_points_at_a_file() {
     let docs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs");

@@ -229,6 +229,7 @@ pub fn mcp_tools() -> String {
 }
 
 /// Writes the reference into `dir`, or with `check` compares it with what is there.
+// spec: REQ-DOCS-0001
 pub fn run(root: &Command, dir: &Path, check: bool) -> Result<()> {
     let files = [
         ("commands.md", commands(root)),

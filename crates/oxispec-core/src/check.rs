@@ -140,6 +140,7 @@ fn node_format(node: &Node, out: &mut Vec<Finding>) {
 }
 
 // spec: REQ-FORMAT-0003
+// spec: REQ-LINK-0003
 fn links(graph: &Graph, node: &Node, out: &mut Vec<Finding>) {
     for (kind, targets) in &node.links {
         if !KNOWN_LINK_KINDS.contains(&kind.as_str()) {
@@ -220,6 +221,7 @@ fn requirements(node: &Node, out: &mut Vec<Finding>, normative: bool) {
 }
 
 // spec: REQ-CHANGE-0001, REQ-CHANGE-0002
+// spec: REQ-CHANGE-0003
 fn change_set(node: &Node, out: &mut Vec<Finding>) {
     let known = change::STATUSES.join(", ");
     match node.status.as_deref() {
