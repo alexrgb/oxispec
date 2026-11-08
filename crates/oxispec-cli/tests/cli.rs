@@ -7324,3 +7324,89 @@ fn code_that_represents_an_entity_is_suspect_when_either_side_changes() {
     let out = run(p, &["suspect"]);
     assert!(out.stdout.contains("0 ok, 1 suspect"), "{}", out.stdout);
 }
+
+// verifies: REQ-ENTITY-0009.S3
+#[test]
+fn a_node_about_an_entity_is_reviewed_again_when_the_entity_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    entity_project(p);
+    let out = run(p, &["suspect"]);
+    assert!(out.stdout.contains("unreviewed"), "{}", out.stdout);
+    assert_eq!(run(p, &["confirm", "--all"]).code, 0);
+    let out = run(p, &["suspect"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("1 reviewed, 0 to review"),
+        "{}",
+        out.stdout
+    );
+    commit_all(p, "reviewed");
+
+    // Reworded prose is not a change.
+    let file = p.join("specs/entities/0001-order.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, text.replace("What it is,", "A note on what it is,")).unwrap();
+    assert_eq!(run(p, &["suspect"]).code, 0);
+
+    // A new attribute is, and the node that is about the entity has to be looked at.
+    fs::write(
+        &file,
+        text.replace(
+            "  total: {type: int}\n",
+            "  total: {type: int}\n  note: {type: bool}\n",
+        ),
+    )
+    .unwrap();
+    let out = run(p, &["suspect"]);
+    assert_eq!(out.code, 1, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("W026"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("REQ-ORDERS-0001 is about ENT-0001"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("1 to review"), "{}", out.stdout);
+    let v = json(&run(p, &["suspect", "--json"]));
+    assert_eq!(v["reviews"]["suspect"], 1);
+    assert_eq!(v["failed"], true);
+
+    let out = run(p, &["entities", "ENT-0001"]);
+    assert!(out.stdout.contains("REQ-ORDERS-0001"), "{}", out.stdout);
+    assert!(out.stdout.contains("NEEDS REVIEW"), "{}", out.stdout);
+    let v = json(&run(p, &["entities", "ENT-0001", "--json"]));
+    let flags: Vec<(&str, bool)> = v["entities"][0]["affected"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| {
+            (
+                a["id"].as_str().unwrap(),
+                a["needs_review"].as_bool().unwrap(),
+            )
+        })
+        .collect();
+    assert!(flags.contains(&("REQ-ORDERS-0001", true)), "{flags:?}");
+    assert!(flags.contains(&("REQ-ORDERS-0002", false)), "{flags:?}");
+
+    // `ci` warns, and fails only with --strict.
+    let out = run(p, &["ci", "--base", "main", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let warned = json(&out)["new_findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|f| f["code"] == "W026");
+    assert!(warned);
+    assert_eq!(run(p, &["ci", "--base", "main", "--strict"]).code, 1);
+
+    // Looking at the node and confirming it settles it, and the lock file keeps that.
+    let out = run(p, &["confirm", "REQ-ORDERS-0001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("about an entity"), "{}", out.stdout);
+    assert_eq!(run(p, &["suspect"]).code, 0);
+    let lock = fs::read_to_string(p.join(".oxispec/trace.lock.json")).unwrap();
+    assert!(lock.contains("about REQ-ORDERS-0001 ENT-0001"), "{lock}");
+    let out = run(p, &["ci", "--base", "main", "--strict"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+}

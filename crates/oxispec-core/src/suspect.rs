@@ -50,6 +50,18 @@ pub struct Entry {
 pub struct Lock {
     pub version: u32,
     pub links: BTreeMap<String, Entry>,
+    /// What a person last said is still right about an entity, for each node that is
+    /// `about` one, keyed `about NODE ENTITY`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub reviews: BTreeMap<String, Review>,
+}
+
+/// A node that is `about` an entity was looked at when the entity was like this.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Review {
+    pub entity: String,
+    /// [`crate::entities::fingerprint`] of the entity at the time.
+    pub fingerprint: String,
 }
 
 impl Default for Lock {
@@ -57,6 +69,7 @@ impl Default for Lock {
         Lock {
             version: LOCK_VERSION,
             links: BTreeMap::new(),
+            reviews: BTreeMap::new(),
         }
     }
 }
@@ -264,6 +277,139 @@ pub fn findings(links: &[Link]) -> Vec<Finding> {
             }
         })
         .collect()
+}
+
+/// Whether a node that is about an entity has been looked at since the entity changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewState {
+    Ok,
+    /// The entity changed since the node was confirmed.
+    Suspect,
+    /// Not confirmed yet.
+    Unconfirmed,
+    /// Confirmed once, but the node no longer is about the entity.
+    Orphaned,
+}
+
+/// One `about` link from a node to an entity, and whether the node still stands.
+#[derive(Debug, Clone, Serialize)]
+pub struct ReviewLink {
+    pub key: String,
+    pub node: String,
+    pub entity: String,
+    pub state: ReviewState,
+    pub path: Option<PathBuf>,
+}
+
+fn review_key(node: &str, entity: &str) -> String {
+    format!("about {node} {entity}")
+}
+
+/// The state of every `about` link to an entity, and every confirmation whose link is gone.
+// spec: REQ-ENTITY-0009
+pub fn reviews(graph: &Graph, lock: &Lock) -> Vec<ReviewLink> {
+    let (entities, _) = crate::entities::read(graph);
+    let mut found = Vec::new();
+    let mut alive: BTreeSet<String> = BTreeSet::new();
+    for node in &graph.nodes {
+        for target in node.links.get("about").into_iter().flatten() {
+            let Some(entity) = entities.iter().find(|e| e.id == id::base_of(target)) else {
+                continue;
+            };
+            let key = review_key(&node.id, &entity.id);
+            if !alive.insert(key.clone()) {
+                continue;
+            }
+            let now = crate::entities::fingerprint(entity);
+            let state = match lock.reviews.get(&key) {
+                None => ReviewState::Unconfirmed,
+                Some(r) if r.fingerprint == now => ReviewState::Ok,
+                Some(_) => ReviewState::Suspect,
+            };
+            found.push(ReviewLink {
+                key,
+                node: node.id.clone(),
+                entity: entity.id.clone(),
+                state,
+                path: Some(node.path.clone()),
+            });
+        }
+    }
+    for (key, review) in &lock.reviews {
+        if !alive.contains(key) {
+            found.push(ReviewLink {
+                key: key.clone(),
+                node: key.split(' ').nth(1).unwrap_or("").to_string(),
+                entity: review.entity.clone(),
+                state: ReviewState::Orphaned,
+                path: None,
+            });
+        }
+    }
+    found
+}
+
+/// W026 for each node that is about an entity that changed since the node was confirmed.
+// spec: REQ-ENTITY-0009
+pub fn review_findings(links: &[ReviewLink]) -> Vec<Finding> {
+    links
+        .iter()
+        .filter(|l| l.state == ReviewState::Suspect)
+        .map(|l| {
+            let finding = Finding::warning(
+                "W026",
+                format!(
+                    "{} is about {}, which changed since it was confirmed; look at it and run `oxispec confirm {}`",
+                    l.node, l.entity, l.node
+                ),
+            )
+            .node(&l.node);
+            match &l.path {
+                Some(path) => finding.at(path, None),
+                None => finding,
+            }
+        })
+        .collect()
+}
+
+/// Records the entities that the nodes in `ids` (every node when `None`) are about as they
+/// are now, and drops confirmations whose link is gone. Returns how many were recorded and
+/// dropped.
+// spec: REQ-ENTITY-0009
+pub fn confirm_reviews(graph: &Graph, lock: &mut Lock, ids: Option<&[String]>) -> (usize, usize) {
+    let wanted = |node: &str| ids.is_none_or(|ids| ids.iter().any(|i| i == node));
+    let (entities, _) = crate::entities::read(graph);
+    let links = reviews(graph, lock);
+    let mut recorded = 0;
+    for l in links
+        .iter()
+        .filter(|l| l.state != ReviewState::Ok && l.state != ReviewState::Orphaned)
+    {
+        if !wanted(&l.node) {
+            continue;
+        }
+        if let Some(entity) = entities.iter().find(|e| e.id == l.entity) {
+            lock.reviews.insert(
+                l.key.clone(),
+                Review {
+                    entity: entity.id.clone(),
+                    fingerprint: crate::entities::fingerprint(entity),
+                },
+            );
+            recorded += 1;
+        }
+    }
+    let gone: Vec<String> = links
+        .iter()
+        .filter(|l| l.state == ReviewState::Orphaned && wanted(&l.node))
+        .map(|l| l.key.clone())
+        .collect();
+    let dropped = gone.len();
+    for key in gone {
+        lock.reviews.remove(&key);
+    }
+    (recorded, dropped)
 }
 
 /// What `confirm` did.
@@ -486,5 +632,85 @@ mod tests {
         assert!(matches!(load(root), Err(Error::Parse(..))));
         fs::write(root.join(LOCK_PATH), "{\"version\": 99, \"links\": {}}").unwrap();
         assert!(matches!(load(root), Err(Error::TooNew(_, 99))));
+    }
+
+    fn about_graph(entity_block: &str, description: &str, about: bool) -> Graph {
+        let links = if about {
+            "links:\n  about: [ENT-0001]\n"
+        } else {
+            ""
+        };
+        Graph::from_sources([
+            (
+                PathBuf::from("specs/e.md"),
+                format!("---\nid: ENT-0001\ntype: entity\n---\n# Order\n\n{description}\n\n```entity\n{entity_block}```\n")
+                    .into_bytes(),
+            ),
+            (
+                PathBuf::from("specs/r.md"),
+                format!("---\nid: REQ-A-0001\ntype: requirement\n{links}---\n### Requirement: A\nThe system SHALL do it.\n\n#### Scenario: S {{#S1}}\n- **WHEN** a\n- **THEN** b\n").into_bytes(),
+            ),
+        ])
+    }
+
+    const ORDER: &str = "name: order\nattributes:\n  total: {type: int}\n";
+
+    fn state_of_review(g: &Graph, lock: &Lock) -> Vec<ReviewState> {
+        reviews(g, lock).iter().map(|r| r.state).collect()
+    }
+
+    // verifies: REQ-ENTITY-0009.S1
+    #[test]
+    fn a_node_about_an_entity_is_suspect_when_the_entity_changes_until_it_is_confirmed() {
+        let g = about_graph(ORDER, "What an order is.", true);
+        let mut lock = Lock::default();
+        assert_eq!(state_of_review(&g, &lock), [ReviewState::Unconfirmed]);
+        assert!(review_findings(&reviews(&g, &lock)).is_empty());
+
+        assert_eq!(confirm_reviews(&g, &mut lock, None), (1, 0));
+        assert_eq!(state_of_review(&g, &lock), [ReviewState::Ok]);
+
+        // A reworded description is not a change to what the entity says.
+        let reworded = about_graph(ORDER, "A different description.", true);
+        assert_eq!(state_of_review(&reworded, &lock), [ReviewState::Ok]);
+
+        // An attribute is.
+        let changed = about_graph(
+            "name: order\nattributes:\n  total: {type: int}\n  note: {type: bool}\n",
+            "What an order is.",
+            true,
+        );
+        assert_eq!(state_of_review(&changed, &lock), [ReviewState::Suspect]);
+        let found = review_findings(&reviews(&changed, &lock));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].code, "W026");
+        assert_eq!(found[0].id.as_deref(), Some("REQ-A-0001"));
+
+        // Confirming another node leaves it alone, and confirming this one settles it.
+        assert_eq!(
+            confirm_reviews(&changed, &mut lock, Some(&["REQ-B-0001".to_string()])),
+            (0, 0)
+        );
+        assert_eq!(state_of_review(&changed, &lock), [ReviewState::Suspect]);
+        assert_eq!(
+            confirm_reviews(&changed, &mut lock, Some(&["REQ-A-0001".to_string()])),
+            (1, 0)
+        );
+        assert_eq!(state_of_review(&changed, &lock), [ReviewState::Ok]);
+    }
+
+    // verifies: REQ-ENTITY-0009.S2
+    #[test]
+    fn a_confirmation_whose_link_is_gone_is_orphaned_and_dropped() {
+        let g = about_graph(ORDER, "x", true);
+        let mut lock = Lock::default();
+        confirm_reviews(&g, &mut lock, None);
+        let unlinked = about_graph(ORDER, "x", false);
+        assert_eq!(state_of_review(&unlinked, &lock), [ReviewState::Orphaned]);
+        assert_eq!(confirm_reviews(&unlinked, &mut lock, None), (0, 1));
+        assert!(lock.reviews.is_empty());
+        // A lock written before reviews existed has none, and reads.
+        let old: Lock = serde_json::from_str("{\"version\":1,\"links\":{}}").unwrap();
+        assert!(old.reviews.is_empty());
     }
 }
