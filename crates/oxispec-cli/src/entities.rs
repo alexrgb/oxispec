@@ -4,12 +4,14 @@ use std::path::Path;
 
 use anyhow::{Result, bail};
 use oxispec_core::entities::{self, affected};
+use oxispec_core::trace::scan_tree_with;
 use oxispec_core::{OUTPUT_SCHEMA_VERSION, config};
 use serde_json::json;
 
 use crate::{load_graph, require_module};
 
 // spec: REQ-ENTITY-0004
+// spec: REQ-ENTITY-0007
 pub fn run(root: &Path, id: Option<&str>, depth: u32, json: bool, cache: bool) -> Result<()> {
     let cfg = config::load(root)?;
     require_module(&cfg, "consistency")?;
@@ -22,15 +24,25 @@ pub fn run(root: &Path, id: Option<&str>, depth: u32, json: bool, cache: bool) -
             None => bail!("no entity {id}; `oxispec entities` lists them"),
         },
     };
+    // The code that says it is about each entity, when the project reads code at all.
+    let annotations = if cfg.has("tests") {
+        scan_tree_with(root, &cfg.trace)?.annotations
+    } else {
+        Vec::new()
+    };
     // A list gives the number of dependents, one entity gives them all.
     let rows: Vec<_> = chosen
         .iter()
-        .map(|e| (*e, affected(&graph, &e.id, depth)))
+        .map(|e| {
+            let code = entities::code(&e.id, &annotations);
+            let missing = entities::missing_in_code(e, &code);
+            (*e, affected(&graph, &e.id, depth), code, missing)
+        })
         .collect();
     if json {
         let out: Vec<_> = rows
             .iter()
-            .map(|(e, a)| {
+            .map(|(e, a, code, missing)| {
                 json!({
                     "id": e.id,
                     "name": e.name,
@@ -38,6 +50,8 @@ pub fn run(root: &Path, id: Option<&str>, depth: u32, json: bool, cache: bool) -
                     "path": e.path,
                     "attributes": e.attributes,
                     "affected": a,
+                    "code": code,
+                    "missing_in_code": missing,
                 })
             })
             .collect();
@@ -54,7 +68,7 @@ pub fn run(root: &Path, id: Option<&str>, depth: u32, json: bool, cache: bool) -
     if rows.is_empty() {
         outln!("no entities; `oxispec new entity \"Order\"` makes one");
     }
-    for (e, a) in &rows {
+    for (e, a, code, missing) in &rows {
         let title = e.title.as_deref().unwrap_or("");
         outln!("{}  {}  {title}", e.id, e.name);
         for (name, attr) in &e.attributes {
@@ -65,6 +79,27 @@ pub fn run(root: &Path, id: Option<&str>, depth: u32, json: bool, cache: bool) -
             }
         }
         if id.is_some() {
+            if code.is_empty() {
+                outln!(
+                    "  no code says it represents it (`// spec: {}` above a struct or class)",
+                    e.id
+                );
+            }
+            for c in code {
+                let what = match (&c.kind, &c.symbol) {
+                    (Some(kind), Some(symbol)) => format!("{symbol} ({kind})"),
+                    _ => "(not bound to code)".to_string(),
+                };
+                let fields = if c.fields.is_empty() {
+                    String::new()
+                } else {
+                    format!("  fields: {}", c.fields.join(", "))
+                };
+                outln!("  code  {}:{}  {what}{fields}", c.path.display(), c.line);
+            }
+            for name in missing {
+                outln!("  ! no field for `{}.{name}` in that code", e.name);
+            }
             if a.is_empty() {
                 outln!("  nothing depends on it yet");
             }
@@ -80,7 +115,7 @@ pub fn run(root: &Path, id: Option<&str>, depth: u32, json: bool, cache: bool) -
                 );
             }
         } else {
-            outln!("  {} depend on it", a.len());
+            outln!("  {} depend on it, {} places in code", a.len(), code.len());
         }
     }
     Ok(())

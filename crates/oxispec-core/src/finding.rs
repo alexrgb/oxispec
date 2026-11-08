@@ -228,6 +228,10 @@ pub const CODES: &[(&str, &str)] = &[
         "An operation states no 401 or 403 response, though other operations do",
     ),
     ("W024", "A node is `about` something that is not an entity"),
+    (
+        "W025",
+        "An attribute of an entity has no field in the code that represents it",
+    ),
     ("I001", "A link to another project is not checked"),
     (
         "I002",

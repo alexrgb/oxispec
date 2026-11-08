@@ -71,5 +71,6 @@ A code is never reused. `E` is an error (`oxispec check` exits with 1), `W` a wa
 | W022 | warning | A live risk at a high level is covered by no approved test plan |
 | W023 | warning | An operation states no 401 or 403 response, though other operations do |
 | W024 | warning | A node is `about` something that is not an entity |
+| W025 | warning | An attribute of an entity has no field in the code that represents it |
 | I001 | info | A link to another project is not checked |
 | I002 | info | A claim says nothing that another claim does not already say |

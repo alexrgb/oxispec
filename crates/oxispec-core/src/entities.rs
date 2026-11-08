@@ -19,8 +19,13 @@
 //! about with an `about` link. When an entity changes, [`affected`] finds what
 //! depends on it and [`changes`] says what changed in it.
 //!
+//! The code that represents an entity says so with a `// spec: ENT-0001` comment above the
+//! struct, class or interface (see [`crate::trace`]). [`code`] lists it, and [`check_code`]
+//! looks for a field for each attribute.
+//!
 //! E041 an entity block cannot be read, has no name, or shares its name
 //! W024 a node is `about` something that is not an entity
+//! W025 an attribute of an entity has no field in the code that represents it
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
@@ -32,6 +37,7 @@ use crate::finding::Finding;
 use crate::graph::Graph;
 use crate::id;
 use crate::node::Node;
+use crate::trace::{Annotation, Kind};
 
 /// How far from an entity a change is followed, by default.
 pub const DEFAULT_DEPTH: u32 = 2;
@@ -374,6 +380,98 @@ pub fn removed(old: &Entity) -> Vec<Change> {
     )]
 }
 
+/// Code that says it is about an entity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Code {
+    pub path: PathBuf,
+    pub line: usize,
+    /// The name of the struct, class, function or other code the comment is above.
+    pub symbol: Option<String>,
+    /// The tree-sitter kind of it, for example `struct_item`.
+    pub kind: Option<String>,
+    /// The fields of a type, which attributes are looked for in.
+    pub fields: Vec<String>,
+}
+
+/// The code that carries `spec: ENT-...` for this entity, in the order it was found.
+// spec: REQ-ENTITY-0007
+pub fn code(entity: &str, annotations: &[Annotation]) -> Vec<Code> {
+    annotations
+        .iter()
+        .filter(|a| a.kind == Kind::Implements && id::base_of(&a.target) == entity)
+        .map(|a| Code {
+            path: a.path.clone(),
+            line: a.line,
+            symbol: a.symbol.as_ref().map(|s| s.name.clone()),
+            kind: a.symbol.as_ref().map(|s| s.kind.clone()),
+            fields: a
+                .symbol
+                .as_ref()
+                .map(|s| s.fields.clone())
+                .unwrap_or_default(),
+        })
+        .collect()
+}
+
+/// A name with case, `_` and `-` left out, so `total_amount` and `totalAmount` are one.
+fn normalized(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// The attributes of an entity that none of its code has a field for. Nothing is said when
+/// no code that names the entity defines a type with fields, since then there is nothing to
+/// look in.
+// spec: REQ-ENTITY-0008
+pub fn missing_in_code(entity: &Entity, code: &[Code]) -> Vec<String> {
+    if code.iter().all(|c| c.fields.is_empty()) {
+        return Vec::new();
+    }
+    let have: BTreeSet<String> = code
+        .iter()
+        .flat_map(|c| c.fields.iter())
+        .map(|f| normalized(f))
+        .collect();
+    entity
+        .attributes
+        .keys()
+        .filter(|a| !have.contains(&normalized(a)))
+        .cloned()
+        .collect()
+}
+
+/// W025 for each attribute of an entity that the code representing it has no field for.
+// spec: REQ-ENTITY-0008
+pub fn check_code(graph: &Graph, annotations: &[Annotation]) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for entity in read(graph).0 {
+        let found = code(&entity.id, annotations);
+        let Some(place) = found.iter().find(|c| !c.fields.is_empty()) else {
+            continue;
+        };
+        for attribute in missing_in_code(&entity, &found) {
+            findings.push(
+                Finding::warning(
+                    "W025",
+                    format!(
+                        "attribute `{attribute}` of {} has no field in {}",
+                        entity.id,
+                        place
+                            .symbol
+                            .as_deref()
+                            .unwrap_or("the code that represents it")
+                    ),
+                )
+                .at(&place.path, Some(place.line))
+                .node(&entity.id),
+            );
+        }
+    }
+    findings
+}
+
 /// What a change to one entity touches, for a report.
 #[derive(Debug, Clone, Serialize)]
 pub struct Impact {
@@ -381,6 +479,8 @@ pub struct Impact {
     pub name: String,
     pub changes: Vec<Change>,
     pub affected: Vec<Affected>,
+    /// The code that represents the entity, which a change to it may need to follow.
+    pub code: Vec<Code>,
 }
 
 /// The entities that differ between two graphs, with what depends on each. A new
@@ -420,6 +520,7 @@ pub fn impacts(old: &Graph, new: &Graph, depth: u32) -> Vec<Impact> {
             name,
             changes,
             affected,
+            code: Vec::new(),
         });
     }
     out.sort_by(|a, b| a.id.cmp(&b.id));
@@ -644,5 +745,52 @@ mod tests {
         assert_eq!(found[0].changes[0].kind, "attribute-removed");
         assert_eq!(found[0].affected[0].id, "REQ-A-0001");
         assert_eq!(found[1].changes[0].kind, "removed");
+    }
+
+    fn annotation(target: &str, line: usize, fields: &[&str], symbol: Option<&str>) -> Annotation {
+        Annotation {
+            target: target.to_string(),
+            kind: Kind::Implements,
+            path: PathBuf::from("src/order.rs"),
+            line,
+            symbol: symbol.map(|name| crate::symbol::Symbol {
+                name: name.to_string(),
+                kind: "struct_item".to_string(),
+                start_line: line,
+                end_line: line + 3,
+                hash: "h".to_string(),
+                fields: fields.iter().map(|f| f.to_string()).collect(),
+            }),
+        }
+    }
+
+    // verifies: REQ-ENTITY-0008.S1
+    #[test]
+    fn an_attribute_with_no_field_is_warned_about_ignoring_case_and_underscores() {
+        let block = "name: order\nattributes:\n  total_amount: {type: int}\n  status: {type: bool}\n  note: {type: bool}\n";
+        let g = graph(&[("specs/e.md", &entity("ENT-0001", block))]);
+        let notes = [
+            annotation("ENT-0001", 1, &["totalAmount", "Status"], Some("Order")),
+            annotation("ENT-0002", 9, &["note"], Some("Other")),
+        ];
+        let code = code("ENT-0001", &notes);
+        assert_eq!(code.len(), 1);
+        let found = check_code(&g, &notes);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].code, "W025");
+        assert!(found[0].message.contains("`note`"), "{}", found[0].message);
+        assert_eq!(found[0].line, Some(1));
+        assert_eq!(found[0].id.as_deref(), Some("ENT-0001"));
+    }
+
+    // verifies: REQ-ENTITY-0008.S2
+    #[test]
+    fn nothing_is_said_when_there_is_no_type_to_look_in() {
+        let g = graph(&[("specs/e.md", &entity("ENT-0001", ORDER))]);
+        let function = [annotation("ENT-0001", 1, &[], Some("pay"))];
+        assert!(check_code(&g, &function).is_empty());
+        assert!(check_code(&g, &[]).is_empty());
+        let unbound = [annotation("ENT-0001", 1, &[], None)];
+        assert!(check_code(&g, &unbound).is_empty());
     }
 }

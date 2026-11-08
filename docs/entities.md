@@ -51,6 +51,32 @@ oxispec entities ENT-0001 --depth 3 --json
 
 A node depends on an entity when it links to it, when one of its claims uses an attribute of it, or, up to `--depth` links away (2 by default), when it links to such a node. The nearest come first, and each says how it is connected: `about ENT-0001`, `claims order.total`, or `refines REQ-ORDERS-0001`. An agent asks the same with the MCP tool `spec_entities`.
 
+## Say which code represents it
+
+Put the ID of the entity in a `spec:` comment above the struct, class, interface or type that represents it, the same comment that ties code to a requirement:
+
+```rust
+// spec: ENT-0001
+pub struct Order {
+    pub total: i64,
+    pub status: Status,
+}
+```
+
+`oxispec entities ENT-0001` then lists the code: where it is, its name and kind, and its fields.
+
+```
+  code  src/order.rs:2  Order (struct_item)  fields: total, status
+```
+
+Three things follow from the link, and none needs anything more written:
+
+- **A field for each attribute.** `oxispec entities` and `oxispec ci` warn (W025) about an attribute that no field of that code matches. Case, `_` and `-` are ignored, so `total_amount`, `totalAmount` and `TotalAmount` are one name. Nothing is said when the comment is above a function, or above a type with no fields, since there is nothing to look in. Fields are read for Rust structs, Go structs, TypeScript interfaces, classes and object type aliases, and JavaScript classes. Other languages have no symbol, so the link is only a place.
+- **Suspect links.** The link is watched like any other between a spec and code. When the struct changes, or the entity does, `oxispec suspect` lists it until someone looks and runs `oxispec confirm ENT-0001`. This is the review step for code: a change to the entity makes the code that represents it suspect.
+- **The report of a change.** When a branch changes an entity, `oxispec ci` names the code that represents it, so whoever changes the entity sees what may need to follow.
+
+More than one place can say it is about the same entity (a struct, a database row type, a DTO). An attribute only has to be a field of one of them, so a layer that carries part of the entity does not raise a warning. A function with `spec: ENT-0001` above it is listed as code, and is watched, but its fields are none.
+
 ## See what a change touches
 
 `oxispec ci` compares the entities of a branch with those where it started, and for each one that changed it says what changed and what depends on it, in the output, in the JSON and in the pull request comment:
@@ -72,7 +98,8 @@ entity ENT-0001 (order) [breaking]: `status` now also allows returned; attribute
 
 ## What it does not do yet
 
-- It does not follow a change into code. Only nodes are followed.
+- It does not read the types of the fields, so an attribute that is an `int` and a field that is a string are not told apart. Only names are compared.
+- It does not follow a change into code beyond the places that say they are about the entity: a function that uses an `Order` and does not say so is not found.
 - It does not know what a requirement says about an entity unless a link or a claim does. A requirement that only mentions an order in its prose is not found.
-- It does not mark the dependents as needing review until someone looks, the way `oxispec suspect` does for code. That is the next step.
+- It does not mark requirements that depend on an entity as needing review until someone looks, the way `oxispec suspect` does for code. That is the next step.
 - Attributes have the four types of the vocabulary. There are no structured types, lists or relations between entities beyond links.

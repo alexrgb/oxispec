@@ -43,6 +43,8 @@ fn write_report(path: &Path, text: &str) -> Result<()> {
 // spec: REQ-CI-0004
 // spec: REQ-SUSPECT-0002
 // spec: REQ-ENTITY-0005
+// spec: REQ-ENTITY-0007
+// spec: REQ-ENTITY-0008
 pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
     let cfg = config::load(root)?;
     let base = git::merge_base(root, &options.base)?;
@@ -52,12 +54,20 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
 
     // A link between code and a spec that changed since it was confirmed is
     // always reported, as it would be to anyone running `oxispec suspect`.
-    if cfg.has("tests") {
+    let scan = if cfg.has("tests") {
         let scan = scan_tree_with(root, &cfg.trace)?;
         let lock = suspect::load(root)?;
         let links = suspect::links(&new, &scan.annotations, &lock);
         diff.new_findings.extend(suspect::findings(&links));
-    }
+        // An attribute of an entity that the code representing it has no field for.
+        if cfg.has("consistency") {
+            diff.new_findings
+                .extend(oxispec_core::entities::check_code(&new, &scan.annotations));
+        }
+        Some(scan)
+    } else {
+        None
+    };
 
     let changes = git::changes(root, &base.oid)?;
     let reach = impact(&new, &changes.paths, &changes.old_ids);
@@ -73,11 +83,17 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
         .collect();
     // What an entity that changed leaves depending on it. It is information, not a finding:
     // whether the dependents are still right is for a person to say.
-    let entity_impacts = if cfg.has("consistency") {
+    let mut entity_impacts = if cfg.has("consistency") {
         oxispec_core::entities::impacts(&old, &new, oxispec_core::entities::DEFAULT_DEPTH)
     } else {
         Vec::new()
     };
+    // The code that represents each of them, which the change may need to follow.
+    if let Some(scan) = &scan {
+        for impact in &mut entity_impacts {
+            impact.code = oxispec_core::entities::code(&impact.id, &scan.annotations);
+        }
+    }
     let reportable = check(&new)
         .iter()
         .filter(|f| f.severity != Severity::Info)
@@ -146,6 +162,14 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
                 what.join("; "),
                 e.affected.len()
             );
+            for c in &e.code {
+                outln!(
+                    "  code: {}:{} {}",
+                    c.path.display(),
+                    c.line,
+                    c.symbol.as_deref().unwrap_or("")
+                );
+            }
         }
         outln!(
             "{} nodes changed, {} touched: {errors} new errors, {warnings} new warnings, {} fixed, {} existing not shown",
