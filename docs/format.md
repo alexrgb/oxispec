@@ -307,6 +307,7 @@ Codes are stable. A code is never reused.
 | W023 | warning | An operation states no 401 or 403 response, though other operations do (see [guide](guide/writing-an-api.md#security)) |
 | W024 | warning | A node is `about` something that is not an entity |
 | W025 | warning | An attribute of an entity has no field in the code that represents it (see [entities.md](entities.md#say-which-code-represents-it)) |
+| W026 | warning | A node is about an entity that changed since the node was confirmed (see [entities.md](entities.md#look-again-when-it-changes)) |
 | I001 | info | A link to another project is not checked. Shown with `--verbose`. |
 | I002 | info | A claim says nothing that another claim does not already say. Shown with `--verbose`. |
 

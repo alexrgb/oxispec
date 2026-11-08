@@ -30,13 +30,24 @@ pub fn run(root: &Path, id: Option<&str>, depth: u32, json: bool, cache: bool) -
     } else {
         Vec::new()
     };
+    // The nodes that are about an entity that changed since a person confirmed them.
+    let stale: std::collections::BTreeSet<String> =
+        oxispec_core::suspect::reviews(&graph, &oxispec_core::suspect::load(root)?)
+            .into_iter()
+            .filter(|r| r.state == oxispec_core::suspect::ReviewState::Suspect)
+            .map(|r| format!("{} {}", r.node, r.entity))
+            .collect();
     // A list gives the number of dependents, one entity gives them all.
     let rows: Vec<_> = chosen
         .iter()
         .map(|e| {
             let code = entities::code(&e.id, &annotations);
             let missing = entities::missing_in_code(e, &code);
-            (*e, affected(&graph, &e.id, depth), code, missing)
+            let mut dependents = affected(&graph, &e.id, depth);
+            for d in &mut dependents {
+                d.needs_review = stale.contains(&format!("{} {}", d.id, e.id));
+            }
+            (*e, dependents, code, missing)
         })
         .collect();
     if json {
@@ -106,12 +117,13 @@ pub fn run(root: &Path, id: Option<&str>, depth: u32, json: bool, cache: bool) -
             for x in a {
                 let title = x.title.as_deref().unwrap_or("");
                 outln!(
-                    "  {} hop{}  {}  {}  ({})  {title}",
+                    "  {} hop{}  {}  {}  ({})  {title}{}",
                     x.distance,
                     if x.distance == 1 { " " } else { "s" },
                     x.id,
                     x.ty,
-                    x.via
+                    x.via,
+                    if x.needs_review { "  NEEDS REVIEW" } else { "" }
                 );
             }
         } else {

@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
 use oxispec_core::results;
-use oxispec_core::suspect::{self, State};
+use oxispec_core::suspect::{self, ReviewState, State};
 use oxispec_core::trace::{Annotation, Coverage, Kind, Scan, coverage, scan_tree_with};
 use oxispec_core::{OUTPUT_SCHEMA_VERSION, config, id, index};
 use serde_json::json;
@@ -22,6 +22,19 @@ fn scan(root: &Path) -> Result<Scan> {
     }
     let scan = scan_tree_with(root, &cfg.trace)?;
     Ok(scan)
+}
+
+/// The annotations for `suspect` and `confirm`. A project with entities and no `tests` module
+/// has none, and the nodes that are about entities are still looked after.
+fn annotations_for_links(root: &Path) -> Result<Vec<Annotation>> {
+    let cfg = config::load(root)?;
+    if cfg.has("tests") {
+        Ok(scan_tree_with(root, &cfg.trace)?.annotations)
+    } else if cfg.has("consistency") {
+        Ok(Vec::new())
+    } else {
+        bail!("module `tests` is not enabled; run `oxispec modules add tests`");
+    }
 }
 
 fn place(a: &Annotation) -> String {
@@ -336,15 +349,25 @@ pub fn suspect_command(
     json_output: bool,
     cache: bool,
 ) -> Result<ExitCode> {
-    let scan = scan(root)?;
+    let annotations = annotations_for_links(root)?;
     let graph = index::load(root, cache).0;
     let lock = suspect::load(root)?;
-    let links = suspect::links(&graph, &scan.annotations, &lock);
+    let links = suspect::links(&graph, &annotations, &lock);
+    let reviews = suspect::reviews(&graph, &lock);
     let suspects = links.iter().filter(|l| l.state.is_suspect()).count();
     let unconfirmed = count(&links, State::Unconfirmed);
     let orphaned = count(&links, State::Orphaned);
     let ok = count(&links, State::Ok);
-    let failed = suspects > 0 || (strict && unconfirmed + orphaned > 0);
+    let in_state = |s: ReviewState| reviews.iter().filter(|r| r.state == s).count();
+    let (r_ok, r_suspect, r_unconfirmed, r_orphaned) = (
+        in_state(ReviewState::Ok),
+        in_state(ReviewState::Suspect),
+        in_state(ReviewState::Unconfirmed),
+        in_state(ReviewState::Orphaned),
+    );
+    let failed = suspects > 0
+        || r_suspect > 0
+        || (strict && unconfirmed + orphaned + r_unconfirmed + r_orphaned > 0);
 
     if json_output {
         let shown: Vec<&suspect::Link> = links
@@ -358,6 +381,16 @@ pub fn suspect_command(
             "unconfirmed": unconfirmed,
             "orphaned": orphaned,
             "links": shown,
+            "reviews": {
+                "ok": r_ok,
+                "suspect": r_suspect,
+                "unconfirmed": r_unconfirmed,
+                "orphaned": r_orphaned,
+                "links": reviews
+                    .iter()
+                    .filter(|r| all || r.state != ReviewState::Ok)
+                    .collect::<Vec<_>>(),
+            },
             "failed": failed,
         });
         outln!("{}", serde_json::to_string_pretty(&out)?);
@@ -372,6 +405,21 @@ pub fn suspect_command(
         if let Some(path) = &f.path {
             outln!("  --> {}:{}", path.display(), f.line.unwrap_or(1));
         }
+    }
+    for f in suspect::review_findings(&reviews) {
+        outln!("{}", crate::finding_line(&f));
+        if let Some(path) = &f.path {
+            outln!("  --> {}", path.display());
+        }
+    }
+    for r in &reviews {
+        let label = match r.state {
+            ReviewState::Unconfirmed => "unreviewed",
+            ReviewState::Orphaned => "orphaned",
+            ReviewState::Ok if all => "reviewed",
+            _ => continue,
+        };
+        outln!("{label:<12} {} about {}", r.node, r.entity);
     }
     for link in &links {
         let label = match link.state {
@@ -391,9 +439,15 @@ pub fn suspect_command(
         "{} links: {ok} ok, {suspects} suspect, {unconfirmed} unconfirmed, {orphaned} orphaned",
         links.len() - orphaned
     );
-    if suspects > 0 {
+    if !reviews.is_empty() {
+        outln!(
+            "{} nodes about an entity: {r_ok} reviewed, {r_suspect} to review, {r_unconfirmed} unreviewed, {r_orphaned} orphaned",
+            reviews.len() - r_orphaned
+        );
+    }
+    if suspects + r_suspect > 0 {
         outln!("look at each one, then run `oxispec confirm ID` for those that are still right");
-    } else if unconfirmed + orphaned > 0 {
+    } else if unconfirmed + orphaned + r_unconfirmed + r_orphaned > 0 {
         outln!("`oxispec confirm --all` records the links as they are now");
     }
     Ok(if failed {
@@ -413,7 +467,7 @@ pub fn confirm_command(
     if ids.is_empty() && !all {
         bail!("say which nodes to confirm, or use --all");
     }
-    let scan = scan(root)?;
+    let annotations = annotations_for_links(root)?;
     let graph = index::load(root, cache).0;
     let mut lock = suspect::load(root)?;
     for given in ids {
@@ -424,24 +478,23 @@ pub fn confirm_command(
     }
     let bases: Vec<String> = ids.iter().map(|i| id::base_of(i).to_string()).collect();
     let filter = (!all).then_some(bases.as_slice());
-    let done = suspect::confirm(&graph, &scan.annotations, &mut lock, filter);
+    let done = suspect::confirm(&graph, &annotations, &mut lock, filter);
+    let (reviewed, review_pruned) = suspect::confirm_reviews(&graph, &mut lock, filter);
+    let (changed, dropped) = (done.confirmed + reviewed, done.pruned + review_pruned);
     if dry_run {
         outln!(
-            "would confirm {} link(s) and drop {} confirmation(s) whose link is gone",
-            done.confirmed,
-            done.pruned
+            "would confirm {changed} link(s) and drop {dropped} confirmation(s) whose link is gone"
         );
         return Ok(());
     }
-    if done.confirmed + done.pruned > 0 {
+    if changed + dropped > 0 {
         suspect::save(root, &lock)?;
     }
-    outln!(
-        "confirmed {} link(s), dropped {} confirmation(s) whose link is gone",
-        done.confirmed,
-        done.pruned
-    );
-    if done.confirmed + done.pruned > 0 {
+    outln!("confirmed {changed} link(s), dropped {dropped} confirmation(s) whose link is gone");
+    if reviewed > 0 {
+        outln!("{reviewed} of them are nodes that are about an entity");
+    }
+    if changed + dropped > 0 {
         outln!("commit {} to share it", suspect::LOCK_PATH);
     }
     Ok(())

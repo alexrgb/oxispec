@@ -45,6 +45,7 @@ fn write_report(path: &Path, text: &str) -> Result<()> {
 // spec: REQ-ENTITY-0005
 // spec: REQ-ENTITY-0007
 // spec: REQ-ENTITY-0008
+// spec: REQ-ENTITY-0009
 pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
     let cfg = config::load(root)?;
     let base = git::merge_base(root, &options.base)?;
@@ -54,9 +55,14 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
 
     // A link between code and a spec that changed since it was confirmed is
     // always reported, as it would be to anyone running `oxispec suspect`.
+    let lock = suspect::load(root)?;
+    // A node that is about an entity that changed since the node was confirmed.
+    if cfg.has("consistency") {
+        diff.new_findings
+            .extend(suspect::review_findings(&suspect::reviews(&new, &lock)));
+    }
     let scan = if cfg.has("tests") {
         let scan = scan_tree_with(root, &cfg.trace)?;
-        let lock = suspect::load(root)?;
         let links = suspect::links(&new, &scan.annotations, &lock);
         diff.new_findings.extend(suspect::findings(&links));
         // An attribute of an entity that the code representing it has no field for.

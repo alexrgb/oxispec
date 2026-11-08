@@ -232,6 +232,10 @@ pub const CODES: &[(&str, &str)] = &[
         "W025",
         "An attribute of an entity has no field in the code that represents it",
     ),
+    (
+        "W026",
+        "A node is about an entity that changed since the node was confirmed",
+    ),
     ("I001", "A link to another project is not checked"),
     (
         "I002",

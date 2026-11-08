@@ -197,6 +197,21 @@ pub fn check(graph: &Graph) -> Vec<Finding> {
     findings
 }
 
+/// A hash of what an entity says: its name and its attributes, not the prose around them,
+/// so a reworded description is not a change that anything depending on it must review.
+// spec: REQ-ENTITY-0009
+pub fn fingerprint(entity: &Entity) -> String {
+    let mut text = format!("{}\n", entity.name);
+    for (name, attribute) in &entity.attributes {
+        text.push_str(&format!(
+            "{name} {} {}\n",
+            attribute.kind,
+            attribute.values.join(",")
+        ));
+    }
+    blake3::hash(text.as_bytes()).to_hex().to_string()
+}
+
 /// A node that depends on an entity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Affected {
@@ -208,6 +223,10 @@ pub struct Affected {
     pub distance: u32,
     /// How it is connected, for example `about ENT-0001` or `claims order.total`.
     pub via: String,
+    /// The entity changed since a person last said this node is still right (`confirm`).
+    /// Only set by the command line, which reads the lock file.
+    #[serde(default)]
+    pub needs_review: bool,
 }
 
 /// The nodes that depend on an entity: those that link to it (any kind, `about` first
@@ -237,6 +256,7 @@ pub fn affected(graph: &Graph, entity: &str, depth: u32) -> Vec<Affected> {
                     title: node.title.clone(),
                     distance,
                     via,
+                    needs_review: false,
                 },
             );
         }

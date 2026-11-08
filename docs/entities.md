@@ -77,6 +77,21 @@ Three things follow from the link, and none needs anything more written:
 
 More than one place can say it is about the same entity (a struct, a database row type, a DTO). An attribute only has to be a field of one of them, so a layer that carries part of the entity does not raise a warning. A function with `spec: ENT-0001` above it is listed as code, and is watched, but its fields are none.
 
+## Look again when it changes
+
+A node that is `about` an entity was written for the entity as it was. Say that you looked at it and it is still right:
+
+```bash
+oxispec confirm --all            # the first time, to record the starting point
+oxispec confirm REQ-ORDERS-0001  # after looking at one node
+```
+
+From then on, when the entity gets a different name or attributes, each node about it is **to review**: `oxispec suspect` lists it and exits with 1, `oxispec entities ENT-0001` marks it `NEEDS REVIEW`, and `oxispec ci` warns (W026) in the output and the comment. Reading the node, changing it if it needs changing, and running `oxispec confirm NODE` settles it. The confirmation goes in `.oxispec/trace.lock.json`, which is committed, so a pull request that changes an entity and does not review what depends on it shows up, and one that does shows the confirmations in its diff.
+
+Only what the entity says counts: its name, its attributes, their types and enum values. A reworded description does not make anything suspect. A node that was never confirmed is "unreviewed" and is not warned about, as with code: nothing is known about it yet. `oxispec suspect --strict` fails on those too.
+
+W026 is a warning, so it fails `ci` only with `--strict`. `confirm ENT-0001` confirms the code that represents the entity (above), not the nodes about it: each node is for a person to look at.
+
 ## See what a change touches
 
 `oxispec ci` compares the entities of a branch with those where it started, and for each one that changed it says what changed and what depends on it, in the output, in the JSON and in the pull request comment:
@@ -101,5 +116,6 @@ entity ENT-0001 (order) [breaking]: `status` now also allows returned; attribute
 - It does not read the types of the fields, so an attribute that is an `int` and a field that is a string are not told apart. Only names are compared.
 - It does not follow a change into code beyond the places that say they are about the entity: a function that uses an `Order` and does not say so is not found.
 - It does not know what a requirement says about an entity unless a link or a claim does. A requirement that only mentions an order in its prose is not found.
-- It does not mark requirements that depend on an entity as needing review until someone looks, the way `oxispec suspect` does for code. That is the next step.
+- A requirement that depends on an entity only through its claims, with no `about` link, is listed as depending on it but is not marked to review. Only `about` links are watched.
+- A release is not held back by a node that needs review, the way it is by a suspect link to code.
 - Attributes have the four types of the vocabulary. There are no structured types, lists or relations between entities beyond links.
