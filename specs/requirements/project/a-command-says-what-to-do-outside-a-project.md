@@ -14,3 +14,7 @@ The system SHALL tell a user who runs a command outside a project to run `oxispe
 #### Scenario: A newer project {#S2}
 - **WHEN** the config says `format: 99`
 - **THEN** every command exits with 2 and names the format
+
+```claims
+exit.refusal == 2
+```

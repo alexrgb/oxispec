@@ -10,3 +10,7 @@ The system SHALL report with `ci` as a new error (E016) a link whose code change
 #### Scenario: A changed function {#S1}
 - **WHEN** a function is confirmed and then changed, and `ci` is run
 - **THEN** `ci` exits with 1, reports E016 with the path of the code, and after `confirm` it exits with 0
+
+```claims
+exit.findings == 1
+```

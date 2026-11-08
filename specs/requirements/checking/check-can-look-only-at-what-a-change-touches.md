@@ -18,3 +18,7 @@ The system SHALL, with `--changed`, check the nodes that changed and the nodes t
 #### Scenario: No commits and no repository {#S3}
 - **WHEN** `--changed` is run in a repository with no commits, and in a folder that is not a repository
 - **THEN** the first checks everything, and the second exits with 2 and says it needs a git repository
+
+```claims
+exit.refusal == 2
+```

@@ -10,3 +10,8 @@ The system SHALL refuse to start `oxispec serve` without a token, and on an addr
 #### Scenario: Start {#S1}
 - **WHEN** the server is started with no tokens, and then on 0.0.0.0 with a token
 - **THEN** the first start fails with a message about no tokens, the second names `--behind-tls-proxy`
+
+```claims
+for token.count == 0: not serve.starts
+for not listen.local and not behind_tls_proxy: not serve.starts
+```

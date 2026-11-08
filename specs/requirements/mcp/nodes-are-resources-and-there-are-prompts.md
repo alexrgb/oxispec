@@ -14,3 +14,7 @@ The system SHALL offer each node as an MCP resource and a few prompts, list the 
 #### Scenario: Pages {#S2}
 - **WHEN** a project has 530 nodes and the client follows the cursor
 - **THEN** the first page has 500 and a cursor, the second has 30 and none, no node is listed twice, and a cursor past the end is an empty page
+
+```claims
+mcp.resources_page_size == 500
+```

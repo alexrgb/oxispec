@@ -10,3 +10,7 @@ The system SHALL report with E017 a claim that cannot be read, with the reason a
 #### Scenario: A loose claim {#S1}
 - **WHEN** a claim has no unit
 - **THEN** `check` exits with 1 and reports E017, says what to write, and names the file and line
+
+```claims
+exit.findings == 1
+```
