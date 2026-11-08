@@ -126,6 +126,17 @@ Arguments:
 
 - `variable` (string, optional): Only this variable, for example session.idle_timeout.
 
+## `spec_entities`
+
+The entities the specs are about (orders, users, sessions) with their typed attributes, and for each the nodes that depend on it: those that link to it with `about` or another link, those whose claims use its attributes, and the nodes that link to those. Use it before changing a requirement or an entity, to see what else the change touches.
+
+Needs the `consistency` module. Read only.
+
+Arguments:
+
+- `depth` (integer, optional, default 2, 1 to 5): How many links away a dependency is followed.
+- `id` (string, optional): Only this entity, for example ENT-0001. Without it, every entity with the number of dependents.
+
 ## `spec_architecture`
 
 The architecture model: its elements, environments and rules, or with `view` and `id` one view as a Mermaid flowchart (context and container views are of a system, a component view of a container, a deployment view of an environment). Problems come from spec_check.

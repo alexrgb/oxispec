@@ -4,7 +4,7 @@ Written by `oxispec docs reference` from the program itself. Do not edit it by h
 
 Every command also accepts `--root <ROOT>` (the project folder; default: the nearest parent with `.oxispec/config.yaml`), `--no-cache` (do not read or write the local index) and `--help`.
 
-Commands: [`init`](#oxispec-init), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`show`](#oxispec-show)
+Commands: [`init`](#oxispec-init), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`entities`](#oxispec-entities), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`show`](#oxispec-show)
 
 ## `oxispec init`
 
@@ -79,7 +79,7 @@ Usage: oxispec new [OPTIONS] <COMMAND>
 
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
-Subcommands: `requirement`, `adr`, `test-plan`, `risk`, `debt`, `prd`, `change`, `vocabulary`, `machine`, `architecture`
+Subcommands: `requirement`, `adr`, `test-plan`, `risk`, `debt`, `prd`, `change`, `vocabulary`, `entity`, `machine`, `architecture`
 
 ### `oxispec new requirement`
 
@@ -172,6 +172,17 @@ A vocabulary: the typed variables that claims in requirements talk about
 
 ```text
 Usage: oxispec new vocabulary [OPTIONS] <TITLE>
+```
+
+- `<TITLE>`
+- `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
+
+### `oxispec new entity`
+
+An entity: a thing the specs are about, with typed attributes that claims can use
+
+```text
+Usage: oxispec new entity [OPTIONS] <TITLE>
 ```
 
 - `<TITLE>`
@@ -548,6 +559,18 @@ Usage: oxispec risks status [OPTIONS] <ID> <STATUS>
 - `<ID>`
 - `<STATUS>`
 - `--by <BY>`: Who accepts the risk (default: git user.name). Only for `accepted`.
+
+## `oxispec entities`
+
+The entities the specs are about, and what depends on each (needs the consistency module)
+
+```text
+Usage: oxispec entities [OPTIONS] [ID]
+```
+
+- `<ID>`: Show this entity with everything that depends on it, as ENT-0001.
+- `--depth <DEPTH>`: How many links away a dependency is followed. Default: `2`.
+- `--json`
 
 ## `oxispec debt`
 

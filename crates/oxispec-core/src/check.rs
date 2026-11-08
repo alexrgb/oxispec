@@ -52,6 +52,7 @@ fn run_checks(graph: &Graph) -> Vec<Finding> {
     findings.extend(crate::api::check(graph));
     findings.extend(crate::compliance::check(graph));
     findings.extend(crate::claims::check(graph));
+    findings.extend(crate::entities::check(graph));
     findings.extend(crate::machines::check(graph));
     findings.extend(crate::architecture::check(graph));
     findings

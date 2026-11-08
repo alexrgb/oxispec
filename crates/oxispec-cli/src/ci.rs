@@ -42,6 +42,7 @@ fn write_report(path: &Path, text: &str) -> Result<()> {
 // spec: REQ-CI-0003
 // spec: REQ-CI-0004
 // spec: REQ-SUSPECT-0002
+// spec: REQ-ENTITY-0005
 pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
     let cfg = config::load(root)?;
     let base = git::merge_base(root, &options.base)?;
@@ -70,6 +71,13 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
             path: n.path.clone(),
         })
         .collect();
+    // What an entity that changed leaves depending on it. It is information, not a finding:
+    // whether the dependents are still right is for a person to say.
+    let entity_impacts = if cfg.has("consistency") {
+        oxispec_core::entities::impacts(&old, &new, oxispec_core::entities::DEFAULT_DEPTH)
+    } else {
+        Vec::new()
+    };
     let reportable = check(&new)
         .iter()
         .filter(|f| f.severity != Severity::Info)
@@ -82,6 +90,7 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
         bump: summarize(&new, &diff).bump(),
         diff: &diff,
         strict: options.strict,
+        entities: entity_impacts,
     };
 
     if let Some(path) = &options.markdown {
@@ -105,6 +114,7 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
             "added": diff.added,
             "removed": diff.removed,
             "changed": diff.changed,
+            "entities": report.entities,
             "bump": report.bump,
             "new_findings": diff.new_findings,
             "fixed_findings": diff.fixed_findings,
@@ -124,6 +134,18 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
                     None => outln!("  --> {}", path.display()),
                 }
             }
+        }
+        for e in &report.entities {
+            let breaking = e.changes.iter().any(|c| c.breaking);
+            let what: Vec<&str> = e.changes.iter().map(|c| c.detail.as_str()).collect();
+            outln!(
+                "entity {} ({}){}: {}; {} depend on it",
+                e.id,
+                e.name,
+                if breaking { " [breaking]" } else { "" },
+                what.join("; "),
+                e.affected.len()
+            );
         }
         outln!(
             "{} nodes changed, {} touched: {errors} new errors, {warnings} new warnings, {} fixed, {} existing not shown",

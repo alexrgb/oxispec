@@ -36,6 +36,8 @@ pub struct Report<'a> {
     pub bump: Bump,
     /// Warnings fail the run too.
     pub strict: bool,
+    /// The entities that changed, and what depends on each.
+    pub entities: Vec<crate::entities::Impact>,
 }
 
 impl Report<'_> {
@@ -149,6 +151,47 @@ pub fn markdown(report: &Report) -> String {
                 cell(&Report::location(f).unwrap_or_else(|| f.id.clone().unwrap_or_default())),
                 cell(&f.message)
             );
+        }
+    }
+
+    if !report.entities.is_empty() {
+        let _ = writeln!(
+            out,
+            "\n**{} changed.** What depends on them may need a second look:\n",
+            plural(report.entities.len(), "entity", "entities")
+        );
+        for e in &report.entities {
+            let breaking = e.changes.iter().any(|c| c.breaking);
+            let what: Vec<String> = e.changes.iter().map(|c| c.detail.clone()).collect();
+            let _ = writeln!(
+                out,
+                "- {} `{}` ({}): {}",
+                if breaking { "⚠️" } else { "ℹ️" },
+                e.id,
+                e.name,
+                cell(&what.join("; "))
+            );
+            if e.affected.is_empty() {
+                out.push_str("  - nothing depends on it yet\n");
+            } else {
+                let shown: Vec<String> = e
+                    .affected
+                    .iter()
+                    .take(10)
+                    .map(|a| format!("`{}`", a.id))
+                    .collect();
+                let more = e.affected.len().saturating_sub(10);
+                let _ = write!(
+                    out,
+                    "  - {} depend on it: {}",
+                    e.affected.len(),
+                    shown.join(", ")
+                );
+                if more > 0 {
+                    let _ = write!(out, " and {more} more");
+                }
+                out.push('\n');
+            }
         }
     }
 
@@ -382,6 +425,7 @@ mod tests {
             existing: 3,
             bump: Bump::Minor,
             strict,
+            entities: Vec::new(),
         }
     }
 

@@ -269,6 +269,7 @@ pub struct Blocks {
     pub vocabulary: Vec<TextBlock>,
     pub machines: Vec<TextBlock>,
     pub architecture: Vec<TextBlock>,
+    pub entities: Vec<TextBlock>,
 }
 
 /// Reads the lines of fenced `claims` blocks and the text of `vocabulary`,
@@ -281,12 +282,14 @@ pub fn parse_blocks(body: &str, line_offset: usize) -> Blocks {
         Vocabulary,
         Machine,
         Architecture,
+        Entity,
     }
     let mut state = In::Nothing;
     let mut claims = Vec::new();
     let mut vocabulary: Vec<TextBlock> = Vec::new();
     let mut machines: Vec<TextBlock> = Vec::new();
     let mut architecture: Vec<TextBlock> = Vec::new();
+    let mut entities: Vec<TextBlock> = Vec::new();
     for (i, line) in body.lines().enumerate() {
         let n = line_offset + i + 1;
         let t = line.trim();
@@ -314,6 +317,13 @@ pub fn parse_blocks(body: &str, line_offset: usize) -> Blocks {
                         text: String::new(),
                     });
                     In::Architecture
+                }
+                Some("entity") => {
+                    entities.push(TextBlock {
+                        line: n + 1,
+                        text: String::new(),
+                    });
+                    In::Entity
                 }
                 _ => In::Other,
             },
@@ -349,6 +359,13 @@ pub fn parse_blocks(body: &str, line_offset: usize) -> Blocks {
                 }
                 In::Architecture
             }
+            (In::Entity, false) => {
+                if let Some(block) = entities.last_mut() {
+                    block.text.push_str(line);
+                    block.text.push('\n');
+                }
+                In::Entity
+            }
             (In::Other, false) => In::Other,
         };
     }
@@ -357,6 +374,7 @@ pub fn parse_blocks(body: &str, line_offset: usize) -> Blocks {
         vocabulary,
         machines,
         architecture,
+        entities,
     }
 }
 
@@ -395,6 +413,7 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
         vocabulary,
         machines,
         architecture,
+        entities,
     } = parse_blocks(body, consumed);
     let title = first_heading(body).map(|h| {
         h.strip_prefix(&format!("{id}: "))
@@ -433,6 +452,7 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
         vocabulary,
         machines,
         architecture,
+        entities,
         body_hash: blake3::hash(body.as_bytes()).to_hex().to_string(),
     };
     (Some(node), Vec::new())

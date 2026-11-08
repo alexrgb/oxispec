@@ -27,6 +27,7 @@ mod compliance;
 mod connect;
 mod context;
 mod debt;
+mod entities;
 mod fetch;
 mod formats;
 mod git;
@@ -267,6 +268,16 @@ enum Command {
         /// Include risks that are not live (mitigated, accepted, closed)
         #[arg(long)]
         all: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// The entities the specs are about, and what depends on each (needs the consistency module)
+    Entities {
+        /// Show this entity with everything that depends on it, as ENT-0001
+        id: Option<String>,
+        /// How many links away a dependency is followed
+        #[arg(long, default_value_t = 2)]
+        depth: u32,
         #[arg(long)]
         json: bool,
     },
@@ -800,6 +811,8 @@ enum NewKind {
     Change { title: String },
     /// A vocabulary: the typed variables that claims in requirements talk about
     Vocabulary { title: String },
+    /// An entity: a thing the specs are about, with typed attributes that claims can use
+    Entity { title: String },
     /// A state machine: states, events and transitions, with properties that are checked
     Machine { title: String },
     /// An element of the architecture model, or a deployment environment
@@ -1146,6 +1159,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let root = project_root(cli.root.as_deref())?;
             testplan::run(&root, id.as_deref(), strict, json, cache)
         }
+        Command::Entities { id, depth, json } => {
+            let root = project_root(cli.root.as_deref())?;
+            entities::run(&root, id.as_deref(), depth, json, cache)?;
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Risks {
             action,
             status,
@@ -1472,6 +1490,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 NewKind::Change { title } => {
                     require_module(&cfg, "specs")?;
                     new_change(&root, &title, scheme, cache)?
+                }
+                NewKind::Entity { title } => {
+                    require_module(&cfg, "consistency")?;
+                    new_entity(&root, &title, scheme, cache)?
                 }
                 NewKind::Vocabulary { title } => {
                     require_module(&cfg, "consistency")?;
@@ -2625,6 +2647,46 @@ fn new_vocabulary(
     let body = VOCABULARY_TEMPLATE
         .replace("@ID@", &id)
         .replace("@TITLE@", title);
+    write_new(root, &rel, &body)?;
+    Ok((id, rel))
+}
+
+const ENTITY_TEMPLATE: &str = "---
+id: @ID@
+type: entity
+status: draft
+---
+# @ID@: @TITLE@
+
+What it is, who or what creates it, and what ends it.
+
+```entity
+name: @NAME@
+attributes:
+#  total: {type: int}
+#  status: {type: enum, values: [open, paid, shipped]}
+```
+
+Requirements, tests and decisions that are about it say so with a link:
+`oxispec link REQ-ORDERS-0001 about @ID@`. The attributes are variables named
+`@NAME@.ATTRIBUTE`, so claims can use them.
+";
+
+// spec: REQ-ENTITY-0004
+fn new_entity(
+    root: &Path,
+    title: &str,
+    scheme: IdScheme,
+    cache: bool,
+) -> Result<(String, PathBuf)> {
+    let id = allocate_id(&load_graph(root, cache), "ENT-", scheme)?;
+    let suffix = id.strip_prefix("ENT-").unwrap_or(&id);
+    let name = slug(title)?.replace('-', "_");
+    let rel = PathBuf::from("specs/entities").join(format!("{suffix}-{}.md", slug(title)?));
+    let body = ENTITY_TEMPLATE
+        .replace("@ID@", &id)
+        .replace("@TITLE@", title)
+        .replace("@NAME@", &name);
     write_new(root, &rel, &body)?;
     Ok((id, rel))
 }

@@ -57,6 +57,7 @@ A code is never reused. `E` is an error (`oxispec check` exits with 1), `W` a wa
 | E038 | error | A risk has a status, likelihood, impact or date that is not valid |
 | E039 | error | A risk is accepted but no person is named in `approved_by` |
 | E040 | error | A test plan has a status or date that is not valid |
+| E041 | error | An entity block cannot be read, has no name, or shares its name with another entity |
 | W012 | warning | A decision is superseded by another, but its status still says it is in force |
 | W013 | warning | A debt item that is still to be paid has no owner |
 | W014 | warning | A debt item is past its due date |
@@ -69,5 +70,6 @@ A code is never reused. `E` is an error (`oxispec check` exits with 1), `W` a wa
 | W021 | warning | A requirement is accepted but no approved test plan covers it |
 | W022 | warning | A live risk at a high level is covered by no approved test plan |
 | W023 | warning | An operation states no 401 or 403 response, though other operations do |
+| W024 | warning | A node is `about` something that is not an entity |
 | I001 | info | A link to another project is not checked |
 | I002 | info | A claim says nothing that another claim does not already say |
