@@ -25,7 +25,28 @@ const FILES: [(&str, &str); 3] = [
     ),
 ];
 
+fn show(title: &str, context: &oxispec_core::context::Pack) {
+    println!(
+        "{title}: {} of {} tokens used",
+        context.used, context.budget
+    );
+    for item in &context.items {
+        let how = item.connection.as_deref().unwrap_or("asked for");
+        println!(
+            "  included {} ({how}), {} tokens{}",
+            item.id,
+            item.tokens,
+            if item.truncated { ", text cut" } else { "" }
+        );
+    }
+    for p in &context.pointers {
+        println!("  only a pointer: {} ({} hops away)", p.id, p.distance);
+    }
+}
+
+// spec: REQ-LIBRARY-0001
 fn main() {
+    println!("The graph: REQ-AUTH-0001 -decided-by-> ADR-0001 <-decided-by- REQ-PAY-0001\n");
     let sources = FILES
         .iter()
         .map(|(path, text)| (PathBuf::from(path), text.as_bytes().to_vec()));
@@ -39,22 +60,23 @@ fn main() {
             .find(|(path, _)| std::path::Path::new(path) == node.path)
             .map(|(_, text)| text.to_string())
     };
-
-    // The nodes asked for, one hop of neighbors, and a budget of 200 tokens.
     let seeds = vec!["REQ-AUTH-0001".to_string()];
-    let context = pack(&graph, &seeds, 1, 200, &text_of);
 
-    println!("{} of {} tokens used", context.used, context.budget);
-    for item in &context.items {
-        let how = item.connection.as_deref().unwrap_or("asked for");
-        println!(
-            "--- {} ({how}){}",
-            item.id,
-            if item.truncated { " [cut]" } else { "" }
-        );
-        println!("{}", item.text.trim());
-    }
-    for p in &context.pointers {
-        println!("not included: {} ({} hops)", p.id, p.distance);
+    println!("CALL 1. Task about REQ-AUTH-0001: one hop of neighbors, a budget of 200 tokens.");
+    show("RESULT 1", &pack(&graph, &seeds, 1, 200, &text_of));
+    println!(
+        "  The requirement and the decision behind it fit. REQ-PAY-0001 is two hops away, so it is left out.\n"
+    );
+
+    println!("CALL 2. The same task, two hops, a budget of 130 tokens.");
+    show("RESULT 2", &pack(&graph, &seeds, 2, 130, &text_of));
+    println!(
+        "  The budget is the limit: what does not fit is named, so the agent can ask for it.\n"
+    );
+
+    println!("The text an agent would read for CALL 1:");
+    let first = pack(&graph, &seeds, 1, 200, &text_of);
+    for item in &first.items {
+        println!("--- {} ---\n{}", item.id, item.text.trim());
     }
 }

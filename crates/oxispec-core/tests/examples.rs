@@ -31,13 +31,13 @@ fn run(name: &str) -> String {
 fn every_example_runs_and_prints_what_it_teaches() {
     let read = run("read_specs");
     assert!(
-        read.contains("ADR-0001 is the decided-by of REQ-AUTH-0001"),
+        read.contains("REQ-AUTH-0001 points at ADR-0001 with `decided-by`"),
         "{read}"
     );
 
     let check = run("check_specs");
-    assert!(check.contains("E002"), "{check}");
-    assert!(check.contains("2 errors"), "{check}");
+    assert!(check.contains("error E002 in REQ-PAY-0001"), "{check}");
+    assert!(check.contains("2 findings, 2 errors"), "{check}");
 
     let trace = run("trace_coverage");
     assert!(trace.contains("verified 1/2 scenarios (50%)"), "{trace}");
@@ -48,10 +48,14 @@ fn every_example_runs_and_prints_what_it_teaches() {
 
     let context = run("context_for_an_agent");
     assert!(
-        context.contains("ADR-0001 (REQ-AUTH-0001 decided-by ADR-0001)"),
+        context.contains("included ADR-0001 (REQ-AUTH-0001 decided-by ADR-0001)"),
         "{context}"
     );
-    assert!(!context.contains("REQ-PAY-0001 ("), "{context}");
+    assert!(
+        context.contains("only a pointer: REQ-PAY-0001 (2 hops away)"),
+        "{context}"
+    );
+    assert!(!context.contains("included REQ-PAY-0001"), "{context}");
 
     let diff = run("compare_revisions");
     assert!(diff.contains("added   REQ-A-0003"), "{diff}");
@@ -59,7 +63,8 @@ fn every_example_runs_and_prints_what_it_teaches() {
     assert!(diff.contains("changed REQ-A-0001"), "{diff}");
 
     let api = run("search_the_api");
-    let nearest = api.lines().find(|l| l.starts_with("0."));
+    assert!(api.contains("second sync: 0 added, 2 unchanged"), "{api}");
+    let nearest = api.lines().find(|l| l.trim_start().starts_with("0."));
     assert!(
         nearest.is_some_and(|l| l.contains("POST /payments")),
         "the nearest operation to `charge a card`: {api}"

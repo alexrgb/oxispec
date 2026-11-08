@@ -20,7 +20,7 @@ There are two ways to get a graph:
 
 ## The examples
 
-Each one runs on its own, with no project on disk, and a test runs them all, so they do not go stale.
+Each one runs on its own, with no project on disk, and explains each step as it prints: what goes in, what is called and what the result means. A test runs them all, so they do not go stale.
 
 | Example | What it shows | Run |
 |---|---|---|

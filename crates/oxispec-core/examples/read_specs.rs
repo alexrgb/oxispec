@@ -37,6 +37,7 @@ Sessions are stored on the server, so that they can be ended from there.
 
 // spec: REQ-LIBRARY-0001
 fn main() {
+    println!("STEP 1. Build a graph from two files (given as text, not read from disk).");
     // Paths are relative to the project root. Bytes are what a file holds.
     let graph = Graph::from_sources([
         (
@@ -48,26 +49,30 @@ fn main() {
             DECISION.as_bytes().to_vec(),
         ),
     ]);
+    println!("The graph has {} nodes.\n", graph.nodes.len());
 
+    println!("STEP 2. Walk the nodes: what each one is, what it links to, what it says.");
     for node in &graph.nodes {
         // A decision has a heading. A requirement is named by its blocks, listed below.
         match node.title.as_deref() {
-            Some(title) => println!("{}  {}  {title}", node.id, node.ty),
-            None => println!("{}  {}", node.id, node.ty),
+            Some(title) => println!("{}  (type {}, \"{title}\")", node.id, node.ty),
+            None => println!("{}  (type {})", node.id, node.ty),
         }
+        println!("    file: {}", node.path.display());
         for (kind, targets) in &node.links {
-            println!("    {kind} -> {}", targets.join(", "));
+            println!("    link: {kind} -> {}", targets.join(", "));
         }
         for block in &node.requirements {
-            println!("    requirement: {}", block.name);
+            println!("    requirement block: {}", block.name);
             for scenario in &block.scenarios {
-                println!("      scenario: {}", scenario.name);
+                println!("        scenario: {}", scenario.name);
             }
         }
     }
 
-    // A link is stored on one node only. The other side is worked out.
+    println!("\nSTEP 3. Ask what links TO a node. The file of ADR-0001 says nothing about this:");
+    println!("a link is written on one node only, and the other side is worked out.");
     for (from, kind) in graph.incoming("ADR-0001") {
-        println!("ADR-0001 is the {kind} of {}", from.id);
+        println!("{} points at ADR-0001 with `{kind}`", from.id);
     }
 }

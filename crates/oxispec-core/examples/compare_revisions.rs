@@ -20,6 +20,15 @@ fn requirement(id: &str, shall: &str) -> (PathBuf, Vec<u8>) {
     )
 }
 
+fn statement(graph: &Graph, id: &str) -> String {
+    graph
+        .get(id)
+        .and_then(|n| n.requirements.first())
+        .map(|b| b.statement.clone())
+        .unwrap_or_default()
+}
+
+// spec: REQ-LIBRARY-0001
 fn main() {
     let before = Graph::from_sources([
         requirement(
@@ -38,23 +47,29 @@ fn main() {
             "The system SHALL send a mail when an account is locked.",
         ),
     ]);
+    println!(
+        "BEFORE: REQ-A-0001 and REQ-A-0002.  AFTER: REQ-A-0001 (reworded) and REQ-A-0003 (new).\n"
+    );
 
+    println!("CALL. diff_graphs(&before, &after):\n");
     let diff = diff_graphs(&before, &after);
     for n in &diff.added {
-        println!("added   {}", n.id);
+        println!("added   {}: {}", n.id, statement(&after, &n.id));
     }
     for n in &diff.removed {
-        println!("removed {}", n.id);
+        println!("removed {}: {}", n.id, statement(&before, &n.id));
     }
     for n in &diff.changed {
         println!("changed {}", n.id);
+        println!("    was: {}", statement(&before, &n.id));
+        println!("    now: {}", statement(&after, &n.id));
         for change in &n.changes {
-            println!("    {}", change.describe());
+            println!("    the diff says: {}", change.describe());
         }
     }
     // Problems that the change brings in, and problems it settles.
     println!(
-        "{} new findings, {} fixed",
+        "\nThe change brings {} new problems and settles {}.",
         diff.new_findings.len(),
         diff.fixed_findings.len()
     );

@@ -40,6 +40,7 @@ The system SHALL charge a card for an order.
 - **THEN** the API responds with 402: the card is declined
 ";
 
+// spec: REQ-LIBRARY-0001
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // `operations` reads the requirement files, so this example writes them to a folder.
     let root = std::env::temp_dir().join(format!("oxispec-example-{}", std::process::id()));
@@ -48,23 +49,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::write(root.join("specs/payments.md"), PAYMENTS)?;
     let graph = Graph::load(&root);
 
+    println!("STEP 1. Requirements titled `METHOD /path` are the operations of the API:");
     let operations = api::operations(&graph, &root)?;
     for op in &operations {
-        println!("{} {}  ({})", op.method.to_uppercase(), op.path, op.node);
+        println!(
+            "  {} {}  from {}, answers {:?}",
+            op.method.to_uppercase(),
+            op.path,
+            op.node,
+            op.responses.keys().collect::<Vec<_>>()
+        );
     }
 
-    // Embed one chunk for each operation. A second `sync` embeds only what changed.
     let embedder = HashEmbedder;
-    let mut store = Store::new(&embedder.id());
     let chunks = apiindex::chunks(&graph, &operations, None);
-    let stats = apiindex::sync(&mut store, chunks, &embedder)?;
-    println!("{} added, {} unchanged", stats.added, stats.unchanged);
-
-    // A query is embedded with the same embedder, and the nearest chunks come back.
-    let query = embedder.embed(&["charge a card".to_string()])?.remove(0);
-    for hit in apiindex::search(&store, &query, 2) {
-        println!("{:.2}  {}", hit.score, hit.entry.call);
+    println!(
+        "\nSTEP 2. One chunk of text for each operation. This is what is embedded for the first one:"
+    );
+    if let Some(first) = chunks.first() {
+        println!(
+            "  ----\n  {}\n  ----",
+            first.text.trim().replace('\n', "\n  ")
+        );
     }
+
+    println!("\nSTEP 3. Embed the chunks into an index (here with a lexical embedder, no model).");
+    let mut store = Store::new(&embedder.id());
+    let stats = apiindex::sync(&mut store, chunks.clone(), &embedder)?;
+    println!(
+        "  first sync:  {} added, {} unchanged",
+        stats.added, stats.unchanged
+    );
+    let stats = apiindex::sync(&mut store, chunks, &embedder)?;
+    println!(
+        "  second sync: {} added, {} unchanged  (only a changed chunk is embedded again)",
+        stats.added, stats.unchanged
+    );
+
+    println!(
+        "\nSTEP 4. Search: the query is embedded the same way, and the nearest chunks come back."
+    );
+    for text in ["charge a card", "fetch an order by its number"] {
+        println!("  query: \"{text}\"");
+        let query = embedder.embed(&[text.to_string()])?.remove(0);
+        for hit in apiindex::search(&store, &query, 2) {
+            println!("    {:.2}  {}", hit.score, hit.entry.call);
+        }
+    }
+    println!("\nThe built-in embedder counts shared words, so it does not know synonyms.");
+    println!("A neural model behind the `Embedder` trait would.");
 
     fs::remove_dir_all(&root)?;
     Ok(())

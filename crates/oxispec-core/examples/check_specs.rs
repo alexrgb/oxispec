@@ -23,12 +23,17 @@ Refunds are possible.
 - **THEN** the money goes back
 ";
 
+// spec: REQ-LIBRARY-0001
 fn main() {
+    println!("INPUT. One requirement, with two mistakes:");
+    println!("  - it links `decided-by` to ADR-0099, which is not in the graph");
+    println!("  - its text has no SHALL or MUST, so it states nothing that must hold\n");
     let graph = Graph::from_sources([(
         PathBuf::from("specs/pay/refunds.md"),
         BROKEN.as_bytes().to_vec(),
     )]);
 
+    println!("CALL. check(&graph) returns a list of findings:\n");
     let findings = check(&graph);
     for f in &findings {
         let level = match f.severity {
@@ -36,8 +41,18 @@ fn main() {
             Severity::Warning => "warning",
             Severity::Info => "info",
         };
-        // `code` is stable, so a program can match on it (`E005` and so on).
-        println!("{level} {}: {}", f.code, f.message);
+        let place = f
+            .path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        // `code` is stable, so a program can match on it (`E002` and so on).
+        println!(
+            "{level} {} in {} ({place}): {}",
+            f.code,
+            f.id.as_deref().unwrap_or("-"),
+            f.message
+        );
     }
 
     // A program that gates on the checks, as `oxispec check` does, exits 1 when
@@ -46,5 +61,8 @@ fn main() {
         .iter()
         .filter(|f| f.severity == Severity::Error)
         .count();
-    println!("{} findings, {errors} errors", findings.len());
+    println!(
+        "\nRESULT. {} findings, {errors} errors. The command would exit with 1.",
+        findings.len()
+    );
 }
