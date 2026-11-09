@@ -4,7 +4,7 @@ About ten minutes. You end with a project that has a requirement, a decision, a 
 
 ## Install
 
-Releases are not published yet, so build from source (Rust 1.89 or newer):
+Build from source (Rust 1.89 or newer, and a C compiler). Ready-made binaries and the other ways to install come with the first release, and are in the [README](../../README.md#install):
 
 ```bash
 git clone https://github.com/alexrgb/oxispec

@@ -67,7 +67,7 @@ reports only the findings that the branch introduces, what changed in the graph 
 
 ## Releases of the specs
 
-`oxispec release prepare` lists what changed since the last release and suggests a version (breaking, added, changed). `oxispec release check` runs the gates and `oxispec release publish 0.2.0` tags the specs. Needs the `releases` module. See [releasing](../releasing.md).
+`oxispec release prepare` lists what changed since the last release and suggests a version (breaking, added, changed). `oxispec release check` runs the gates and `oxispec release publish 0.2.0` tags the specs. Needs the `releases` module.
 
 ## With an AI agent
 

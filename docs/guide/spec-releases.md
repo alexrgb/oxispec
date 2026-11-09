@@ -50,4 +50,4 @@ runs the gates again and creates the tag. It refuses to run if the release file 
 - `oxispec site --out public --releases` builds a site with a folder for each release and a version picker (for the nodes the project publishes, see [site](../site.md)).
 - `oxispec rollback specs-v0.1.0 REQ-AUTH-0001 --dry-run` shows what putting a node back to that release would do. It checks that nothing breaks and commits nothing.
 
-The rules for versions, and what counts as breaking, are in [versioning](../versioning.md). Releasing the program itself (binaries, crates.io, npm) is a different process, described in [releasing](../releasing.md).
+The rules for versions, and what counts as breaking, are in [versioning](../versioning.md). Releasing the program itself (binaries, crates.io, npm) is a different process, which is not part of the user guide.
