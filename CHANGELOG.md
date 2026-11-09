@@ -4,7 +4,7 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-11-08
+## [0.1.0-rc.1] - 2026-11-10
 
 First release. The program is early: the file format, the command line and the JSON outputs may still change before 1.0 (see [docs/versioning.md](docs/versioning.md)), and the library `oxispec-core` has no stability promise yet.
 
