@@ -4123,7 +4123,7 @@ fn the_library_dependency_version_matches_the_release_version() {
         manifest
             .lines()
             .any(|l| l.starts_with("oxispec-core") && l.contains(&want)),
-        "`oxispec-core` in [workspace.dependencies] must say {want}; see docs/releasing.md"
+        "`oxispec-core` in [workspace.dependencies] must say {want}"
     );
 }
 

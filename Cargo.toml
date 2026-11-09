@@ -13,7 +13,7 @@ keywords = ["specs", "adr", "requirements", "mcp", "ai-agents"]
 categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
-# The version moves with `workspace.package.version` in every release. See docs/releasing.md.
+# The version moves with `workspace.package.version` in every release.
 oxispec-core = { path = "crates/oxispec-core", version = "=0.1.0" }
 anyhow = "1"
 blake3 = { version = "1", features = ["pure"] }
