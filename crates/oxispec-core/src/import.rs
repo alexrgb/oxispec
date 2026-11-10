@@ -671,13 +671,17 @@ impl Draft {
         if let Some(intro) = &self.intro {
             out.push_str(&format!("\n## Purpose\n\n{intro}\n"));
         }
+        // An anchor is unique in the file, so the numbers run on across the
+        // requirements of one node instead of starting again in each.
+        let mut anchor = 0;
         for b in &self.blocks {
             out.push_str(&format!(
                 "\n### Requirement: {}\n{}\n",
                 b.title, b.statement
             ));
-            for (i, s) in b.scenarios.iter().enumerate() {
-                out.push_str(&format!("\n#### Scenario: {} {{#S{}}}\n", s.name, i + 1));
+            for s in &b.scenarios {
+                anchor += 1;
+                out.push_str(&format!("\n#### Scenario: {} {{#S{anchor}}}\n", s.name));
                 for (kw, text) in &s.steps {
                     out.push_str(&format!("- **{kw}** {text}\n"));
                 }
@@ -765,6 +769,18 @@ mod tests_of_import {
         assert!(out.contains("#### Scenario: one {#S1}"));
         assert!(out.contains("#### Scenario: two {#S2}"));
         assert!(out.contains("- **WHEN** x"));
+    }
+
+    // verifies: REQ-IMPORT-0001.S6
+    #[test]
+    fn anchors_run_on_across_the_requirements_of_one_node() {
+        let text = "### Requirement: A\nThe system SHALL a.\n#### Scenario: one\n- WHEN x\n- THEN y\n#### Scenario: two\n- WHEN x\n- THEN z\n### Requirement: B\nThe system SHALL b.\n#### Scenario: three\n- WHEN p\n- THEN q\n";
+        let d = draft(&input("a", text), Source::OpenSpec, true);
+        let out = d.render("REQ-A-0001", "draft", None, "a.md");
+        for n in 1..=3 {
+            assert_eq!(out.matches(&format!("{{#S{n}}}")).count(), 1, "{out}");
+        }
+        assert!(out.contains("#### Scenario: three {#S3}"));
     }
 
     #[test]

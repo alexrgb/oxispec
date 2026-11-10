@@ -26,3 +26,7 @@ The system SHALL read specs written for OpenSpec, Spec Kit, Kiro, as a product r
 #### Scenario: OpenAPI {#S5}
 - **WHEN** an OpenAPI file has operations with tags and responses
 - **THEN** a draft is made for each tag with a requirement per operation and a scenario per response
+
+#### Scenario: Many requirements in one file {#S6}
+- **WHEN** a source file has several requirements with scenarios
+- **THEN** the scenario anchors of the node are numbered one after the other, so none is used twice and `check` has nothing to say about them
