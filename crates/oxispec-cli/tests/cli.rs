@@ -6040,14 +6040,14 @@ fn import_specs_brings_in_openspec_and_lists_what_it_leaves_out() {
     let out = run(p, &["import", "specs", "--from", "openspec", "--dry-run"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("would import"), "{}", out.stdout);
-    assert!(!p.join("specs/requirements/auth/auth.md").exists());
+    assert!(!p.join("specs/requirements/auth/login.md").exists());
 
     let out = run(p, &["import", "specs", "--from", "openspec"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     assert!(out.stdout.contains("REQ-AUTH-0001"), "{}", out.stdout);
     assert!(out.stdout.contains("design.md"), "{}", out.stdout);
     assert!(out.stdout.contains("add-2fa"), "{}", out.stdout);
-    let text = fs::read_to_string(p.join("specs/requirements/auth/auth.md")).unwrap();
+    let text = fs::read_to_string(p.join("specs/requirements/auth/login.md")).unwrap();
     assert!(text.contains("### Requirement: Login"), "{text}");
     assert!(
         text.contains("#### Scenario: Good password {#S1}"),
@@ -6060,6 +6060,45 @@ fn import_specs_brings_in_openspec_and_lists_what_it_leaves_out() {
     // The folder is still there, so a second import clashes and writes nothing more.
     let again = run(p, &["import", "specs", "--from", "openspec"]);
     assert_ne!(again.code, 0);
+}
+
+// verifies: REQ-IMPORT-0001.S6
+#[test]
+fn a_spec_with_many_requirements_becomes_a_node_for_each() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    let cap = p.join("openspec/specs/bin");
+    fs::create_dir_all(&cap).unwrap();
+    fs::write(
+        cap.join("spec.md"),
+        "# bin Specification\n\n## Purpose\nWhy.\n\n## Requirements\n\n### Requirement: BIN-1 Deleting moves a post to the bin\nThe system SHALL move a deleted post to a bin.\n\n#### Scenario: Delete\n- **WHEN** a post is deleted\n- **THEN** it is in the bin\n\n#### Scenario: Restore\n- **WHEN** it is restored\n- **THEN** it is in the list\n\n### Requirement: BIN-2 The bin is emptied\nThe system SHALL delete for good after 30 days.\n\n#### Scenario: Old\n- **WHEN** 30 days pass\n- **THEN** it is gone\n",
+    )
+    .unwrap();
+    let out = run(p, &["import", "specs", "--from", "openspec", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let v: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+    let ids: Vec<_> = v["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n["id"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(ids, ["REQ-BIN-0001", "REQ-BIN-0002"]);
+    let first = fs::read_to_string(
+        p.join("specs/requirements/bin/bin-1-deleting-moves-a-post-to-the-bin.md"),
+    )
+    .unwrap();
+    let second =
+        fs::read_to_string(p.join("specs/requirements/bin/bin-2-the-bin-is-emptied.md")).unwrap();
+    assert!(first.contains("## Purpose") && !second.contains("## Purpose"));
+    assert!(first.contains("{#S2}"), "{first}");
+    assert!(second.contains("#### Scenario: Old {#S1}"), "{second}");
+    // Each node is one requirement, so a scenario can be linked on its own.
+    let show = run(p, &["show", "REQ-BIN-0002.S1"]);
+    assert_eq!(show.code, 0, "{}{}", show.stdout, show.stderr);
+    let check = run(p, &["check"]);
+    assert_eq!(check.code, 0, "{}{}", check.stdout, check.stderr);
 }
 
 // verifies: REQ-IMPORT-0001.S2
@@ -6102,7 +6141,7 @@ fn import_specs_reads_kiro_and_spec_kit_and_marks_what_needs_filling_in() {
         v["nodes"][0]["notes"].to_string().contains("placeholder"),
         "{v}"
     );
-    let text = fs::read_to_string(p.join("specs/requirements/search/001-search.md")).unwrap();
+    let text = fs::read_to_string(p.join("specs/requirements/search/fr-001.md")).unwrap();
     assert!(text.contains("<outcome>"), "{text}");
 }
 
@@ -6125,7 +6164,7 @@ fn import_specs_takes_plain_markdown_and_refuses_unknown_sources() {
         &["import", "specs", "--from", "markdown", "--dir", "notes.md"],
     );
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
-    let text = fs::read_to_string(p.join("specs/requirements/notes/notes.md")).unwrap();
+    let text = fs::read_to_string(p.join("specs/requirements/notes/retry.md")).unwrap();
     assert!(
         text.contains("The system SHALL satisfy this requirement: Failed jobs are retried."),
         "{text}"
@@ -6149,7 +6188,9 @@ fn import_specs_reads_a_prd_and_an_openapi_description() {
     .unwrap();
     let out = run(p, &["import", "specs", "--from", "prd", "--dir", "prd.md"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
-    let text = fs::read_to_string(p.join("specs/requirements/prd/prd.md")).unwrap();
+    let text =
+        fs::read_to_string(p.join("specs/requirements/prd/fr-1-shoppers-can-pay-by-card.md"))
+            .unwrap();
     assert!(
         text.contains("### Requirement: FR-1 Shoppers can pay by card"),
         "{text}"
@@ -6166,7 +6207,7 @@ fn import_specs_reads_a_prd_and_an_openapi_description() {
         &["import", "specs", "--from", "openapi", "--dir", "api.json"],
     );
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
-    let text = fs::read_to_string(p.join("specs/requirements/orders/orders.md")).unwrap();
+    let text = fs::read_to_string(p.join("specs/requirements/orders/post-orders.md")).unwrap();
     assert!(text.contains("### Requirement: POST /orders"), "{text}");
     assert!(text.contains("responds with 201: Created"), "{text}");
     let out = run(
@@ -6870,13 +6911,13 @@ fn an_import_plan_is_looked_at_changed_and_only_then_applied() {
     let out = run(p, &["import", "apply", "--dry-run"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     assert!(out.stdout.contains("would write"), "{}", out.stdout);
-    assert!(!p.join("specs/requirements/auth/auth.md").exists());
+    assert!(!p.join("specs/requirements/auth/login.md").exists());
     assert!(p.join(".oxispec/import-plan.json").is_file());
 
     let out = run(p, &["import", "apply"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     assert!(!p.join(".oxispec/import-plan.json").exists());
-    assert!(p.join("specs/requirements/auth/auth.md").is_file());
+    assert!(p.join("specs/requirements/auth/login.md").is_file());
     let change = fs::read_dir(p.join("specs/changes"))
         .unwrap()
         .next()

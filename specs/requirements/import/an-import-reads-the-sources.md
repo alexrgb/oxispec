@@ -5,7 +5,7 @@ status: accepted
 date: 2026-11-06
 ---
 ### Requirement: An import reads the specs of other tools
-The system SHALL read specs written for OpenSpec, Spec Kit, Kiro, as a product requirements document or as an OpenAPI description into requirement drafts with their scenarios.
+The system SHALL read specs written for OpenSpec, Spec Kit, Kiro, as a product requirements document or as an OpenAPI description into requirement nodes, one for each requirement, with their scenarios.
 
 #### Scenario: OpenSpec {#S1}
 - **WHEN** a spec has requirements with scenarios
@@ -29,4 +29,4 @@ The system SHALL read specs written for OpenSpec, Spec Kit, Kiro, as a product r
 
 #### Scenario: Many requirements in one file {#S6}
 - **WHEN** a source file has several requirements with scenarios
-- **THEN** the scenario anchors of the node are numbered one after the other, so none is used twice and `check` has nothing to say about them
+- **THEN** each requirement is a node of its own with its scenarios numbered from S1, the purpose of the file is in the first node, and `check` has nothing to say about the result

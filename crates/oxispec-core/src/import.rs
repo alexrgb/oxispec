@@ -2,8 +2,8 @@
 //!
 //! Six sources are understood: OpenSpec (`openspec/specs/<capability>/spec.md`),
 //! Spec Kit (`specs/<feature>/spec.md`), Kiro (`.kiro/specs/<feature>/requirements.md`),
-//! plain markdown, a product requirements document, and an OpenAPI or Swagger file. Each spec file becomes one requirement node that holds a
-//! `### Requirement:` block for each requirement in it. What has no place in a
+//! plain markdown, a product requirements document, and an OpenAPI or Swagger file. Each requirement in a spec file becomes a requirement node of its own,
+//! with the scenarios under it. What has no place in a
 //! node (design notes, tasks, active changes) is listed, not dropped silently.
 
 use std::fs;
@@ -661,27 +661,60 @@ impl Draft {
         }
     }
 
-    /// The node file: front matter, the intro and the blocks.
-    pub fn render(&self, id: &str, status: &str, date: Option<&str>, source: &str) -> String {
+    /// How many nodes the file makes: one for each requirement, and one for a
+    /// file with none, so that its notes have a place.
+    pub fn node_count(&self) -> usize {
+        self.blocks.len().max(1)
+    }
+
+    /// The notes about requirement `index`: those that name it, and the ones
+    /// that name no requirement, which go with the first.
+    pub fn notes_for(&self, index: usize) -> Vec<String> {
+        let named = |b: &Block| format!("`{}`", b.title);
+        let own = self.blocks.get(index).map(named);
+        self.notes
+            .iter()
+            .filter(|n| {
+                let mine = own.as_ref().is_some_and(|t| n.contains(t.as_str()));
+                let other = self
+                    .blocks
+                    .iter()
+                    .enumerate()
+                    .any(|(i, b)| i != index && n.contains(&named(b)));
+                mine || (index == 0 && !other)
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// The node file of requirement `index`: front matter, the purpose of the
+    /// spec (in the first node only) and the requirement with its scenarios,
+    /// which are numbered from S1 in each node.
+    pub fn render_block(
+        &self,
+        index: usize,
+        id: &str,
+        status: &str,
+        date: Option<&str>,
+        source: &str,
+    ) -> String {
         let mut out = format!("---\nid: {id}\ntype: requirement\nstatus: {status}\n");
         if let Some(date) = date {
             out.push_str(&format!("date: {date}\n"));
         }
         out.push_str(&format!("---\n<!-- imported from {source} -->\n"));
-        if let Some(intro) = &self.intro {
+        if index == 0
+            && let Some(intro) = &self.intro
+        {
             out.push_str(&format!("\n## Purpose\n\n{intro}\n"));
         }
-        // An anchor is unique in the file, so the numbers run on across the
-        // requirements of one node instead of starting again in each.
-        let mut anchor = 0;
-        for b in &self.blocks {
+        if let Some(b) = self.blocks.get(index) {
             out.push_str(&format!(
                 "\n### Requirement: {}\n{}\n",
                 b.title, b.statement
             ));
-            for s in &b.scenarios {
-                anchor += 1;
-                out.push_str(&format!("\n#### Scenario: {} {{#S{anchor}}}\n", s.name));
+            for (i, s) in b.scenarios.iter().enumerate() {
+                out.push_str(&format!("\n#### Scenario: {} {{#S{}}}\n", s.name, i + 1));
                 for (kw, text) in &s.steps {
                     out.push_str(&format!("- **{kw}** {text}\n"));
                 }
@@ -765,7 +798,7 @@ mod tests_of_import {
     fn a_rendered_node_has_numbered_anchors() {
         let text = "### Requirement: A\nThe system SHALL a.\n#### Scenario: one\n- WHEN x\n- THEN y\n#### Scenario: two\n- WHEN x\n- THEN z\n";
         let d = draft(&input("a", text), Source::OpenSpec, true);
-        let out = d.render("REQ-A-0001", "draft", None, "a.md");
+        let out = d.render_block(0, "REQ-A-0001", "draft", None, "a.md");
         assert!(out.contains("#### Scenario: one {#S1}"));
         assert!(out.contains("#### Scenario: two {#S2}"));
         assert!(out.contains("- **WHEN** x"));
@@ -773,14 +806,33 @@ mod tests_of_import {
 
     // verifies: REQ-IMPORT-0001.S6
     #[test]
-    fn anchors_run_on_across_the_requirements_of_one_node() {
-        let text = "### Requirement: A\nThe system SHALL a.\n#### Scenario: one\n- WHEN x\n- THEN y\n#### Scenario: two\n- WHEN x\n- THEN z\n### Requirement: B\nThe system SHALL b.\n#### Scenario: three\n- WHEN p\n- THEN q\n";
+    fn each_requirement_of_a_file_is_a_node_of_its_own() {
+        let text = "## Purpose\nWhy.\n\n### Requirement: A\nThe system SHALL a.\n#### Scenario: one\n- WHEN x\n- THEN y\n#### Scenario: two\n- WHEN x\n- THEN z\n### Requirement: B\nThe system SHALL b.\n#### Scenario: three\n- WHEN p\n- THEN q\n";
         let d = draft(&input("a", text), Source::OpenSpec, true);
-        let out = d.render("REQ-A-0001", "draft", None, "a.md");
-        for n in 1..=3 {
-            assert_eq!(out.matches(&format!("{{#S{n}}}")).count(), 1, "{out}");
-        }
-        assert!(out.contains("#### Scenario: three {#S3}"));
+        assert_eq!(d.node_count(), 2);
+        let first = d.render_block(0, "REQ-A-0001", "draft", None, "a.md");
+        let second = d.render_block(1, "REQ-A-0002", "draft", None, "a.md");
+        assert!(first.contains("### Requirement: A") && !first.contains("Requirement: B"));
+        assert!(second.contains("### Requirement: B") && !second.contains("Requirement: A"));
+        // The numbers start again in each node, and the purpose is in the first only.
+        assert!(second.contains("#### Scenario: three {#S1}"), "{second}");
+        assert!(first.contains("## Purpose") && !second.contains("## Purpose"));
+    }
+
+    #[test]
+    fn notes_go_with_the_requirement_they_name() {
+        let text = "### Requirement: A\nThe system SHALL a.\n### Requirement: B\nThe system SHALL b.\n#### Scenario: s\n- WHEN p\n- THEN q\n";
+        let d = draft(&input("a", text), Source::OpenSpec, true);
+        assert!(
+            d.notes_for(0).iter().all(|n| n.contains("`A`")),
+            "{:?}",
+            d.notes
+        );
+        assert!(!d.notes_for(0).is_empty());
+        assert!(d.notes_for(1).is_empty(), "{:?}", d.notes_for(1));
+        let empty = draft(&input("e", "# Nothing\n"), Source::OpenSpec, true);
+        assert_eq!(empty.node_count(), 1);
+        assert_eq!(empty.notes_for(0), empty.notes);
     }
 
     #[test]
