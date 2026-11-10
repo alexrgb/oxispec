@@ -13,6 +13,8 @@ oxispec check
 
 Where it looks: `openspec/specs`, `specs` (Spec Kit), `.kiro/specs`; for `markdown`, `prd` and `openapi` pass `--dir` with a file or folder. `prd` reads the bullets under requirements, features and user-story sections; `openapi` writes a node for each tag, a block for each operation and a scenario for each response (see [profiles.md](../profiles.md#importing-specs-from-other-tools)). Each spec file becomes one requirement node; the report lists what was left out (design notes, tasks, plans and open changes).
 
+A file with many requirements stays one node, with a `### Requirement:` block for each, and its scenarios are numbered `{#S1}`, `{#S2}` and on through the whole node (not from 1 again in each requirement), because an anchor must be unique in a file. A scenario is then linked as `REQ-AUTH-0001.S7`. The ids of the source (`AUTH-1`) stay in the block headings; they are not node ids.
+
 The import does not invent content. Where a source has no scenario, it writes a placeholder, and where the project's style needs SHALL or MUST and the text has none, it adds a sentence that does. Each is a note in the report, and `oxispec check` shows what is left to fill in. A second run refuses to overwrite files.
 
 ## Specs, changes and design notes, with a say in each
