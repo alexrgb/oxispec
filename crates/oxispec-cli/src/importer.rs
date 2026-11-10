@@ -86,51 +86,36 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
         .map(|i| import::draft(i, source, normative))
         .collect();
 
-    let graph = load_graph(root, cache);
-    let scheme = opts.scheme.unwrap_or(cfg.id_scheme);
-    let mut counters: HashMap<String, u32> = HashMap::new();
-    let mut taken: HashSet<String> = HashSet::new();
-    let mut planned = Vec::new();
+    let mut ids = Ids {
+        graph: load_graph(root, cache),
+        scheme: opts.scheme.unwrap_or(cfg.id_scheme),
+        counters: HashMap::new(),
+        taken: HashSet::new(),
+    };
+    let mut paths: HashSet<PathBuf> = HashSet::new();
+    let mut planned: Vec<Vec<Node>> = Vec::new();
     for d in &drafts {
-        let domain = d.domain();
-        let prefix = format!("REQ-{domain}-");
-        let id = match scheme {
-            IdScheme::Sequential => {
-                let n = counters
-                    .entry(prefix.clone())
-                    .or_insert_with(|| next_number(&graph, &prefix));
-                let id = format!("{prefix}{n:04}");
-                *n += 1;
-                id
-            }
-            IdScheme::Random => loop {
-                let id = allocate_id(&graph, &prefix, scheme)?;
-                if taken.insert(id.clone()) {
-                    break id;
-                }
-            },
-        };
-        let name = slug(&d.name).unwrap_or_else(|_| domain.to_ascii_lowercase());
-        let rel = PathBuf::from("specs/requirements")
-            .join(domain.to_ascii_lowercase())
-            .join(format!("{name}.md"));
-        if root.join(&rel).exists() {
-            bail!(
-                "{} already exists; move it or import from a smaller folder",
-                rel.display()
-            );
-        }
-        let text = d.render(
-            &id,
+        let nodes = nodes_of(
+            d,
+            &shown(root, &d.path),
+            &mut ids,
             status,
             dated.then_some(today.as_str()),
-            &shown(root, &d.path),
-        );
-        planned.push((id, rel, text));
+            &mut paths,
+        )?;
+        for n in &nodes {
+            if root.join(&n.rel).exists() {
+                bail!(
+                    "{} already exists; move it or import from a smaller folder",
+                    n.rel.display()
+                );
+            }
+        }
+        planned.push(nodes);
     }
     if !opts.dry_run {
-        for (_, rel, text) in &planned {
-            write_new(root, rel, text)?;
+        for n in planned.iter().flatten() {
+            write_new(root, &n.rel, &n.text)?;
         }
     }
 
@@ -143,13 +128,15 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
         let items: Vec<_> = drafts
             .iter()
             .zip(&planned)
-            .map(|(d, (id, rel, _))| {
-                json!({
-                    "id": id,
-                    "path": shown(root, rel),
-                    "source": shown(root, &d.path),
-                    "requirements": d.blocks.len(),
-                    "notes": d.notes,
+            .flat_map(|(d, nodes)| {
+                nodes.iter().map(move |n| {
+                    json!({
+                        "id": n.id,
+                        "path": shown(root, &n.rel),
+                        "source": shown(root, &d.path),
+                        "requirements": usize::from(!d.blocks.is_empty()),
+                        "notes": n.notes,
+                    })
                 })
             })
             .collect();
@@ -170,21 +157,24 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
         );
         return Ok(());
     }
-    for (d, (id, rel, _)) in drafts.iter().zip(&planned) {
+    for (d, nodes) in drafts.iter().zip(&planned) {
+        let (first, last) = (nodes.first(), nodes.last());
         outln!(
-            "{} {} -> {} ({}, {} requirement(s))",
+            "{} {} -> {} node(s), {} to {}",
             if opts.dry_run {
                 "would import"
             } else {
                 "imported"
             },
             shown(root, &d.path),
-            shown(root, rel),
-            id,
-            d.blocks.len()
+            nodes.len(),
+            first.map_or("", |n| n.id.as_str()),
+            last.map_or("", |n| n.id.as_str()),
         );
-        for note in &d.notes {
-            outln!("    {note}");
+        for n in nodes {
+            for note in &n.notes {
+                outln!("    {note}");
+            }
         }
     }
     for (path, reason) in &skipped {
@@ -192,10 +182,69 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
     }
     outln!(
         "{} node(s) in the `{}` format; run `oxispec check` to see what is left to fill in",
-        planned.len(),
+        planned.iter().map(Vec::len).sum::<usize>(),
         profile.name
     );
     Ok(())
+}
+
+/// A requirement node that is about to be written.
+struct Node {
+    id: String,
+    rel: PathBuf,
+    text: String,
+    notes: Vec<String>,
+    title: String,
+}
+
+/// A short file name for a requirement: the words of its title.
+fn file_stem(title: &str, fallback: &str) -> String {
+    let stem = slug(title).unwrap_or_else(|_| fallback.to_string());
+    if stem.len() <= 60 {
+        return stem;
+    }
+    let cut = &stem[..60];
+    cut.rsplit_once('-')
+        .map_or(cut, |(words, _)| words)
+        .to_string()
+}
+
+/// The nodes of one spec file, a node for each requirement in it, with their
+/// IDs and files. A name that is taken in the run gets a number after it.
+fn nodes_of(
+    d: &import::Draft,
+    source: &str,
+    ids: &mut Ids,
+    status: &str,
+    date: Option<&str>,
+    paths: &mut HashSet<PathBuf>,
+) -> Result<Vec<Node>> {
+    let domain = d.domain();
+    let prefix = format!("REQ-{domain}-");
+    let dir = PathBuf::from("specs/requirements").join(domain.to_ascii_lowercase());
+    let mut out = Vec::new();
+    for i in 0..d.node_count() {
+        let id = ids.next(&prefix)?;
+        let title = d
+            .blocks
+            .get(i)
+            .map_or(d.name.as_str(), |b| b.title.as_str());
+        let stem = file_stem(title, &domain.to_ascii_lowercase());
+        let mut rel = dir.join(format!("{stem}.md"));
+        let mut n = 2;
+        while !paths.insert(rel.clone()) {
+            rel = dir.join(format!("{stem}-{n}.md"));
+            n += 1;
+        }
+        out.push(Node {
+            text: d.render_block(i, &id, status, date, source),
+            notes: d.notes_for(i),
+            title: title.to_string(),
+            id,
+            rel,
+        });
+    }
+    Ok(out)
 }
 
 /// Hands out IDs for a run that writes several nodes: sequential numbers
@@ -409,35 +458,34 @@ fn build(root: &Path, plan: &Plan, cache: bool) -> Result<Vec<Out>> {
     };
     let mut outs: Vec<Out> = Vec::new();
     let live = |k: Kind| plan.items.iter().filter(move |i| i.kind == k);
+    let mut paths: HashSet<PathBuf> = HashSet::new();
     for item in live(Kind::Requirement) {
-        let domain = import::domain_of(&item.title);
-        let id = ids.next(&format!("REQ-{domain}-"))?;
-        let made = import_plan::render_requirement(
-            root,
-            item,
-            source,
-            &id,
+        let draft = import_plan::draft_of(root, item, source, normative)?;
+        let nodes = nodes_of(
+            &draft,
+            &item.sources.join(", "),
+            &mut ids,
             status,
             dated.then_some(today.as_str()),
-            normative,
+            &mut paths,
         )?;
-        known.push(Known {
-            id: id.clone(),
-            titles: made.titles.clone(),
-        });
-        let rel = PathBuf::from("specs/requirements")
-            .join(domain.to_ascii_lowercase())
-            .join(format!(
-                "{}.md",
-                slug(&item.title).unwrap_or_else(|_| domain.to_ascii_lowercase())
-            ));
-        outs.push(Out {
-            n: item.n,
-            kind: item.kind,
-            id,
-            rel,
-            made,
-        });
+        for n in nodes {
+            known.push(Known {
+                id: n.id.clone(),
+                titles: vec![n.title.clone()],
+            });
+            outs.push(Out {
+                n: item.n,
+                kind: item.kind,
+                id: n.id,
+                rel: n.rel,
+                made: import_plan::Made {
+                    text: n.text,
+                    notes: n.notes,
+                    titles: vec![n.title],
+                },
+            });
+        }
     }
     for item in live(Kind::Change) {
         let id = ids.next("CHG-")?;
@@ -532,30 +580,37 @@ pub fn plan_show(
         bail!("item {n} is skipped; set a kind to see its draft");
     }
     let outs = build(root, &plan, cache)?;
-    let out = outs
-        .iter()
-        .find(|o| o.n == n)
-        .context("the item has no draft")?;
+    let mine: Vec<&Out> = outs.iter().filter(|o| o.n == n).collect();
+    let first = mine.first().context("the item has no draft")?;
     if json {
+        let nodes: Vec<_> = mine
+            .iter()
+            .map(|o| {
+                json!({"id": o.id, "path": shown(root, &o.rel),
+                       "notes": o.made.notes, "text": o.made.text})
+            })
+            .collect();
         outln!(
             "{}",
             serde_json::to_string_pretty(&json!({
-                "schema_version": OUTPUT_SCHEMA_VERSION, "n": n, "kind": out.kind.name(),
-                "id": out.id, "path": shown(root, &out.rel), "notes": out.made.notes,
-                "text": out.made.text,
+                "schema_version": OUTPUT_SCHEMA_VERSION, "n": n, "kind": first.kind.name(),
+                "id": first.id, "path": shown(root, &first.rel), "notes": first.made.notes,
+                "text": first.made.text, "nodes": nodes,
             }))?
         );
     } else {
-        outln!(
-            "# item {n}: {} {} -> {}",
-            out.kind.name(),
-            out.id,
-            shown(root, &out.rel)
-        );
-        for note in &out.made.notes {
-            outln!("# note: {note}");
+        for out in mine {
+            outln!(
+                "# item {n}: {} {} -> {}",
+                out.kind.name(),
+                out.id,
+                shown(root, &out.rel)
+            );
+            for note in &out.made.notes {
+                outln!("# note: {note}");
+            }
+            outln!("{}", out.made.text);
         }
-        outln!("{}", out.made.text);
     }
     Ok(())
 }

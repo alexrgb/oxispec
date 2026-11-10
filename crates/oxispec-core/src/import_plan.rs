@@ -241,17 +241,14 @@ pub fn demote(text: &str, by: usize) -> String {
     out.join("\n")
 }
 
-/// A requirement node from a spec, in the way `import specs` makes one.
-#[allow(clippy::too_many_arguments)]
-pub fn render_requirement(
+/// The requirements of a spec, in the way `import specs` reads them: each is
+/// a node of its own.
+pub fn draft_of(
     root: &Path,
     item: &Item,
     plan_source: Source,
-    id: &str,
-    status: &str,
-    date: Option<&str>,
     normative: bool,
-) -> io::Result<Made> {
+) -> io::Result<import::Draft> {
     let source = if item.role == Role::Spec {
         plan_source
     } else {
@@ -262,12 +259,7 @@ pub fn render_requirement(
         path: PathBuf::from(item.sources.first().cloned().unwrap_or_default()),
         text: joined(root, item)?,
     };
-    let draft = import::draft(&input, source, normative);
-    Ok(Made {
-        text: draft.render(id, status, date, &item.sources.join(", ")),
-        titles: draft.blocks.iter().map(|b| b.title.clone()).collect(),
-        notes: draft.notes,
-    })
+    Ok(import::draft(&input, source, normative))
 }
 
 /// The domain a requirement node of a capability has in its ID.
