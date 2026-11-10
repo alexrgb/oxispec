@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/oxispec-core", "crates/oxispec-cli", "crates/oxispec-stress"]
 
 [workspace.package]
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/alexrgb/oxispec"
@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
 # The version moves with `workspace.package.version` in every release.
-oxispec-core = { path = "crates/oxispec-core", version = "=0.1.0-rc.1" }
+oxispec-core = { path = "crates/oxispec-core", version = "=0.1.0-rc.2" }
 anyhow = "1"
 blake3 = { version = "1", features = ["pure"] }
 clap = { version = "4", features = ["derive"] }

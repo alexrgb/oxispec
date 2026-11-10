@@ -22,3 +22,5 @@ install-updater = false
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
 # The crates.io job checks out the code, so it needs to read the repository
 github-custom-job-permissions = { "publish-crates" = { contents = "read" } }
+# GitHub does not offer the default `macos-14` runner to this account (the job fails with "configuration is not supported"), so build for Apple silicon on the runner the CI already uses
+github-custom-runners = { aarch64-apple-darwin = "macos-latest" }
