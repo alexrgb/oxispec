@@ -198,6 +198,10 @@ pub const CODES: &[(&str, &str)] = &[
         "An entity block cannot be read, has no name, or shares its name with another entity",
     ),
     (
+        "E042",
+        "An alias is not a valid ID, is the ID of another node, or is an alias of two nodes",
+    ),
+    (
         "W012",
         "A decision is superseded by another, but its status still says it is in force",
     ),

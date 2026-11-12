@@ -441,6 +441,7 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
         review: fm.review,
         title,
         path: path.to_path_buf(),
+        aliases: fm.aliases.map(OneOrMany::into_vec).unwrap_or_default(),
         links: fm
             .links
             .into_iter()

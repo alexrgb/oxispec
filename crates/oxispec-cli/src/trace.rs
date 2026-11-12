@@ -80,7 +80,7 @@ pub fn trace_command(
     let mine: Vec<&Annotation> = scan
         .annotations
         .iter()
-        .filter(|a| id::base_of(&a.target) == node.id)
+        .filter(|a| id::base_of(&graph.canonical(&a.target)) == node.id)
         .collect();
     let implementers: Vec<&&Annotation> =
         mine.iter().filter(|a| a.kind == Kind::Implements).collect();

@@ -7652,3 +7652,46 @@ fn nodes_are_listed_by_type_and_domain_and_shown_with_their_text() {
     );
     assert!(!out.stdout.contains("type: requirement"), "{}", out.stdout);
 }
+
+// verifies: REQ-FORMAT-0007.S1
+#[test]
+fn a_node_is_found_verified_and_linked_by_its_alias() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    fs::create_dir_all(p.join("specs/requirements/car")).unwrap();
+    fs::write(
+        p.join("specs/requirements/car/slides.md"),
+        "---\nid: REQ-CAR-1\ntype: requirement\nstatus: accepted\naliases: [CAR-1]\n---\n### Requirement: CAR-1 Slides\nThe system SHALL build slides.\n\n#### Scenario: One by one {#S1}\n- **WHEN** a slide is asked for\n- **THEN** it is built\n",
+    )
+    .unwrap();
+    fs::write(
+        p.join("specs/requirements/car/other.md"),
+        "---\nid: REQ-CAR-2\ntype: requirement\nstatus: accepted\nlinks:\n  refines: [CAR-1]\n---\n### Requirement: More\nThe system SHALL do more.\n\n#### Scenario: More {#S1}\n- **WHEN** a\n- **THEN** b\n",
+    )
+    .unwrap();
+    fs::create_dir_all(p.join("src")).unwrap();
+    fs::write(
+        p.join("src/slides.rs"),
+        "// verifies: CAR-1.S1\nfn slides_are_built() {}\n",
+    )
+    .unwrap();
+
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["show", "CAR-1"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("REQ-CAR-1"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("REQ-CAR-2"),
+        "linked from: {}",
+        out.stdout
+    );
+    let out = run(p, &["search", "CAR-1", "--json"]);
+    assert!(out.stdout.contains("REQ-CAR-1"), "{}", out.stdout);
+    let out = run(p, &["trace", "REQ-CAR-1"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("src/slides.rs"), "{}", out.stdout);
+    let out = run(p, &["coverage", "--json"]);
+    assert!(out.stdout.contains("\"verified\": 1"), "{}", out.stdout);
+}

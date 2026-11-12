@@ -171,7 +171,8 @@ struct Current {
 fn current(graph: &Graph, annotations: &[Annotation]) -> Vec<(Annotation, Current)> {
     let mut seen: BTreeMap<String, usize> = BTreeMap::new();
     let mut out = Vec::new();
-    for a in annotations {
+    let annotations = crate::trace::resolved(graph, annotations);
+    for a in &annotations {
         if resolve_link(graph, &a.target) != LinkResolution::Ok {
             continue;
         }

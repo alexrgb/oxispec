@@ -7,6 +7,7 @@
 //! E011 invalid scenario anchor
 //! E012 change set with a missing or unknown status
 //! E013 approved or merged change set without `approved_by`
+//! E042 alias that is invalid, is another node's ID, or belongs to two nodes
 //! E028 to E031: format profiles, see `formats`
 //! E017 to E019, W005, W006, I002: claims and the vocabulary, see `claims`
 //! E020 to E024, W007, W008: state machines, see `machines`
@@ -28,6 +29,7 @@ pub fn check(graph: &Graph) -> Vec<Finding> {
 fn run_checks(graph: &Graph) -> Vec<Finding> {
     let mut findings = graph.findings.clone();
     duplicates(graph, &mut findings);
+    aliases(graph, &mut findings);
     // A user story has no SHALL; the other styles do.
     let normative = graph
         .formats
@@ -112,6 +114,36 @@ fn duplicates(graph: &Graph, out: &mut Vec<Finding>) {
             );
         } else {
             seen.insert(&n.id, n);
+        }
+    }
+}
+
+// spec: REQ-FORMAT-0007
+fn aliases(graph: &Graph, out: &mut Vec<Finding>) {
+    let mut claimed: HashMap<&str, &Node> = HashMap::new();
+    for n in &graph.nodes {
+        for alias in &n.aliases {
+            let message = match id::parse(alias) {
+                Some(p) if p.namespace.is_none() && p.child.is_none() => {
+                    if graph.nodes.iter().any(|o| o.id == *alias) {
+                        format!("alias {alias} is the ID of another node")
+                    } else if let Some(first) = claimed.get(alias.as_str()) {
+                        if first.id == n.id {
+                            continue;
+                        }
+                        format!("alias {alias} is also an alias of {}", first.id)
+                    } else {
+                        claimed.insert(alias, n);
+                        continue;
+                    }
+                }
+                _ => format!("invalid alias {alias:?}: use letters and digits between hyphens"),
+            };
+            out.push(
+                Finding::error("E042", message)
+                    .at(&n.path, Some(1))
+                    .node(&n.id),
+            );
         }
     }
 }
@@ -340,7 +372,7 @@ fn supersede_cycles(graph: &Graph, out: &mut Vec<Finding>) {
 mod tests {
     use super::*;
     use crate::parse::parse_file_text;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     fn graph(files: &[(&str, &str)]) -> Graph {
         let mut nodes = Vec::new();
@@ -383,6 +415,58 @@ mod tests {
         let text = REQ.replace("ADR-0001", "platform/identity:ADR-0009");
         let g = graph(&[("r.md", &text)]);
         assert_eq!(codes(&g), vec!["I001"]);
+    }
+
+    // verifies: REQ-FORMAT-0007.S2
+    #[test]
+    fn an_alias_that_is_taken_is_reported() {
+        let node = |id: &str, aliases: &str| {
+            format!(
+                "---\nid: {id}\ntype: requirement\naliases: {aliases}\n---\n### Requirement: R\nThe system SHALL x.\n\n#### Scenario: S {{#S1}}\n- **WHEN** a\n- **THEN** b\n"
+            )
+        };
+        let graph = Graph::from_sources([
+            (PathBuf::from("a.md"), node("REQ-A-1", "[A-1]").into_bytes()),
+            (
+                PathBuf::from("b.md"),
+                node("REQ-B-1", "[A-1, REQ-A-1]").into_bytes(),
+            ),
+            (
+                PathBuf::from("c.md"),
+                node("REQ-C-1", "[\"bad id\"]").into_bytes(),
+            ),
+        ]);
+        let found = check(&graph);
+        let e042: Vec<_> = found.iter().filter(|f| f.code == "E042").collect();
+        assert_eq!(e042.len(), 3, "{e042:?}");
+        assert!(found.iter().all(|f| f.code != "E001"));
+    }
+
+    // verifies: REQ-FORMAT-0007.S1
+    #[test]
+    fn a_link_to_an_alias_is_a_link_to_the_node() {
+        let a = "---\nid: REQ-CAR-1\ntype: requirement\naliases: [CAR-1]\n---\n### Requirement: R\nThe system SHALL x.\n\n#### Scenario: S {#S1}\n- **WHEN** a\n- **THEN** b\n";
+        let b =
+            "---\nid: ADR-0001\ntype: adr\nlinks:\n  decided-by: [CAR-1.S1]\n---\n# ADR-0001: T\n";
+        let graph = Graph::from_sources([
+            (PathBuf::from("a.md"), a.as_bytes().to_vec()),
+            (PathBuf::from("b.md"), b.as_bytes().to_vec()),
+        ]);
+        assert!(
+            check(&graph)
+                .iter()
+                .all(|f| f.code != "E002" && f.code != "E009"),
+            "{:?}",
+            check(&graph)
+        );
+        assert_eq!(
+            graph.get("CAR-1.S1").map(|n| n.id.as_str()),
+            Some("REQ-CAR-1")
+        );
+        assert_eq!(graph.canonical("CAR-1.S1"), "REQ-CAR-1.S1");
+        assert_eq!(graph.canonical("REQ-CAR-1"), "REQ-CAR-1");
+        assert_eq!(graph.incoming("CAR-1").len(), 1);
+        assert_eq!(graph.incoming("REQ-CAR-1").len(), 1);
     }
 
     // verifies: REQ-FORMAT-0002.S1

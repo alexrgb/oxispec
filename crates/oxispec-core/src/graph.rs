@@ -37,6 +37,9 @@ pub struct Data {
     pub findings: Vec<Finding>,
     /// Position of the first node with each ID, so lookups do not scan.
     by_id: HashMap<String, usize>,
+    /// Position of the node that has each alias. An ID is never an alias, and the first node
+    /// to claim an alias keeps it.
+    by_alias: HashMap<String, usize>,
 }
 
 impl std::ops::Deref for Graph {
@@ -44,6 +47,27 @@ impl std::ops::Deref for Graph {
 
     fn deref(&self) -> &Data {
         &self.data
+    }
+}
+
+fn canonical_target(
+    target: &str,
+    by_id: &HashMap<String, usize>,
+    by_alias: &HashMap<String, usize>,
+    nodes: &[Node],
+) -> String {
+    let Some(parsed) = id::parse(target) else {
+        return target.to_string();
+    };
+    if parsed.namespace.is_some() || by_id.contains_key(parsed.base) {
+        return target.to_string();
+    }
+    match by_alias.get(parsed.base) {
+        Some(&position) => match parsed.child {
+            Some(child) => format!("{}.{child}", nodes[position].id),
+            None => nodes[position].id.clone(),
+        },
+        None => target.to_string(),
     }
 }
 
@@ -63,11 +87,42 @@ impl Graph {
         for (position, node) in nodes.iter().enumerate() {
             by_id.entry(node.id.clone()).or_insert(position);
         }
+        let mut by_alias: HashMap<String, usize> = HashMap::new();
+        for (position, node) in nodes.iter().enumerate() {
+            for alias in &node.aliases {
+                if !by_id.contains_key(alias) {
+                    by_alias.entry(alias.clone()).or_insert(position);
+                }
+            }
+        }
+        // A link that uses an alias is read as a link to the node itself, so that every
+        // check and report sees one name for one node.
+        if !by_alias.is_empty() {
+            let canonical: Vec<Vec<(String, Vec<String>)>> = nodes
+                .iter()
+                .map(|n| {
+                    n.links
+                        .iter()
+                        .map(|(kind, targets)| {
+                            let targets = targets
+                                .iter()
+                                .map(|t| canonical_target(t, &by_id, &by_alias, &nodes))
+                                .collect();
+                            (kind.clone(), targets)
+                        })
+                        .collect()
+                })
+                .collect();
+            for (node, links) in nodes.iter_mut().zip(canonical) {
+                node.links = links.into_iter().collect();
+            }
+        }
         Graph {
             data: Arc::new(Data {
                 nodes,
                 findings,
                 by_id,
+                by_alias,
             }),
             checked: Arc::default(),
             analyses: Arc::default(),
@@ -138,16 +193,27 @@ impl Graph {
         Graph::new(nodes, Vec::new())
     }
 
+    /// The node with this ID, or the one that has it as an alias. A scenario suffix is ignored.
     pub fn get(&self, node_id: &str) -> Option<&Node> {
         let base = id::base_of(node_id);
-        self.by_id.get(base).map(|&position| &self.nodes[position])
+        self.by_id
+            .get(base)
+            .or_else(|| self.by_alias.get(base))
+            .map(|&position| &self.nodes[position])
+    }
+
+    /// The target with the node's own ID in place of an alias, keeping a scenario suffix:
+    /// `CAR-1.S2` gives `REQ-CAR-1.S2`. A target that is no alias is returned as it is.
+    pub fn canonical(&self, target: &str) -> String {
+        canonical_target(target, &self.by_id, &self.by_alias, &self.nodes)
     }
 
     /// Nodes that link to `node_id`, with the link kind. Reverse links are
     /// computed, never stored.
     // spec: REQ-FORMAT-0006
     pub fn incoming(&self, node_id: &str) -> Vec<(&Node, &str)> {
-        let base = id::base_of(node_id);
+        let canonical = self.canonical(node_id);
+        let base = id::base_of(&canonical);
         let mut out = Vec::new();
         for n in &self.nodes {
             for (kind, targets) in &n.links {

@@ -162,8 +162,9 @@ impl Manifest {
 /// Changes when anything the index holds about the node changes.
 fn signature(node: &Node) -> String {
     let text = format!(
-        "{}\0{}\0{}\0{}\0{}\0{}",
+        "{}\0{}\0{}\0{}\0{}\0{}\0{}",
         node.id,
+        node.aliases.join(" "),
         node.ty,
         node.status.as_deref().unwrap_or(""),
         node.title.as_deref().unwrap_or(""),
@@ -227,7 +228,12 @@ fn add(writer: &IndexWriter, fields: &Fields, root: &Path, node: &Node) -> Resul
     let mut document = doc!(
         fields.path => path,
         fields.id => node.id.clone(),
-        fields.ids => format!("{} {}", node.id, node.path.display()),
+        fields.ids => format!(
+            "{} {} {}",
+            node.id,
+            node.aliases.join(" "),
+            node.path.display()
+        ),
         fields.ty => node.ty.clone(),
         fields.body => body_of(root, node),
     );
