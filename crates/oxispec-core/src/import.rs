@@ -639,6 +639,41 @@ pub fn domain_of(name: &str) -> String {
     }
 }
 
+/// The ID a requirement has in its source, when its title begins with one: `CAR-1 Slides` gives
+/// `("CAR", "1")`. The prefix is capitals and digits and starts with a letter; the number is
+/// kept as it is written.
+pub fn source_id(title: &str) -> Option<(String, String)> {
+    let title = title.trim();
+    let dash = title.find('-')?;
+    let prefix = &title[..dash];
+    let mut chars = prefix.chars();
+    if !chars.next().is_some_and(|c| c.is_ascii_uppercase())
+        || !chars.all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+    {
+        return None;
+    }
+    let rest = &title[dash + 1..];
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    if digits.is_empty() || rest[digits.len()..].starts_with(|c: char| c.is_ascii_alphanumeric()) {
+        return None;
+    }
+    Some((prefix.to_string(), digits))
+}
+
+/// The title without the ID of the source: `CAR-1: Slides` gives `Slides`.
+pub fn title_without_id(title: &str) -> &str {
+    match source_id(title) {
+        Some((prefix, digits)) => {
+            let skip = prefix.len() + 1 + digits.len();
+            let rest = title.trim_start()[skip..].trim_start_matches(|c: char| {
+                c.is_whitespace() || ":-\u{2014}\u{2013}.".contains(c)
+            });
+            if rest.is_empty() { title } else { rest }
+        }
+        None => title,
+    }
+}
+
 /// Why a file is not imported when it already is an OxiSpec node.
 pub const ALREADY_NODE: &str = "already an OxiSpec node";
 
@@ -698,9 +733,26 @@ impl Draft {
         date: Option<&str>,
         source: &str,
     ) -> String {
+        self.render_block_as(index, id, &[], status, date, source)
+    }
+
+    /// Like [`Draft::render_block`], with other names for the node, such as the ID the
+    /// requirement had in its source.
+    pub fn render_block_as(
+        &self,
+        index: usize,
+        id: &str,
+        aliases: &[String],
+        status: &str,
+        date: Option<&str>,
+        source: &str,
+    ) -> String {
         let mut out = format!("---\nid: {id}\ntype: requirement\nstatus: {status}\n");
         if let Some(date) = date {
             out.push_str(&format!("date: {date}\n"));
+        }
+        if !aliases.is_empty() {
+            out.push_str(&format!("aliases: [{}]\n", aliases.join(", ")));
         }
         out.push_str(&format!("---\n<!-- imported from {source} -->\n"));
         if index == 0

@@ -89,6 +89,7 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | 67 | `fix/95-import-feedback` | Fixes from importing a real project with rc.3: an ADR status with words after it keeps its status and an amended-by link; `import plan start` skips specs that `import specs` wrote; `import adr` switches the `adrs` module on; an "Alternatives considered" section no longer warns on every record; empty template headings are not copied. Not built: requirement IDs from the source, bulk edits of a plan, `--status`. |
 | 68 | `feat/97-import-usability` | `import specs --status`, `plan start --only`, `plan set --where kind=`, `oxispec list` with `--type`, `--status`, `--domain`, `show --text`, and help examples for `--from` and `--dir`. Not built: `--include-archive`, typed links for added requirements, requirement IDs from the source. |
 | 69 | `feat/98-aliases` | A node can list `aliases` in its front matter. A link, a code marker, `show`, `trace`, `coverage` and `search` that use an alias read as the node itself, and E042 reports an alias that is taken or invalid. It is the base for keeping the IDs of another tool when importing. Not built: the importer writing aliases and source IDs (the next iteration). |
+| 70 | `feat/99-import-source-ids` | An OpenSpec or markdown import keeps the ID of the source: `CAR-1` gives `REQ-CAR-1` with `CAR-1` as its alias, a number that is taken gets the next free one, files are named without the ID, and a delta that names `POST-29` links that requirement. Tried on the posting-app specs: 327 nodes, `check` clean, six change sets linked instead of two. Not built: `domains:` override in the config, `--include-archive`. |
 | 23+ | later | OIDC and richer policies for server mode, natural language layer, workspaces and federation | See design sections 10, 14 and 19 |
 
 The plan changes as we learn. Change it in a pull request, like anything else.
@@ -171,4 +172,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 67**: fixes from importing a real project: ADR status with a tail, a plan that skips imported specs, the `adrs` module on demand.
 - **Iteration 68**: import usability: a status of choice, plan edits in bulk, `list` and `show --text`.
 - **Iteration 69**: a node can have aliases.
+- **Iteration 70**: an import keeps the IDs of the source as IDs and aliases.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

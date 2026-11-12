@@ -34,3 +34,7 @@ The system SHALL read specs written for OpenSpec, Spec Kit, Kiro, as a product r
 #### Scenario: A status {#S7}
 - **WHEN** specs are imported with `--status accepted`
 - **THEN** the requirement nodes have that status
+
+#### Scenario: The ID of the source {#S8}
+- **WHEN** an OpenSpec or markdown requirement begins with an ID such as `ANAL-2`
+- **THEN** its node is `REQ-ANAL-2` with `ANAL-2` as an alias, a number that is taken gives the next free one with a note, and a requirement without an ID gets a number nobody asked for
