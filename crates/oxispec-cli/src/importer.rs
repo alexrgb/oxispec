@@ -319,6 +319,35 @@ fn print_plan(plan: &Plan) {
     }
 }
 
+/// The source files that nodes under `specs/` say they were imported from.
+fn already_imported(dir: &Path) -> HashSet<String> {
+    let mut found = HashSet::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().is_some_and(|x| x == "md")
+                && let Ok(text) = std::fs::read_to_string(&p)
+            {
+                for line in text.lines() {
+                    if let Some(rest) = line
+                        .strip_prefix("<!-- imported from ")
+                        .and_then(|r| r.strip_suffix(" -->"))
+                    {
+                        found.extend(rest.split(", ").map(str::to_string));
+                    }
+                }
+            }
+        }
+    }
+    found
+}
+
 pub fn plan_start(
     root: &Path,
     from: &str,
@@ -356,6 +385,17 @@ pub fn plan_start(
         .with_context(|| format!("cannot read {}", dir.display()))?;
     if plan.items.is_empty() {
         bail!("nothing to import was found in {}", dir.display());
+    }
+    let mut plan = plan;
+    let done = already_imported(&root.join("specs"));
+    for item in &mut plan.items {
+        if item.role == import_plan::Role::Spec
+            && item.sources.iter().all(|s| done.contains(s))
+            && !item.sources.is_empty()
+        {
+            item.kind = import_plan::Kind::Skip;
+            item.why = "already imported by `oxispec import specs`".to_string();
+        }
     }
     write_plan(root, &plan)?;
     if json {
@@ -529,7 +569,7 @@ fn build(root: &Path, plan: &Plan, cache: bool) -> Result<Vec<Out>> {
     for o in &outs {
         if root.join(&o.rel).exists() {
             bail!(
-                "{} already exists; rename item {} with `oxispec import plan set {} --title`",
+                "{} already exists; item {} may be imported already (skip it with `oxispec import plan set {} --kind skip`) or needs another name (`--title`)",
                 o.rel.display(),
                 o.n,
                 o.n

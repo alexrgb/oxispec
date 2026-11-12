@@ -218,7 +218,7 @@ pub fn find(dir: &Path, source: Source) -> io::Result<Found> {
             let reason = if file_name(&d) == "archive" {
                 "archived changes are history, not specs"
             } else {
-                "an open change; start a change set with `oxispec new change`"
+                "an open change; `oxispec import plan start` makes it a change set"
             };
             found.unmapped.push(Unmapped {
                 path: d,
