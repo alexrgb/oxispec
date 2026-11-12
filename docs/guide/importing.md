@@ -27,10 +27,10 @@ oxispec import apply --dry-run                # everything that would be written
 oxispec import apply                          # write it, remove the plan
 ```
 
-By default a spec becomes a requirement, an open change (proposal, design, tasks, spec deltas) becomes a draft change set, and design notes next to a spec become a change set; archived changes are skipped. Nothing is written before `apply`.
+By default a spec becomes a requirement, an open change (proposal, design, tasks, spec deltas) becomes a draft change set, and design notes next to a spec become a change set; archived changes are skipped. Nothing is written before `apply`. If you ran `import specs` first, the plan lists those specs as skipped, so they are not written twice.
 
 An AI agent can do this with you: the `oxispec-import-specs` skill makes it propose, ask about each item and show the drafts, and apply only after your yes.
 
 ## Decision records
 
-`oxispec import adr --from adr-tools|madr|log4brains` reads the records of those tools, with their statuses and "superseded by" lines, as ADRs. `oxispec adr convert` changes an ADR from one format to another. See [profiles](../profiles.md#importing-decisions-from-other-tools).
+`oxispec import adr --from adr-tools|madr|log4brains` reads the records of those tools, with their statuses and "superseded by" lines, as ADRs. A status may have words after it (`Accepted (built)`, `Accepted, amended by ADR-0003`): the status is taken from the first word, the rest is kept as a note, and an "amended by" becomes a link. The `adrs` module is switched on if it is off. `oxispec adr convert` changes an ADR from one format to another. See [profiles](../profiles.md#importing-decisions-from-other-tools).

@@ -86,6 +86,7 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | 64 | `docs/64-readme-install` | An install section in the README by platform (from source today, then the shell and PowerShell installers, Homebrew, npm, crates.io), where the binary goes, how to update and how to check an archive with its attestation; the getting-started guide points to it | A new user can see how to install. **Built** (this PR). The channels work once 0.1.0 is published, and none has been tried. |
 | 65 | `fix/65-openspec-import-anchors` | Scenario anchors of an imported node run on across its requirements, found by importing the specs and ADRs of a real project (a copy of the posting app) | The import of a spec with many requirements passes `check`. **Built** (this PR). The node is still one per source file, so the requirement ids of the source (`AUTH-1`) stay in the headings only. |
 | 66 | `feat/66-import-one-node-per-requirement` | An import makes a node for each requirement of a spec file, not one for the file: IDs, files named after the requirement, scenarios from S1 in each node, the purpose in the first, change sets linked to the exact requirements | A spec of 35 requirements gives 35 nodes that code, tests, claims and change sets can point at. **Built** (this PR). Found by importing a real project: its 27 spec files held 327 requirements. Replaces the numbering across a node of iteration 65. |
+| 67 | `fix/95-import-feedback` | Fixes from importing a real project with rc.3: an ADR status with words after it keeps its status and an amended-by link; `import plan start` skips specs that `import specs` wrote; `import adr` switches the `adrs` module on; an "Alternatives considered" section no longer warns on every record; empty template headings are not copied. Not built: requirement IDs from the source, bulk edits of a plan, `--status`. |
 | 23+ | later | OIDC and richer policies for server mode, natural language layer, workspaces and federation | See design sections 10, 14 and 19 |
 
 The plan changes as we learn. Change it in a pull request, like anything else.
@@ -165,4 +166,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 64**: the install section and the token steps.
 - **Iteration 65**: the anchors of an imported node run on. Found by importing the specs of a real project.
 - **Iteration 66**: an import makes a node for each requirement.
+- **Iteration 67**: fixes from importing a real project: ADR status with a tail, a plan that skips imported specs, the `adrs` module on demand.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

@@ -10,3 +10,11 @@ The system SHALL import decision records written for adr-tools, MADR and Log4bra
 #### Scenario: Import {#S1}
 - **WHEN** records from adr-tools and then from MADR and Log4brains are imported
 - **THEN** each becomes a node with its status and date, a record that supersedes another links to it, a second import refuses to overwrite, and the project passes `check`
+
+#### Scenario: A status with more words after it {#S2}
+- **WHEN** a record says `Accepted (built)` or `Accepted, amended by ADR-0003`
+- **THEN** its status is accepted, the rest is kept as a note, and an amended-by link becomes a link of the record that amends
+
+#### Scenario: A project without the module {#S3}
+- **WHEN** records are imported into a project whose `adrs` module is off
+- **THEN** the module is switched on and the records are written

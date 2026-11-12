@@ -159,10 +159,13 @@ pub fn render(parts: &Parts, target: &Profile) -> Rendered {
             continue;
         }
         emit(&mut out, 2, &s.name, &s.text);
-        notes.push(format!(
-            "`{}` has no place in `{}`; kept as it was",
-            s.name, target.name
-        ));
+        // A common section that the text keeps whole; saying so for every record is noise.
+        if !s.name.eq_ignore_ascii_case("alternatives considered") {
+            notes.push(format!(
+                "`{}` has no place in `{}`; kept as it was",
+                s.name, target.name
+            ));
+        }
     }
     Rendered { text: out, notes }
 }
@@ -327,10 +330,31 @@ fn status_line(line: &str, into: &mut Foreign) {
             }
         }
     }
-    let word = lower.trim_end_matches('.').trim();
+    // A status word may lead a longer line: `Accepted (built)`, `Accepted, amended by ADR-0032`.
+    let end = lower
+        .find(|c: char| !c.is_ascii_alphabetic())
+        .unwrap_or(lower.len());
+    let word = &lower[..end];
     if STATUSES.contains(&word) {
         if into.status.as_deref() != Some("superseded") {
             into.status = Some(word.to_string());
+        }
+        let rest = lower[end..].trim_matches(|c: char| c.is_whitespace() || ".,;:-—–".contains(c));
+        if !rest.is_empty() {
+            // What follows is kept as a note; a link word in it still makes a link.
+            for (link, kind, this_acts) in LINK_WORDS {
+                if let Some(at) = lower[end..].find(link)
+                    && let Some(other) = reference(&line[end + at + link.len()..])
+                {
+                    into.edges.push(Edge {
+                        kind,
+                        this_acts: *this_acts,
+                        other,
+                    });
+                    break;
+                }
+            }
+            into.metadata.push(format!("Status: {line}"));
         }
     } else {
         into.metadata.push(format!("Status: {line}"));
@@ -625,6 +649,8 @@ pub fn import(
             });
         }
         let mut done = render(&parts, target);
+        // The importer made this section itself; there is nothing to warn about.
+        done.notes.retain(|n| !n.starts_with("`Imported metadata`"));
         if rec.status.is_none() {
             done.notes.push("no status found; set one".into());
         }
@@ -925,6 +951,31 @@ mod tests_of_adr {
         )
         .unwrap_err();
         assert!(err.to_string().contains("same number"));
+    }
+
+    // verifies: REQ-ADR-0002.S2
+    #[test]
+    fn a_status_word_with_a_tail_still_gives_the_status() {
+        let one = "# 1. A\n\n**Status:** Accepted (built)\n\n## Context\n\nC.\n";
+        let two =
+            "# 2. B\n\n**Status:** Accepted, amended by ADR-0003 (now off)\n\n## Context\n\nC.\n";
+        let three =
+            "# 3. C\n\n**Status:** Accepted \u{2014} updated 2026-09-12\n\n## Context\n\nC.\n";
+        let got = import(
+            &files(&[("0001-a.md", one), ("0002-b.md", two), ("0003-c.md", three)]),
+            Dialect::Madr,
+            0,
+            &profile("nygard"),
+        )
+        .unwrap();
+        for g in &got {
+            assert!(g.text.contains("status: accepted"), "{}", g.text);
+        }
+        assert!(got[0].text.contains("Status: Accepted (built)"));
+        assert!(got[2].text.contains("updated 2026-09-12"));
+        // ADR-0003 amends ADR-0002.
+        assert!(got[2].text.contains("amends:"), "{}", got[2].text);
+        assert!(got[2].text.contains("ADR-0002"));
     }
 
     #[test]

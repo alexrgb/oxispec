@@ -6932,6 +6932,68 @@ fn an_import_plan_is_looked_at_changed_and_only_then_applied() {
     assert!(!check.stdout.contains("E002"), "{}", check.stdout);
 }
 
+// verifies: REQ-IMPORT-0002.S4
+#[test]
+fn a_plan_leaves_out_the_specs_that_import_specs_has_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    openspec_with_a_change(p);
+    let out = run(p, &["import", "specs", "--from", "openspec"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("import plan start"),
+        "the hint for an open change points to the plan: {}",
+        out.stdout
+    );
+    let out = run(
+        p,
+        &["import", "plan", "start", "--from", "openspec", "--json"],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let v: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+    let kinds: Vec<_> = v["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["kind"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(kinds, ["skip", "change", "change"]);
+    let out = run(p, &["import", "apply"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+}
+
+// verifies: REQ-ADR-0002.S3
+#[test]
+fn import_adr_switches_the_adrs_module_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init"]).code, 0);
+    let from = p.join("docs/adr");
+    fs::create_dir_all(&from).unwrap();
+    fs::write(
+        from.join("0001-use-rust.md"),
+        "# 1. Use Rust\n\nDate: 2016-03-01\n\n## Status\n\nAccepted\n\n## Context\n\nSpeed.\n\n## Decision\n\nRust.\n\n## Consequences\n\nSlow.\n",
+    )
+    .unwrap();
+    let out = run(
+        p,
+        &["import", "adr", "--from", "adr-tools", "--dir", "docs/adr"],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("enabled the `adrs` module"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        fs::read_to_string(p.join(".oxispec/config.yaml"))
+            .unwrap()
+            .contains("adrs")
+    );
+    assert_eq!(run(p, &["check"]).code, 0);
+}
+
 // verifies: REQ-IMPORT-0004.S1
 #[test]
 fn a_skipped_item_is_not_written_and_an_empty_plan_is_refused() {

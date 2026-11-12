@@ -18,3 +18,7 @@ The system SHALL propose, for the files of another tool, a requirement for each 
 #### Scenario: A decision {#S3}
 - **WHEN** notes are set to become a decision
 - **THEN** the text is kept as the context of a decision
+
+#### Scenario: Specs that are imported already {#S4}
+- **WHEN** a plan is started after `import specs` has written the specs
+- **THEN** those specs are in the plan as skipped, so applying it does not write them twice

@@ -347,6 +347,8 @@ pub fn render_change(root: &Path, item: &Item, id: &str, known: &[Known]) -> io:
                         }
                         t.push_str(&body);
                     }
+                    // A heading with no text is the template's, not the author's.
+                    None if body.is_empty() => {}
                     None => what.push_str(&format!("\n\n### {}\n\n{body}", s.title)),
                 }
             }

@@ -136,8 +136,18 @@ pub fn import(root: &Path, opts: &ImportOptions, cache: bool) -> Result<()> {
         dry_run,
         json,
     } = *opts;
-    let cfg = config::load(root)?;
-    require_module(&cfg, "adrs")?;
+    let mut cfg = config::load(root)?;
+    if !cfg.has("adrs") {
+        // Records to import mean the module is wanted; turn it on, as `modules add adrs` does.
+        let mut all = cfg.modules.clone();
+        all.push("adrs".to_string());
+        cfg.modules = crate::modules::resolve(&all).map_err(anyhow::Error::msg)?;
+        if !dry_run {
+            config::save(root, &cfg)?;
+            crate::ensure_module_dirs(root, &cfg)?;
+            outln!("enabled the `adrs` module");
+        }
+    }
     let Some(dialect) = Dialect::parse(from) else {
         bail!(
             "unknown source `{from}`; the sources are {}",
