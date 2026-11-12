@@ -4,7 +4,7 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ## [Unreleased]
 
-## [0.1.0-rc.3] - 2026-11-10
+## [0.1.0-rc.4] - 2026-11-12
 
 First release. The program is early: the file format, the command line and the JSON outputs may still change before 1.0 (see [docs/versioning.md](docs/versioning.md)), and the library `oxispec-core` has no stability promise yet.
 
@@ -18,7 +18,8 @@ First release. The program is early: the file format, the command line and the J
 - **Consistency.** Claims and a vocabulary with an exact solver that reports conflicts with the smallest set of claims. State machines with property checks, counterexample paths, Mermaid diagrams and generated tests. An architecture model (C4 and deployment) with Mermaid views and `forbid` rules.
 - **Entities.** A node type for the things the specs are about, with typed attributes that claims can use. `oxispec entities` shows what depends on one, `ci` says what a change to one touches and whether it can break a reader, the code that represents it is linked with a `spec:` comment and checked for a field for each attribute, and the nodes about an entity are to review when it changes.
 - **Records of work.** Tech debt, a risk register, test plans read against the tests, and product requirements documents, each a node type with checks, a command and a release gate where it fits.
-- **Formats and import.** Format profiles, ADR formats (MADR, Nygard, Y-statement) with `adr convert` and `import adr`, requirement styles (EARS, user stories, Gherkin), compliance profiles, and `import specs` from OpenSpec, Spec Kit, Kiro, plain markdown, a PRD and an OpenAPI description, with a plan that can be looked at and changed first.
+- **Names.** A node can list `aliases`, such as the ID it had in another tool; a link, a `spec:` or `verifies:` marker, `show`, `trace` and `search` that use one read as the node itself (E042 reports an alias that is taken). `oxispec list` lists nodes by type, status and domain, and `show --text` prints the text of a node.
+- **Formats and import.** Format profiles, ADR formats (MADR, Nygard, Y-statement) with `adr convert` and `import adr`, requirement styles (EARS, user stories, Gherkin), compliance profiles, and `import specs` from OpenSpec, Spec Kit, Kiro, plain markdown, a PRD and an OpenAPI description, with a plan that can be looked at and changed first (`--only`, `set --where`). A requirement is a node of its own, an OpenSpec or markdown requirement keeps the ID of its source (`CAR-1` gives `REQ-CAR-1` with that alias), and `--status` sets the status the requirements start with.
 - **APIs.** Requirements titled as calls are the operations of an API. `docs openapi` writes an OpenAPI skeleton and compares a file or a running service with the requirements, `api show` gives the card of an operation, and `api index` and `api search` find an operation by meaning with a built-in embedder or an embedding service on your machine.
 - **Agents.** Skills for Claude Code, Cursor, GitHub Copilot and Gemini CLI, with `agents update`, `check` and `export`. An MCP server (`oxispec mcp`) with tools, resources, prompts and context packs, `oxispec serve` for many clients over HTTP with limited tokens and an audit log, and `oxispec connect` to write the server into each client's config.
 - **Documentation.** A user guide, a command reference, a table of check codes and an MCP tools reference written from the program, and runnable examples of the library.
