@@ -22,3 +22,7 @@ The system SHALL propose, for the files of another tool, a requirement for each 
 #### Scenario: Specs that are imported already {#S4}
 - **WHEN** a plan is started after `import specs` has written the specs
 - **THEN** those specs are in the plan as skipped, so applying it does not write them twice
+
+#### Scenario: Several items at once {#S5}
+- **WHEN** a plan is started with `--only change`, or items are set by `--where kind=requirement`
+- **THEN** the other items are skipped, or every item of that kind changes, in one call

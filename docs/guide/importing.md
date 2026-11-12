@@ -23,13 +23,18 @@ Use a plan when there are open changes or design notes, or when you want to deci
 oxispec import plan start --from openspec     # lists the items; writes .oxispec/import-plan.json
 oxispec import plan show 2 --draft            # the file item 2 would write, with notes
 oxispec import plan set 2 --kind adr          # requirement, change, adr or skip
+oxispec import plan set --where kind=requirement --kind skip   # every item of a kind
 oxispec import apply --dry-run                # everything that would be written
 oxispec import apply                          # write it, remove the plan
 ```
 
+`plan start --only change` plans the open changes and sets the rest to skip, which suits a project whose specs are imported already. `--status accepted`, on `import specs` and on `import apply`, gives the requirements the status of specs that are in force instead of the first status of the profile.
+
 By default a spec becomes a requirement, an open change (proposal, design, tasks, spec deltas) becomes a draft change set, and design notes next to a spec become a change set; archived changes are skipped. Nothing is written before `apply`. If you ran `import specs` first, the plan lists those specs as skipped, so they are not written twice.
 
 An AI agent can do this with you: the `oxispec-import-specs` skill makes it propose, ask about each item and show the drafts, and apply only after your yes.
+
+After an import, `oxispec list --type requirement --domain carousels` lists the requirements of one domain (the part of the ID between `REQ-` and the number), and `oxispec show ID --text` prints a node's text.
 
 ## Decision records
 
