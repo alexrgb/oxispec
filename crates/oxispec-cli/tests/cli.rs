@@ -6084,18 +6084,19 @@ fn a_spec_with_many_requirements_becomes_a_node_for_each() {
         .iter()
         .map(|n| n["id"].as_str().unwrap().to_string())
         .collect();
-    assert_eq!(ids, ["REQ-BIN-0001", "REQ-BIN-0002"]);
-    let first = fs::read_to_string(
-        p.join("specs/requirements/bin/bin-1-deleting-moves-a-post-to-the-bin.md"),
-    )
-    .unwrap();
+    assert_eq!(ids, ["REQ-BIN-1", "REQ-BIN-2"]);
+    let first =
+        fs::read_to_string(p.join("specs/requirements/bin/deleting-moves-a-post-to-the-bin.md"))
+            .unwrap();
     let second =
-        fs::read_to_string(p.join("specs/requirements/bin/bin-2-the-bin-is-emptied.md")).unwrap();
+        fs::read_to_string(p.join("specs/requirements/bin/the-bin-is-emptied.md")).unwrap();
+    assert!(first.contains("aliases: [BIN-1]"), "{first}");
+    assert!(first.contains("### Requirement: BIN-1 Deleting"), "{first}");
     assert!(first.contains("## Purpose") && !second.contains("## Purpose"));
     assert!(first.contains("{#S2}"), "{first}");
     assert!(second.contains("#### Scenario: Old {#S1}"), "{second}");
     // Each node is one requirement, so a scenario can be linked on its own.
-    let show = run(p, &["show", "REQ-BIN-0002.S1"]);
+    let show = run(p, &["show", "REQ-BIN-2.S1"]);
     assert_eq!(show.code, 0, "{}{}", show.stdout, show.stderr);
     let check = run(p, &["check"]);
     assert_eq!(check.code, 0, "{}{}", check.stdout, check.stderr);
@@ -6930,6 +6931,98 @@ fn an_import_plan_is_looked_at_changed_and_only_then_applied() {
     assert!(p.join("specs/adr").read_dir().unwrap().count() == 1);
     let check = run(p, &["check"]);
     assert!(!check.stdout.contains("E002"), "{}", check.stdout);
+}
+
+// verifies: REQ-IMPORT-0001.S8
+#[test]
+fn a_requirement_keeps_the_id_its_source_gave_it_as_an_alias() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    let spec = |req: &[(&str, &str)]| {
+        let mut t = String::from("# S\n\n## Requirements\n\n");
+        for (title, text) in req {
+            t.push_str(&format!(
+                "### Requirement: {title}\n{text}\n\n#### Scenario: A\n- **WHEN** a\n- **THEN** b\n\n"
+            ));
+        }
+        t
+    };
+    // Two capabilities share the prefix ANAL; ANAL-2 is claimed twice; one requirement has no ID.
+    for (cap, body) in [
+        (
+            "analytics",
+            spec(&[
+                ("ANAL-1 Counts views", "The system SHALL count views."),
+                ("Shows a chart", "The system SHALL draw a chart."),
+                ("ANAL-2 Exports", "The system SHALL export."),
+            ]),
+        ),
+        (
+            "analytics-import",
+            spec(&[("ANAL-2 Imports", "The system SHALL import.")]),
+        ),
+    ] {
+        let d = p.join("openspec/specs").join(cap);
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join("spec.md"), body).unwrap();
+    }
+    let out = run(p, &["import", "specs", "--from", "openspec", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let v: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+    let nodes = v["nodes"].as_array().unwrap();
+    let ids: Vec<_> = nodes.iter().map(|n| n["id"].as_str().unwrap()).collect();
+    // The unnumbered requirement takes a number nobody asked for, and the second ANAL-2 the next free one.
+    assert_eq!(
+        ids,
+        ["REQ-ANAL-1", "REQ-ANAL-0001", "REQ-ANAL-2", "REQ-ANAL-0002"],
+        "{ids:?}"
+    );
+    assert!(
+        nodes[3]["notes"].to_string().contains("is taken"),
+        "{}",
+        nodes[3]
+    );
+    assert_eq!(nodes[0]["aliases"][0], "ANAL-1");
+    assert_eq!(run(p, &["check"]).code, 0);
+    let out = run(p, &["show", "ANAL-2"]);
+    assert!(out.stdout.contains("REQ-ANAL-2"), "{}", out.stdout);
+    let out = run(p, &["list", "--domain", "anal"]);
+    assert!(out.stdout.contains("4 node(s)"), "{}", out.stdout);
+}
+
+// verifies: REQ-IMPORT-0002.S6
+#[test]
+fn a_change_set_links_the_requirement_a_delta_names_by_its_source_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    let cap = p.join("openspec/specs/bin");
+    fs::create_dir_all(&cap).unwrap();
+    fs::write(
+        cap.join("spec.md"),
+        "# bin\n\n## Requirements\n\n### Requirement: BIN-1 Deleting\nThe system SHALL bin.\n\n#### Scenario: A\n- **WHEN** a\n- **THEN** b\n",
+    )
+    .unwrap();
+    let change = p.join("openspec/changes/keep-longer");
+    fs::create_dir_all(change.join("specs/bin")).unwrap();
+    fs::write(
+        change.join("proposal.md"),
+        "## Why\nLonger.\n\n## What Changes\n- 60 days\n",
+    )
+    .unwrap();
+    fs::write(
+        change.join("specs/bin/spec.md"),
+        "## MODIFIED Requirements\n### Requirement: BIN-1 Deleting is kept longer\nThe system SHALL bin for 60 days.\n",
+    )
+    .unwrap();
+    let out = run(p, &["import", "plan", "start", "--from", "openspec"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["import", "apply"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let changes: Vec<_> = fs::read_dir(p.join("specs/changes")).unwrap().collect();
+    let text = fs::read_to_string(changes[0].as_ref().unwrap().path()).unwrap();
+    assert!(text.contains("- REQ-BIN-1"), "{text}");
 }
 
 // verifies: REQ-IMPORT-0002.S4

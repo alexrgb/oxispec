@@ -87,12 +87,12 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
         .map(|i| import::draft(i, source, normative))
         .collect();
 
-    let mut ids = Ids {
-        graph: load_graph(root, cache),
-        scheme: opts.scheme.unwrap_or(cfg.id_scheme),
-        counters: HashMap::new(),
-        taken: HashSet::new(),
-    };
+    let mut ids = Ids::new(
+        load_graph(root, cache),
+        opts.scheme.unwrap_or(cfg.id_scheme),
+    );
+    let keep_ids = keeps_ids(source);
+    ids.reserve(&drafts.iter().collect::<Vec<_>>(), keep_ids);
     let mut paths: HashSet<PathBuf> = HashSet::new();
     let mut planned: Vec<Vec<Node>> = Vec::new();
     for d in &drafts {
@@ -103,6 +103,7 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
             status,
             dated.then_some(today.as_str()),
             &mut paths,
+            keep_ids,
         )?;
         for n in &nodes {
             if root.join(&n.rel).exists() {
@@ -133,6 +134,7 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
                 nodes.iter().map(move |n| {
                     json!({
                         "id": n.id,
+                        "aliases": n.aliases,
                         "path": shown(root, &n.rel),
                         "source": shown(root, &d.path),
                         "requirements": usize::from(!d.blocks.is_empty()),
@@ -206,6 +208,7 @@ fn chosen_status<'a>(profile: &'a formats::Profile, asked: Option<&'a str>) -> R
 /// A requirement node that is about to be written.
 struct Node {
     id: String,
+    aliases: Vec<String>,
     rel: PathBuf,
     text: String,
     notes: Vec<String>,
@@ -224,8 +227,19 @@ fn file_stem(title: &str, fallback: &str) -> String {
         .to_string()
 }
 
+/// Whether the IDs that requirements have in their source are kept. OpenSpec and plain markdown
+/// name requirements within a spec by authors' own scheme (`CAR-1`); Spec Kit, Kiro and a PRD
+/// number from the start in every document (`FR-001`), so those numbers would collide.
+fn keeps_ids(source: Source) -> bool {
+    matches!(source, Source::OpenSpec | Source::Markdown)
+}
+
 /// The nodes of one spec file, a node for each requirement in it, with their
 /// IDs and files. A name that is taken in the run gets a number after it.
+///
+/// A requirement whose title begins with an ID of its source (`CAR-1 Slides`) keeps it: the
+/// node is `REQ-CAR-1`, and `CAR-1` is its alias. If that number is taken, the node gets the
+/// next free one and says so.
 fn nodes_of(
     d: &import::Draft,
     source: &str,
@@ -233,18 +247,60 @@ fn nodes_of(
     status: &str,
     date: Option<&str>,
     paths: &mut HashSet<PathBuf>,
+    keep_ids: bool,
 ) -> Result<Vec<Node>> {
-    let domain = d.domain();
-    let prefix = format!("REQ-{domain}-");
-    let dir = PathBuf::from("specs/requirements").join(domain.to_ascii_lowercase());
+    let folder = d.domain().to_ascii_lowercase();
+    let dir = PathBuf::from("specs/requirements").join(&folder);
     let mut out = Vec::new();
+    let fallback = if keep_ids {
+        d.blocks
+            .iter()
+            .find_map(|b| import::source_id(&b.title))
+            .map_or_else(|| d.domain(), |(prefix, _)| prefix)
+    } else {
+        d.domain()
+    };
     for i in 0..d.node_count() {
-        let id = ids.next(&prefix)?;
         let title = d
             .blocks
             .get(i)
             .map_or(d.name.as_str(), |b| b.title.as_str());
-        let stem = file_stem(title, &domain.to_ascii_lowercase());
+        let mut notes = d.notes_for(i);
+        let mut aliases = Vec::new();
+        let own = import::source_id(title).filter(|_| keep_ids);
+        let id = match own {
+            Some((prefix, number)) => {
+                let wanted = format!("REQ-{prefix}-{number}");
+                let alias = format!("{prefix}-{number}");
+                let id = if ids.scheme == IdScheme::Sequential && ids.claim(&wanted) {
+                    wanted
+                } else if ids.scheme == IdScheme::Sequential {
+                    let id = ids.next(&format!("REQ-{prefix}-"))?;
+                    notes.push(format!(
+                        "{wanted} is taken, so this requirement is {id}; it keeps {alias} as an alias"
+                    ));
+                    id
+                } else {
+                    ids.next(&format!("REQ-{prefix}-"))?
+                };
+                if ids.graph.get(&alias).is_some() || !ids.aliases.insert(alias.clone()) {
+                    notes.push(format!(
+                        "{alias} belongs to another node, so it is not an alias here"
+                    ));
+                } else {
+                    aliases.push(alias);
+                }
+                id
+            }
+            // No ID of its own: it joins the numbers of the others in its file, if they have any.
+            None => ids.next(&format!("REQ-{}-", fallback))?,
+        };
+        let named = if keep_ids {
+            import::title_without_id(title)
+        } else {
+            title
+        };
+        let stem = file_stem(named, &folder);
         let mut rel = dir.join(format!("{stem}.md"));
         let mut n = 2;
         while !paths.insert(rel.clone()) {
@@ -252,9 +308,10 @@ fn nodes_of(
             n += 1;
         }
         out.push(Node {
-            text: d.render_block(i, &id, status, date, source),
-            notes: d.notes_for(i),
+            text: d.render_block_as(i, &id, &aliases, status, date, source),
+            notes,
             title: title.to_string(),
+            aliases,
             id,
             rel,
         });
@@ -269,20 +326,56 @@ struct Ids {
     scheme: IdScheme,
     counters: HashMap<String, u32>,
     taken: HashSet<String>,
+    /// IDs that requirements of the sources ask for. A number that nobody asked for is never
+    /// handed out in their place.
+    reserved: HashSet<String>,
+    aliases: HashSet<String>,
 }
 
 impl Ids {
+    fn new(graph: oxispec_core::Graph, scheme: IdScheme) -> Ids {
+        Ids {
+            graph,
+            scheme,
+            counters: HashMap::new(),
+            taken: HashSet::new(),
+            reserved: HashSet::new(),
+            aliases: HashSet::new(),
+        }
+    }
+
+    /// Notes the IDs that the requirements of the drafts ask for.
+    fn reserve(&mut self, drafts: &[&import::Draft], keep_ids: bool) {
+        if !keep_ids {
+            return;
+        }
+        for d in drafts {
+            for b in &d.blocks {
+                if let Some((prefix, number)) = import::source_id(&b.title) {
+                    self.reserved.insert(format!("REQ-{prefix}-{number}"));
+                }
+            }
+        }
+    }
+
+    /// Takes an ID that a source asked for, if no node and no earlier requirement has it.
+    fn claim(&mut self, id: &str) -> bool {
+        self.graph.get(id).is_none() && self.taken.insert(id.to_string())
+    }
+
     fn next(&mut self, prefix: &str) -> Result<String> {
         match self.scheme {
-            IdScheme::Sequential => {
+            IdScheme::Sequential => loop {
                 let n = self
                     .counters
                     .entry(prefix.to_string())
                     .or_insert_with(|| next_number(&self.graph, prefix));
                 let id = format!("{prefix}{n:04}");
                 *n += 1;
-                Ok(id)
-            }
+                if !self.reserved.contains(&id) && self.taken.insert(id.clone()) {
+                    return Ok(id);
+                }
+            },
             IdScheme::Random => loop {
                 let id = allocate_id(&self.graph, prefix, self.scheme)?;
                 if self.taken.insert(id.clone()) {
@@ -564,31 +657,46 @@ fn build(root: &Path, plan: &Plan, status: Option<&str>, cache: bool) -> Result<
         .map(|n| Known {
             id: n.id.clone(),
             titles: n.requirements.iter().map(|r| r.name.clone()).collect(),
+            aliases: n.aliases.clone(),
+            group: n
+                .path
+                .parent()
+                .and_then(|p| p.file_name())
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_default(),
         })
         .collect();
-    let mut ids = Ids {
-        graph,
-        scheme: cfg.id_scheme,
-        counters: HashMap::new(),
-        taken: HashSet::new(),
-    };
+    let mut ids = Ids::new(graph, cfg.id_scheme);
     let mut outs: Vec<Out> = Vec::new();
     let live = |k: Kind| plan.items.iter().filter(move |i| i.kind == k);
     let mut paths: HashSet<PathBuf> = HashSet::new();
+    let mut drafts = Vec::new();
     for item in live(Kind::Requirement) {
-        let draft = import_plan::draft_of(root, item, source, normative)?;
+        drafts.push((item, import_plan::draft_of(root, item, source, normative)?));
+    }
+    let keep_ids = keeps_ids(source);
+    ids.reserve(&drafts.iter().map(|(_, d)| d).collect::<Vec<_>>(), keep_ids);
+    for (item, draft) in &drafts {
         let nodes = nodes_of(
-            &draft,
+            draft,
             &item.sources.join(", "),
             &mut ids,
             status,
             dated.then_some(today.as_str()),
             &mut paths,
+            keep_ids,
         )?;
         for n in nodes {
             known.push(Known {
                 id: n.id.clone(),
                 titles: vec![n.title.clone()],
+                aliases: n.aliases.clone(),
+                group: n
+                    .rel
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .map(|f| f.to_string_lossy().to_string())
+                    .unwrap_or_default(),
             });
             outs.push(Out {
                 n: item.n,

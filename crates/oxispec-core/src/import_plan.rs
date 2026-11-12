@@ -195,6 +195,10 @@ pub fn propose(
 pub struct Known {
     pub id: String,
     pub titles: Vec<String>,
+    /// The names the node answers to, such as the ID its requirement had in the source.
+    pub aliases: Vec<String>,
+    /// The folder of the node below `specs/requirements`: the capability it came from.
+    pub group: String,
 }
 
 /// What an item would write.
@@ -359,16 +363,23 @@ pub fn render_change(root: &Path, item: &Item, id: &str, known: &[Known]) -> io:
                 .and_then(|i| parts.get(i))
                 .copied()
                 .unwrap_or("");
-            let prefix = domain_prefix(capability);
+            let group = import::domain_of(capability).to_ascii_lowercase();
             let mut listing = String::new();
             for (op, name) in delta_entries(&text) {
                 listing.push_str(&format!("- {op}: {name}\n"));
                 if op == "ADDED" || op == "RENAMED" {
                     continue;
                 }
-                let hit = known.iter().find(|k| {
-                    k.id.starts_with(&prefix)
-                        && k.titles.iter().any(|t| t.eq_ignore_ascii_case(&name))
+                // The ID the source gave the requirement is what its authors say, so it comes
+                // first; the title is the way when there is none.
+                let by_alias = import::source_id(&name).and_then(|(p, n)| {
+                    let alias = format!("{p}-{n}");
+                    known.iter().find(|k| k.aliases.contains(&alias))
+                });
+                let hit = by_alias.or_else(|| {
+                    known.iter().find(|k| {
+                        k.group == group && k.titles.iter().any(|t| t.eq_ignore_ascii_case(&name))
+                    })
                 });
                 match hit {
                     Some(k) => {
@@ -575,6 +586,8 @@ mod tests_of_plan {
         let known = vec![Known {
             id: "REQ-AUTH-0001".into(),
             titles: vec!["Login".into()],
+            aliases: Vec::new(),
+            group: "auth".into(),
         }];
         let made = render_change(root, &plan.items[2], "CHG-0001", &known).unwrap();
         let t = &made.text;

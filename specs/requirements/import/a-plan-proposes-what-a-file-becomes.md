@@ -26,3 +26,7 @@ The system SHALL propose, for the files of another tool, a requirement for each 
 #### Scenario: Several items at once {#S5}
 - **WHEN** a plan is started with `--only change`, or items are set by `--where kind=requirement`
 - **THEN** the other items are skipped, or every item of that kind changes, in one call
+
+#### Scenario: A delta names a requirement by its ID {#S6}
+- **WHEN** a delta of an open change names `BIN-1 …` and a requirement has that alias
+- **THEN** the change set links that requirement
