@@ -58,6 +58,7 @@ A code is never reused. `E` is an error (`oxispec check` exits with 1), `W` a wa
 | E039 | error | A risk is accepted but no person is named in `approved_by` |
 | E040 | error | A test plan has a status or date that is not valid |
 | E041 | error | An entity block cannot be read, has no name, or shares its name with another entity |
+| E042 | error | An alias is not a valid ID, is the ID of another node, or is an alias of two nodes |
 | W012 | warning | A decision is superseded by another, but its status still says it is in force |
 | W013 | warning | A debt item that is still to be paid has no owner |
 | W014 | warning | A debt item is past its due date |

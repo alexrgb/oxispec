@@ -34,6 +34,8 @@ pub struct Frontmatter {
     pub review: Option<String>,
     #[serde(default)]
     pub links: BTreeMap<String, OneOrMany>,
+    /// Other names the node answers to, such as the ID it had in another tool.
+    pub aliases: Option<OneOrMany>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -140,6 +142,10 @@ pub struct Node {
     pub path: PathBuf,
     /// Link kind to target IDs, for example `decided-by` to `[ADR-0007]`.
     pub links: BTreeMap<String, Vec<String>>,
+    /// Other names the node answers to, such as the ID it had in another tool.
+    /// A link, a code marker or `show` may use one in place of the ID.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
     pub requirements: Vec<RequirementBlock>,
     /// Lines of `claims` blocks, for the consistency checks.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

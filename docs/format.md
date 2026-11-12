@@ -34,6 +34,7 @@ The system MUST expire admin sessions after 15 minutes of inactivity.
 | `owner` | Optional, free text for now. |
 | `approved_by`, `approved_on` | Set on [change sets](#change-sets) when they are approved. A name, and a date as `YYYY-MM-DD`. |
 | `links` | Optional. Link kind to one or more targets. |
+| `aliases` | Optional. Other names the node answers to, such as the ID it had in another tool (`aliases: [CAR-1]`). A link, a `spec:` or `verifies:` marker in code, `show`, `trace` and `search` may use one in place of the ID. An alias must be a valid ID that no node has and no other node lists (E042). |
 
 Unknown keys are ignored.
 
@@ -282,6 +283,7 @@ Codes are stable. A code is never reused.
 | E039 | error | A risk is accepted but no person is named in `approved_by` |
 | E040 | error | A test plan has a status or date that is not valid (see [test-plans.md](test-plans.md)) |
 | E041 | error | An entity block cannot be read, has no name, or shares its name with another entity (see [entities.md](entities.md)) |
+| E042 | error | An alias is not a valid ID, is the ID of another node, or is an alias of two nodes |
 | W001 | warning | Unknown node type |
 | W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
 | W003 | warning | A file could not be read |

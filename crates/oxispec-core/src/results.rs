@@ -271,6 +271,7 @@ pub fn scenario_status(
     annotations: &[Annotation],
     results: &Results,
 ) -> BTreeMap<String, Status> {
+    let annotations = &crate::trace::resolved(graph, annotations);
     // Outcomes of the results that belong to each scenario.
     let mut seen: BTreeMap<String, Vec<Outcome>> = BTreeMap::new();
     // Scenarios that some test names, with the test's symbol.

@@ -421,8 +421,19 @@ impl Coverage {
 /// are counted, since a draft is not expected to be built yet.
 ///
 /// A `verifies` that names a requirement, not a scenario, covers all of its scenarios.
+/// The annotations with each alias in a target replaced by the ID of the node that has it.
+pub fn resolved(graph: &Graph, annotations: &[Annotation]) -> Vec<Annotation> {
+    annotations
+        .iter()
+        .map(|a| Annotation {
+            target: graph.canonical(&a.target),
+            ..a.clone()
+        })
+        .collect()
+}
+
 pub fn coverage(graph: &Graph, annotations: &[Annotation], status: Option<&str>) -> Coverage {
-    let mut all = annotations.to_vec();
+    let mut all = resolved(graph, annotations);
     all.extend(from_links(graph));
 
     let mut result = Coverage::default();
