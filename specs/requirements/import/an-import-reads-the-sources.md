@@ -30,3 +30,7 @@ The system SHALL read specs written for OpenSpec, Spec Kit, Kiro, as a product r
 #### Scenario: Many requirements in one file {#S6}
 - **WHEN** a source file has several requirements with scenarios
 - **THEN** each requirement is a node of its own with its scenarios numbered from S1, the purpose of the file is in the first node, and `check` has nothing to say about the result
+
+#### Scenario: A status {#S7}
+- **WHEN** specs are imported with `--status accepted`
+- **THEN** the requirement nodes have that status

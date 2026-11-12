@@ -6994,6 +6994,86 @@ fn import_adr_switches_the_adrs_module_on() {
     assert_eq!(run(p, &["check"]).code, 0);
 }
 
+// verifies: REQ-IMPORT-0001.S7
+#[test]
+fn specs_can_be_imported_with_a_status_of_choice() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    let cap = p.join("openspec/specs/auth");
+    fs::create_dir_all(&cap).unwrap();
+    fs::write(cap.join("spec.md"), OPENSPEC_AUTH).unwrap();
+    let out = run(
+        p,
+        &[
+            "import", "specs", "--from", "openspec", "--status", "accepted",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let text = fs::read_to_string(p.join("specs/requirements/auth/login.md")).unwrap();
+    assert!(text.contains("status: accepted"), "{text}");
+}
+
+// verifies: REQ-IMPORT-0002.S5
+#[test]
+fn a_plan_can_be_narrowed_and_changed_for_several_items_at_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    openspec_with_a_change(p);
+    let out = run(
+        p,
+        &[
+            "import", "plan", "start", "--from", "openspec", "--only", "change", "--json",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let v: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+    let kinds: Vec<_> = v["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["kind"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(kinds, ["skip", "change", "change"]);
+    let out = run(
+        p,
+        &[
+            "import",
+            "plan",
+            "set",
+            "--where",
+            "kind=change",
+            "--kind",
+            "skip",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["import", "plan", "show", "--json"]);
+    assert!(
+        !out.stdout.contains("\"kind\": \"change\""),
+        "{}",
+        out.stdout
+    );
+    let out = run(
+        p,
+        &[
+            "import",
+            "plan",
+            "set",
+            "--where",
+            "kind=requirement",
+            "--kind",
+            "requirement",
+            "--title",
+            "X",
+        ],
+    );
+    assert_ne!(out.code, 0, "a title is for one item");
+    let out = run(p, &["import", "plan", "set", "1", "--where", "kind=skip"]);
+    assert_ne!(out.code, 0, "a number and --where together");
+}
+
 // verifies: REQ-IMPORT-0004.S1
 #[test]
 fn a_skipped_item_is_not_written_and_an_empty_plan_is_refused() {
@@ -7530,4 +7610,45 @@ fn each_published_crate_carries_the_license_texts_of_the_project() {
             );
         }
     }
+}
+
+// verifies: REQ-SEARCH-0003.S1
+// verifies: REQ-SEARCH-0003.S2
+#[test]
+fn nodes_are_listed_by_type_and_domain_and_shown_with_their_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    for (cap, body) in [("auth", OPENSPEC_AUTH), ("post-candidates", OPENSPEC_AUTH)] {
+        let d = p.join("openspec/specs").join(cap);
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join("spec.md"), body).unwrap();
+    }
+    assert_eq!(run(p, &["import", "specs", "--from", "openspec"]).code, 0);
+    let out = run(
+        p,
+        &[
+            "list",
+            "--type",
+            "requirement",
+            "--domain",
+            "post-candidates",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("REQ-POSTCANDIDATES-0001"),
+        "{}",
+        out.stdout
+    );
+    assert!(!out.stdout.contains("REQ-AUTH-"), "{}", out.stdout);
+    assert!(out.stdout.contains("1 node(s)"), "{}", out.stdout);
+    let out = run(p, &["show", "REQ-AUTH-0001", "--text"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("The system SHALL sign users in."),
+        "{}",
+        out.stdout
+    );
+    assert!(!out.stdout.contains("type: requirement"), "{}", out.stdout);
 }

@@ -526,9 +526,26 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// List nodes, for example: list --type requirement --domain carousels
+    List {
+        /// Only nodes of this type. Repeat for several types
+        #[arg(long = "type", value_name = "TYPE")]
+        ty: Vec<String>,
+        /// Only nodes with this status
+        #[arg(long)]
+        status: Option<String>,
+        /// Only nodes whose ID is of this domain, such as `carousels` for REQ-CAROUSELS-0001
+        #[arg(long)]
+        domain: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
     /// Show a node, its links, and the nodes that link to it
     Show {
         id: String,
+        /// Print the text of the node as well
+        #[arg(long, conflicts_with = "at")]
+        text: bool,
         #[arg(long)]
         json: bool,
         /// Show the node as it was at a git revision (a branch, tag, hash or date:YYYY-MM-DD)
@@ -592,21 +609,30 @@ enum ImportKind {
     },
     /// Write the nodes of the import plan. With --dry-run: show them and write nothing
     Apply {
+        /// The status to give the requirements. Default: the first status of the profile
+        #[arg(long)]
+        status: Option<String>,
         #[arg(long)]
         dry_run: bool,
         #[arg(long)]
         json: bool,
     },
-    /// Specs of OpenSpec, Spec Kit, Kiro or plain markdown. Each file becomes a requirement node;
-    /// what has no place in one (design notes, tasks, open changes) is listed
+    /// Specs of OpenSpec, Spec Kit, Kiro or plain markdown. Each requirement becomes a node;
+    /// what has no place in one (design notes, tasks, open changes) is listed.
+    /// Example: import specs --from openspec --dir openspec/specs --status accepted
     Specs {
-        /// openspec, speckit, kiro, markdown, prd (a product requirements document) or openapi
-        /// (OpenAPI or Swagger, JSON or YAML)
+        /// The name of the tool, not a path: openspec, speckit, kiro, markdown, prd (a product
+        /// requirements document) or openapi (OpenAPI or Swagger, JSON or YAML)
         #[arg(long)]
         from: String,
-        /// The folder of specs (for markdown, a file or folder). Default: where the tool keeps them
+        /// The folder of specs (for markdown, a file or folder). Default: where the tool keeps
+        /// them, such as openspec/specs
         #[arg(long)]
         dir: Option<PathBuf>,
+        /// The status to give the requirements, for example `accepted` for specs that are in
+        /// force. Default: the first status of the profile
+        #[arg(long)]
+        status: Option<String>,
         /// The requirement profile to write them in. Default: the one the config chooses
         #[arg(long)]
         format: Option<String>,
@@ -670,6 +696,10 @@ enum PlanAction {
         /// Start again, replacing a plan that exists
         #[arg(long)]
         force: bool,
+        /// Plan only these kinds (comma separated: requirement, change); the other items are
+        /// set to skip
+        #[arg(long, value_delimiter = ',', value_name = "KINDS")]
+        only: Vec<String>,
         #[arg(long)]
         json: bool,
     },
@@ -683,11 +713,15 @@ enum PlanAction {
     },
     /// Change what an item becomes: requirement, change, adr or skip
     Set {
-        n: usize,
+        /// The item. Leave it out with --where to change several items
+        n: Option<usize>,
         #[arg(long)]
         kind: Option<String>,
         #[arg(long)]
         title: Option<String>,
+        /// Change every item of this kind, for example `kind=requirement`
+        #[arg(long = "where", value_name = "kind=KIND")]
+        where_: Option<String>,
     },
 }
 
@@ -1318,26 +1352,43 @@ fn run(cli: Cli) -> Result<ExitCode> {
                         from,
                         dir,
                         force,
+                        only,
                         json,
                     } => {
                         let _lock = lock_project(&root)?;
-                        importer::plan_start(&root, &from, dir.as_deref(), force, json)?
+                        importer::plan_start(&root, &from, dir.as_deref(), force, &only, json)?
                     }
                     PlanAction::Show { n, draft, json } => {
                         importer::plan_show(&root, n, draft, json, cache)?
                     }
-                    PlanAction::Set { n, kind, title } => {
+                    PlanAction::Set {
+                        n,
+                        kind,
+                        title,
+                        where_,
+                    } => {
                         let _lock = lock_project(&root)?;
-                        importer::plan_set(&root, n, kind.as_deref(), title.as_deref())?
+                        importer::plan_set(
+                            &root,
+                            n,
+                            kind.as_deref(),
+                            title.as_deref(),
+                            where_.as_deref(),
+                        )?
                     }
                 },
-                ImportKind::Apply { dry_run, json } => {
+                ImportKind::Apply {
+                    status,
+                    dry_run,
+                    json,
+                } => {
                     let _lock = lock_project(&root)?;
-                    importer::apply(&root, dry_run, json, cache)?
+                    importer::apply(&root, status.as_deref(), dry_run, json, cache)?
                 }
                 ImportKind::Specs {
                     from,
                     dir,
+                    status,
                     format,
                     id_scheme,
                     dry_run,
@@ -1350,6 +1401,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                             from: &from,
                             dir: dir.as_deref(),
                             format: format.as_deref(),
+                            status: status.as_deref(),
                             scheme: id_scheme.map(IdScheme::from),
                             dry_run,
                             json,
@@ -1693,13 +1745,30 @@ fn run(cli: Cli) -> Result<ExitCode> {
             index_command(&project_root(cli.root.as_deref())?, rebuild, json)?;
             Ok(ExitCode::SUCCESS)
         }
-        Command::Show { id, json, at } => {
+        Command::Show { id, text, json, at } => {
             show(
                 &project_root(cli.root.as_deref())?,
                 &id,
                 json,
                 cache,
                 at.as_deref(),
+                text,
+            )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::List {
+            ty,
+            status,
+            domain,
+            json,
+        } => {
+            list_nodes(
+                &project_root(cli.root.as_deref())?,
+                &ty,
+                status.as_deref(),
+                domain.as_deref(),
+                json,
+                cache,
             )?;
             Ok(ExitCode::SUCCESS)
         }
@@ -2211,7 +2280,79 @@ fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<Exi
     })
 }
 
-fn show(root: &Path, id: &str, json: bool, cache: bool, at: Option<&str>) -> Result<()> {
+// spec: REQ-SEARCH-0003
+fn list_nodes(
+    root: &Path,
+    types: &[String],
+    status: Option<&str>,
+    domain: Option<&str>,
+    json: bool,
+    cache: bool,
+) -> Result<()> {
+    config::load(root)?;
+    let graph = load_graph(root, cache);
+    let domain = domain.map(|d| d.to_ascii_uppercase().replace(['-', '_', ' '], ""));
+    let rows: Vec<_> = graph
+        .nodes
+        .iter()
+        .filter(|n| types.is_empty() || types.iter().any(|t| t == &n.ty))
+        .filter(|n| status.is_none_or(|s| n.status.as_deref() == Some(s)))
+        .filter(|n| {
+            domain.as_ref().is_none_or(|d| {
+                // REQ-CAROUSELS-0001: the part between the first dash and the number.
+                let mut parts = n.id.split('-');
+                parts.next();
+                let tail: Vec<&str> = parts.collect();
+                tail.len() >= 2 && tail[..tail.len() - 1].join("") == *d
+            })
+        })
+        .collect();
+    let title_of = |n: &oxispec_core::node::Node| {
+        n.title
+            .clone()
+            .or_else(|| n.requirements.first().map(|r| r.name.clone()))
+            .unwrap_or_default()
+    };
+    if json {
+        let items: Vec<_> = rows
+            .iter()
+            .map(|n| {
+                serde_json::json!({
+                    "id": n.id, "type": n.ty, "status": n.status,
+                    "title": title_of(n), "path": n.path,
+                })
+            })
+            .collect();
+        outln!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "schema_version": OUTPUT_SCHEMA_VERSION,
+                "nodes": items,
+            }))?
+        );
+        return Ok(());
+    }
+    for n in &rows {
+        outln!(
+            "{}  {}  [{}]  {}",
+            n.id,
+            n.ty,
+            n.status.as_deref().unwrap_or("-"),
+            title_of(n)
+        );
+    }
+    outln!("{} node(s)", rows.len());
+    Ok(())
+}
+
+fn show(
+    root: &Path,
+    id: &str,
+    json: bool,
+    cache: bool,
+    at: Option<&str>,
+    text: bool,
+) -> Result<()> {
     config::load(root)?;
     let revision = at.map(|spec| git::resolve_rev(root, spec)).transpose()?;
     let graph = match &revision {
@@ -2248,6 +2389,14 @@ fn show(root: &Path, id: &str, json: bool, cache: bool, at: Option<&str>) -> Res
     outln!("path:  {}", node.path.display());
     if let Some(owner) = &node.owner {
         outln!("owner: {owner}");
+    }
+    if text {
+        let raw = std::fs::read_to_string(root.join(&node.path))
+            .with_context(|| format!("cannot read {}", node.path.display()))?;
+        let raw = raw.replace("\r\n", "\n");
+        let body = oxispec_core::parse::frontmatter_span(&raw)
+            .map_or(raw.as_str(), |span| &raw[span.body_start..]);
+        outln!("\n{}\n", body.trim());
     }
     for r in &node.requirements {
         let anchors: Vec<&str> = r

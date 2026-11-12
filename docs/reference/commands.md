@@ -4,7 +4,7 @@ Written by `oxispec docs reference` from the program itself. Do not edit it by h
 
 Every command also accepts `--root <ROOT>` (the project folder; default: the nearest parent with `.oxispec/config.yaml`), `--no-cache` (do not read or write the local index) and `--help`.
 
-Commands: [`init`](#oxispec-init), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`entities`](#oxispec-entities), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`show`](#oxispec-show)
+Commands: [`init`](#oxispec-init), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`entities`](#oxispec-entities), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`list`](#oxispec-list), [`show`](#oxispec-show)
 
 ## `oxispec init`
 
@@ -735,6 +735,7 @@ Usage: oxispec import plan start [OPTIONS] --from <FROM>
 - `--from <FROM>`: openspec, speckit, kiro, markdown, prd (a product requirements document) or openapi (OpenAPI or Swagger, JSON or YAML). Required.
 - `--dir <DIR>`
 - `--force`: Start again, replacing a plan that exists.
+- `--only <KINDS>`: Plan only these kinds (comma separated: requirement, change); the other items are set to skip.
 - `--json`
 
 #### `oxispec import plan show`
@@ -754,12 +755,13 @@ Usage: oxispec import plan show [OPTIONS] [N]
 Change what an item becomes: requirement, change, adr or skip
 
 ```text
-Usage: oxispec import plan set [OPTIONS] <N>
+Usage: oxispec import plan set [OPTIONS] [N]
 ```
 
-- `<N>`
+- `<N>`: The item. Leave it out with --where to change several items.
 - `--kind <KIND>`
 - `--title <TITLE>`
+- `--where <kind=KIND>`: Change every item of this kind, for example `kind=requirement`.
 
 ### `oxispec import apply`
 
@@ -769,19 +771,21 @@ Write the nodes of the import plan. With --dry-run: show them and write nothing
 Usage: oxispec import apply [OPTIONS]
 ```
 
+- `--status <STATUS>`: The status to give the requirements. Default: the first status of the profile.
 - `--dry-run`
 - `--json`
 
 ### `oxispec import specs`
 
-Specs of OpenSpec, Spec Kit, Kiro or plain markdown. Each file becomes a requirement node; what has no place in one (design notes, tasks, open changes) is listed
+Specs of OpenSpec, Spec Kit, Kiro or plain markdown. Each requirement becomes a node; what has no place in one (design notes, tasks, open changes) is listed. Example: import specs --from openspec --dir openspec/specs --status accepted
 
 ```text
 Usage: oxispec import specs [OPTIONS] --from <FROM>
 ```
 
-- `--from <FROM>`: openspec, speckit, kiro, markdown, prd (a product requirements document) or openapi (OpenAPI or Swagger, JSON or YAML). Required.
-- `--dir <DIR>`: The folder of specs (for markdown, a file or folder). Default: where the tool keeps them.
+- `--from <FROM>`: The name of the tool, not a path: openspec, speckit, kiro, markdown, prd (a product requirements document) or openapi (OpenAPI or Swagger, JSON or YAML). Required.
+- `--dir <DIR>`: The folder of specs (for markdown, a file or folder). Default: where the tool keeps them, such as openspec/specs.
+- `--status <STATUS>`: The status to give the requirements, for example `accepted` for specs that are in force. Default: the first status of the profile.
 - `--format <FORMAT>`: The requirement profile to write them in. Default: the one the config chooses.
 - `--id-scheme <ID_SCHEME>`: sequential or random; overrides the config. One of `sequential`, `random`.
 - `--dry-run`: Show what would be written and write nothing.
@@ -1082,6 +1086,19 @@ Usage: oxispec index [OPTIONS]
 - `--rebuild`: Delete the cache first, so every file is parsed again.
 - `--json`
 
+## `oxispec list`
+
+List nodes, for example: list --type requirement --domain carousels
+
+```text
+Usage: oxispec list [OPTIONS]
+```
+
+- `--type <TYPE>`: Only nodes of this type. Repeat for several types.
+- `--status <STATUS>`: Only nodes with this status.
+- `--domain <DOMAIN>`: Only nodes whose ID is of this domain, such as `carousels` for REQ-CAROUSELS-0001.
+- `--json`
+
 ## `oxispec show`
 
 Show a node, its links, and the nodes that link to it
@@ -1091,5 +1108,6 @@ Usage: oxispec show [OPTIONS] <ID>
 ```
 
 - `<ID>`
+- `--text`: Print the text of the node as well.
 - `--json`
 - `--at <AT>`: Show the node as it was at a git revision (a branch, tag, hash or date:YYYY-MM-DD).

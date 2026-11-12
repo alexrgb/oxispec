@@ -20,6 +20,7 @@ pub struct Options<'a> {
     pub from: &'a str,
     pub dir: Option<&'a Path>,
     pub format: Option<&'a str>,
+    pub status: Option<&'a str>,
     pub scheme: Option<IdScheme>,
     pub dry_run: bool,
     pub json: bool,
@@ -70,7 +71,7 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
         None => bail!("no profile named `{asked}`; see `oxispec formats list`"),
     };
     let normative = profile.style.is_none_or(Style::needs_normative);
-    let status = profile.statuses.first().map_or("draft", String::as_str);
+    let status = chosen_status(profile, opts.status)?;
     let dated = profile
         .fields
         .iter()
@@ -186,6 +187,20 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
         profile.name
     );
     Ok(())
+}
+
+/// The status for imported requirements: the one asked for, which the profile has to allow,
+/// or the first the profile lists.
+fn chosen_status<'a>(profile: &'a formats::Profile, asked: Option<&'a str>) -> Result<&'a str> {
+    match asked {
+        Some(s) if profile.statuses.is_empty() || profile.statuses.iter().any(|t| t == s) => Ok(s),
+        Some(s) => bail!(
+            "the status `{s}` is not one `{}` allows ({})",
+            profile.name,
+            profile.statuses.join(", ")
+        ),
+        None => Ok(profile.statuses.first().map_or("draft", String::as_str)),
+    }
 }
 
 /// A requirement node that is about to be written.
@@ -353,10 +368,21 @@ pub fn plan_start(
     from: &str,
     dir: Option<&Path>,
     force: bool,
+    only: &[String],
     json: bool,
 ) -> Result<()> {
     let cfg = config::load(root)?;
     require_module(&cfg, "specs")?;
+    let mut only_kinds = Vec::new();
+    for k in only {
+        match Kind::parse(k) {
+            Some(kind) => only_kinds.push(kind),
+            None => bail!(
+                "unknown kind `{k}`; the kinds are {}",
+                Kind::NAMES.join(", ")
+            ),
+        }
+    }
     let Some(source) = Source::parse(from) else {
         bail!(
             "unknown source `{from}`; the sources are {}",
@@ -397,6 +423,14 @@ pub fn plan_start(
             item.why = "already imported by `oxispec import specs`".to_string();
         }
     }
+    if !only_kinds.is_empty() {
+        for item in &mut plan.items {
+            if item.kind != Kind::Skip && !only_kinds.contains(&item.kind) {
+                item.kind = Kind::Skip;
+                item.why = "left out by `--only`".to_string();
+            }
+        }
+    }
     write_plan(root, &plan)?;
     if json {
         let items: Vec<_> = plan.items.iter().map(item_json).collect();
@@ -422,29 +456,71 @@ pub fn plan_start(
     Ok(())
 }
 
-pub fn plan_set(root: &Path, n: usize, kind: Option<&str>, title: Option<&str>) -> Result<()> {
+pub fn plan_set(
+    root: &Path,
+    n: Option<usize>,
+    kind: Option<&str>,
+    title: Option<&str>,
+    where_: Option<&str>,
+) -> Result<()> {
     let mut plan = read_plan(root)?;
-    let Some(item) = plan.items.iter_mut().find(|i| i.n == n) else {
-        bail!("the plan has no item {n}; it has 1 to {}", plan.items.len());
-    };
-    if let Some(k) = kind {
-        let Some(k) = Kind::parse(k) else {
-            bail!(
+    let kind = match kind {
+        Some(k) => match Kind::parse(k) {
+            Some(k) => Some(k),
+            None => bail!(
                 "unknown kind `{k}`; the kinds are {}",
                 Kind::NAMES.join(", ")
-            );
-        };
-        item.kind = k;
-    }
-    if let Some(t) = title {
-        if t.trim().is_empty() {
-            bail!("the title cannot be empty");
+            ),
+        },
+        None => None,
+    };
+    let title = match title {
+        Some(t) if t.trim().is_empty() => bail!("the title cannot be empty"),
+        Some(t) => Some(t.trim().to_string()),
+        None => None,
+    };
+    let numbers: Vec<usize> = match (n, where_) {
+        (Some(_), Some(_)) => bail!("give an item number or `--where`, not both"),
+        (None, None) => bail!("give an item number, or `--where kind=KIND` for several items"),
+        (Some(n), None) => {
+            if !plan.items.iter().any(|i| i.n == n) {
+                bail!("the plan has no item {n}; it has 1 to {}", plan.items.len());
+            }
+            vec![n]
         }
-        item.title = t.trim().to_string();
+        (None, Some(w)) => {
+            let Some(name) = w.strip_prefix("kind=") else {
+                bail!("`--where` reads `kind=KIND`, for example `kind=requirement`");
+            };
+            let Some(of) = Kind::parse(name) else {
+                bail!(
+                    "unknown kind `{name}`; the kinds are {}",
+                    Kind::NAMES.join(", ")
+                );
+            };
+            if title.is_some() {
+                bail!("a title is for one item; give its number");
+            }
+            plan.items
+                .iter()
+                .filter(|i| i.kind == of)
+                .map(|i| i.n)
+                .collect()
+        }
+    };
+    for item in plan.items.iter_mut().filter(|i| numbers.contains(&i.n)) {
+        if let Some(k) = kind {
+            item.kind = k;
+        }
+        if let Some(t) = &title {
+            item.title = t.clone();
+        }
+        outln!("item {} {} {}", item.n, item.kind.name(), item.title);
     }
-    let line = format!("{} {} {}", item.n, item.kind.name(), item.title);
+    if numbers.is_empty() {
+        outln!("no item matches");
+    }
     write_plan(root, &plan)?;
-    outln!("item {line}");
     Ok(())
 }
 
@@ -457,7 +533,7 @@ struct Out {
     made: import_plan::Made,
 }
 
-fn build(root: &Path, plan: &Plan, cache: bool) -> Result<Vec<Out>> {
+fn build(root: &Path, plan: &Plan, status: Option<&str>, cache: bool) -> Result<Vec<Out>> {
     let cfg = config::load(root)?;
     require_module(&cfg, "specs")?;
     let Some(source) = Source::parse(&plan.from) else {
@@ -473,7 +549,7 @@ fn build(root: &Path, plan: &Plan, cache: bool) -> Result<Vec<Out>> {
     };
     let req_profile = wanted("requirement", "shall")?;
     let normative = req_profile.style.is_none_or(Style::needs_normative);
-    let status = req_profile.statuses.first().map_or("draft", String::as_str);
+    let status = chosen_status(&req_profile, status)?;
     let dated = req_profile
         .fields
         .iter()
@@ -619,7 +695,7 @@ pub fn plan_show(
     if item.kind == Kind::Skip {
         bail!("item {n} is skipped; set a kind to see its draft");
     }
-    let outs = build(root, &plan, cache)?;
+    let outs = build(root, &plan, None, cache)?;
     let mine: Vec<&Out> = outs.iter().filter(|o| o.n == n).collect();
     let first = mine.first().context("the item has no draft")?;
     if json {
@@ -656,9 +732,15 @@ pub fn plan_show(
 }
 
 // spec: REQ-IMPORT-0004
-pub fn apply(root: &Path, dry_run: bool, json: bool, cache: bool) -> Result<()> {
+pub fn apply(
+    root: &Path,
+    status: Option<&str>,
+    dry_run: bool,
+    json: bool,
+    cache: bool,
+) -> Result<()> {
     let plan = read_plan(root)?;
-    let outs = build(root, &plan, cache)?;
+    let outs = build(root, &plan, status, cache)?;
     if outs.is_empty() {
         bail!("every item is skipped; nothing to write");
     }
