@@ -38,3 +38,8 @@ The system SHALL read specs written for OpenSpec, Spec Kit, Kiro, as a product r
 #### Scenario: The ID of the source {#S8}
 - **WHEN** an OpenSpec or markdown requirement begins with an ID such as `ANAL-2`
 - **THEN** its node is `REQ-ANAL-2` with `ANAL-2` as an alias, a number that is taken gives the next free one with a note, and a requirement without an ID gets a number nobody asked for
+
+#### Scenario: Domains of choice {#S9}
+- **WHEN** the config has `domains:` that map the name of a spec, or the prefix of a source ID, to a domain
+- **THEN** the folder of a spec, the IDs of requirements with no ID in the source, and the IDs under a source prefix use that domain, the source ID stays as the alias, a delta still finds its requirements, and a domain that is not letters and digits is refused
+

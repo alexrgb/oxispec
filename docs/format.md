@@ -199,6 +199,9 @@ agents: [claude, cursor]   # only with the agents module; see agents.md
 trace:
   exclude: ["vendor/**"]   # optional
   languages: [rust, python]   # optional: scan only these, see trace.md
+domains:                    # optional: the domain an import gives, see profiles.md
+  analytics-and-reports: REPORTS   # a spec by name
+  CAR: SLIDES                      # or the prefix of a source ID
 api_index:                  # optional: embed with a service, see the API guide
   embedder: { url: "http://localhost:11434/v1/embeddings", model: nomic-embed-text }
 ```

@@ -6,6 +6,7 @@
 //! with the scenarios under it. What has no place in a
 //! node (design notes, tasks, active changes) is listed, not dropped silently.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -637,6 +638,25 @@ pub fn domain_of(name: &str) -> String {
     } else {
         domain
     }
+}
+
+fn domain_given(domains: &BTreeMap<String, String>, key: &str) -> Option<String> {
+    domains
+        .iter()
+        .find(|(k, _)| k.trim().eq_ignore_ascii_case(key.trim()))
+        .map(|(_, v)| v.to_ascii_uppercase())
+}
+
+/// The domain for the spec of this name (its folder or file): the one the config gives it in
+/// `domains`, or else the name in capitals as [`domain_of`] makes it.
+pub fn domain_for(domains: &BTreeMap<String, String>, name: &str) -> String {
+    domain_given(domains, name).unwrap_or_else(|| domain_of(name))
+}
+
+/// The domain for IDs that begin with this prefix in the source (`CAR` of `CAR-1`): the one the
+/// config gives in `domains`, or else the prefix itself.
+pub fn domain_for_prefix(domains: &BTreeMap<String, String>, prefix: &str) -> String {
+    domain_given(domains, prefix).unwrap_or_else(|| prefix.to_string())
 }
 
 /// The ID a requirement has in its source, when its title begins with one: `CAR-1 Slides` gives
