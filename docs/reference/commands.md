@@ -736,6 +736,7 @@ Usage: oxispec import plan start [OPTIONS] --from <FROM>
 - `--dir <DIR>`
 - `--force`: Start again, replacing a plan that exists.
 - `--only <KINDS>`: Plan only these kinds (comma separated: requirement, change); the other items are set to skip.
+- `--include-archive`: OpenSpec: make each archived change a change set (merged), not one skipped item.
 - `--json`
 
 #### `oxispec import plan show`

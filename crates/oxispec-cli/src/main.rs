@@ -700,6 +700,9 @@ enum PlanAction {
         /// set to skip
         #[arg(long, value_delimiter = ',', value_name = "KINDS")]
         only: Vec<String>,
+        /// OpenSpec: make each archived change a change set (merged), not one skipped item
+        #[arg(long)]
+        include_archive: bool,
         #[arg(long)]
         json: bool,
     },
@@ -1353,10 +1356,19 @@ fn run(cli: Cli) -> Result<ExitCode> {
                         dir,
                         force,
                         only,
+                        include_archive,
                         json,
                     } => {
                         let _lock = lock_project(&root)?;
-                        importer::plan_start(&root, &from, dir.as_deref(), force, &only, json)?
+                        importer::plan_start(
+                            &root,
+                            &from,
+                            dir.as_deref(),
+                            force,
+                            &only,
+                            include_archive,
+                            json,
+                        )?
                     }
                     PlanAction::Show { n, draft, json } => {
                         importer::plan_show(&root, n, draft, json, cache)?

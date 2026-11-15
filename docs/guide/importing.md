@@ -30,7 +30,7 @@ oxispec import apply                          # write it, remove the plan
 
 `plan start --only change` plans the open changes and sets the rest to skip, which suits a project whose specs are imported already. `--status accepted`, on `import specs` and on `import apply`, gives the requirements the status of specs that are in force instead of the first status of the profile.
 
-By default a spec becomes a requirement, an open change (proposal, design, tasks, spec deltas) becomes a draft change set, and design notes next to a spec become a change set; archived changes are skipped. Nothing is written before `apply`. If you ran `import specs` first, the plan lists those specs as skipped, so they are not written twice.
+By default a spec becomes a requirement, an open change (proposal, design, tasks, spec deltas) becomes a draft change set, and design notes next to a spec become a change set; archived changes are skipped, unless the plan is started with `--include-archive`: then each one is a change set that is `merged`, with `approved_by: OpenSpec archive` (the archive is where OpenSpec records that a change was accepted, so no person is named) and `approved_on` from the date in the folder name. Nothing is written before `apply`. If you ran `import specs` or `import apply` first, the plan lists what was written as skipped, so it is not written twice.
 
 An AI agent can do this with you: the `oxispec-import-specs` skill makes it propose, ask about each item and show the drafts, and apply only after your yes.
 

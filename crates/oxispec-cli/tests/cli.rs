@@ -7056,6 +7056,116 @@ fn a_plan_leaves_out_the_specs_that_import_specs_has_written() {
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
 }
 
+// verifies: REQ-IMPORT-0002.S7
+#[test]
+fn archived_changes_become_merged_change_sets_when_asked() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    openspec_with_a_change(p);
+    let write = |rel: &str, text: &str| {
+        let f = p.join(rel);
+        fs::create_dir_all(f.parent().unwrap()).unwrap();
+        fs::write(f, text).unwrap();
+    };
+    write(
+        "openspec/changes/archive/2025-03-04-add-sso/proposal.md",
+        "## Why\nOne login.\n\n## What Changes\n- single sign-on\n",
+    );
+    write(
+        "openspec/changes/archive/2025-03-04-add-sso/specs/auth/spec.md",
+        "## MODIFIED Requirements\n### Requirement: Login\nThe system SHALL sign in with SSO.\n",
+    );
+    write(
+        "openspec/changes/archive/old-idea/proposal.md",
+        "## Why\nA while ago.\n",
+    );
+    let start = |extra: &[&str]| {
+        let mut args = vec!["import", "plan", "start", "--from", "openspec", "--force"];
+        args.extend_from_slice(extra);
+        args.push("--json");
+        let out = run(p, &args);
+        assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+        let v: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+        v["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| {
+                format!(
+                    "{} {}",
+                    i["kind"].as_str().unwrap(),
+                    i["title"].as_str().unwrap()
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        start(&[]),
+        [
+            "requirement auth",
+            "change Auth",
+            "change Add 2fa",
+            "skip Archived changes"
+        ]
+    );
+    assert_eq!(
+        start(&["--include-archive"]),
+        [
+            "requirement auth",
+            "change Auth",
+            "change Add 2fa",
+            "change Add sso",
+            "change Old idea"
+        ]
+    );
+    let out = run(p, &["import", "apply"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert_eq!(run(p, &["check"]).code, 0, "{}", run(p, &["check"]).stdout);
+    let shown = |title: &str| {
+        let out = run(p, &["list", "--type", "change", "--json"]);
+        let v: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+        let id = v["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["title"].as_str().is_some_and(|t| t.contains(title)))
+            .map(|n| n["id"].as_str().unwrap().to_string())
+            .unwrap_or_else(|| panic!("no change set `{title}` in {}", out.stdout));
+        fs::read_to_string(
+            fs::read_dir(p.join("specs/changes"))
+                .unwrap()
+                .flatten()
+                .map(|e| e.path())
+                .find(|f| fs::read_to_string(f).is_ok_and(|t| t.contains(&format!("id: {id}\n"))))
+                .unwrap(),
+        )
+        .unwrap()
+    };
+    let sso = shown("Add sso");
+    assert!(
+        sso.contains(
+            "status: merged\napproved_by: OpenSpec archive\napproved_on: \"2025-03-04\"\n"
+        ),
+        "{sso}"
+    );
+    assert!(sso.contains("links:\n  changes:\n"), "{sso}");
+    let old = shown("Old idea");
+    assert!(
+        old.contains("status: merged\napproved_by: OpenSpec archive\n")
+            && !old.contains("approved_on"),
+        "{old}"
+    );
+    assert!(shown("Add 2fa").contains("status: draft\n"));
+    // Starting a plan again leaves out what was written.
+    let again = start(&["--include-archive"]);
+    assert_eq!(
+        again.iter().filter(|l| l.starts_with("skip")).count(),
+        again.len(),
+        "{again:?}"
+    );
+}
+
 // verifies: REQ-ADR-0002.S3
 #[test]
 fn import_adr_switches_the_adrs_module_on() {
