@@ -2667,8 +2667,10 @@ fn new_requirement(
         None => bail!("no profile named `{asked}`; see `oxispec formats list`"),
     };
     let domain = domain.to_ascii_uppercase();
-    if domain.is_empty() || !domain.chars().all(|c| c.is_ascii_alphanumeric()) {
-        bail!("the domain must be letters and digits, for example AUTH");
+    if !id::is_domain(&domain) {
+        bail!(
+            "the domain must be letters and digits, in parts joined by hyphens, each starting with a letter, for example AUTH or ACCOUNT-AND-PROFILE"
+        );
     }
     let id = allocate_id(&load_graph(root, cache), &format!("REQ-{domain}-"), scheme)?;
     let rel = config::node_dir(root, "requirements")?

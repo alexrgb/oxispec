@@ -95,6 +95,7 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | 73 | `feat/configurable-docs-dir` | The folder of the documents is a setting: `docs_dir` in the config, `oxispec init --docs-dir`. A new project uses `oxispec/` (the architecture model in `oxispec/architecture/`); a config with no `docs_dir` still means `specs`, so existing projects do not move. A folder that is absolute, reaches out with `..` or starts with a dot is refused. |
 | 74 | `feat/move-docs` | `oxispec move-docs DIR [--dry-run]` moves the documents to another folder at any time and sets `docs_dir` (`docs_dir: specs` when it goes back to `specs`). IDs and links stay, `check` finds the same nodes. It refuses a clash before moving anything, undoes a move that fails part way, and lists the files that still name the old folder. Not built: rewriting those files, staging with git. |
 | 75 | `feat/move-docs-report` | `move-docs` reports before and after it moves: whether the new folder exists and what is in it, each folder of the documents with where it goes and `can move` or `CLASH`, and the folders to rename or move away when something clashes (all or nothing). The same facts are in `--json`. |
+| 76 | `fix/hyphens-in-domains` | An import keeps the hyphens of a spec's name: `account-and-profile` is the folder `account-and-profile` and the domain `ACCOUNT-AND-PROFILE`, no longer `accountandprofile`. A domain in `domains:` may have hyphens when each part starts with a letter, and `new requirement` accepts the same. |
 | 23+ | later | OIDC and richer policies for server mode, natural language layer, workspaces and federation | See design sections 10, 14 and 19 |
 
 The plan changes as we learn. Change it in a pull request, like anything else.
@@ -183,4 +184,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 73**: the folder of the documents is a setting, and `oxispec/` is the default for new projects.
 - **Iteration 74**: `move-docs` moves the documents to another folder.
 - **Iteration 75**: `move-docs` reports the new folder and what clashes.
+- **Iteration 76**: an import keeps the hyphens of a spec's name in its folder and domain (`account-and-profile` gives `REQ-ACCOUNT-AND-PROFILE-0001`).
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

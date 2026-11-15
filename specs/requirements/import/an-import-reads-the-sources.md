@@ -41,5 +41,8 @@ The system SHALL read specs written for OpenSpec, Spec Kit, Kiro, as a product r
 
 #### Scenario: Domains of choice {#S9}
 - **WHEN** the config has `domains:` that map the name of a spec, or the prefix of a source ID, to a domain
-- **THEN** the folder of a spec, the IDs of requirements with no ID in the source, and the IDs under a source prefix use that domain, the source ID stays as the alias, a delta still finds its requirements, and a domain that is not letters and digits is refused
+- **THEN** the folder of a spec, the IDs of requirements with no ID in the source, and the IDs under a source prefix use that domain, the source ID stays as the alias, a delta still finds its requirements, and a domain that is not letters and digits, in parts joined by hyphens, is refused
 
+#### Scenario: Names keep their hyphens {#S10}
+- **WHEN** a spec has a name such as `account-and-profile` and the config gives it no domain
+- **THEN** its folder is `account-and-profile` and its requirements are `REQ-ACCOUNT-AND-PROFILE-0001`, and a domain in `domains:` may have hyphens too when each part starts with a letter

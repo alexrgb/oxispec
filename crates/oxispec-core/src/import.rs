@@ -6,6 +6,7 @@
 //! with the scenarios under it. What has no place in a
 //! node (design notes, tasks, active changes) is listed, not dropped silently.
 
+use crate::id;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
@@ -625,19 +626,10 @@ pub fn draft(input: &Input, source: Source, normative: bool) -> Draft {
     }
 }
 
-/// The domain of the IDs for a spec of this name.
+/// The domain of the IDs for a spec of this name: the name in capitals with its hyphens, so
+/// `account-and-profile` gives `ACCOUNT-AND-PROFILE` (see [`id::domain_from_name`]).
 pub fn domain_of(name: &str) -> String {
-    let name = name.trim_start_matches(|c: char| !c.is_ascii_alphabetic());
-    let domain: String = name
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .map(|c| c.to_ascii_uppercase())
-        .collect();
-    if domain.is_empty() {
-        "IMPORTED".into()
-    } else {
-        domain
-    }
+    id::domain_from_name(name).unwrap_or_else(|| "IMPORTED".into())
 }
 
 fn domain_given(domains: &BTreeMap<String, String>, key: &str) -> Option<String> {
@@ -698,22 +690,10 @@ pub fn title_without_id(title: &str) -> &str {
 pub const ALREADY_NODE: &str = "already an OxiSpec node";
 
 impl Draft {
-    /// Letters and digits of the name, in capitals, without a leading number:
-    /// `001-user-auth` gives `USERAUTH`.
+    /// The name in capitals, with its hyphens and without a leading number:
+    /// `001-user-auth` gives `USER-AUTH`.
     pub fn domain(&self) -> String {
-        let name = self
-            .name
-            .trim_start_matches(|c: char| !c.is_ascii_alphabetic());
-        let domain: String = name
-            .chars()
-            .filter(char::is_ascii_alphanumeric)
-            .map(|c| c.to_ascii_uppercase())
-            .collect();
-        if domain.is_empty() {
-            "IMPORTED".into()
-        } else {
-            domain
-        }
+        domain_of(&self.name)
     }
 
     /// How many nodes the file makes: one for each requirement, and one for a
