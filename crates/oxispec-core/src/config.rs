@@ -15,6 +15,22 @@ pub const FORMAT: u32 = 1;
 /// The folder for the documents of a project that `oxispec init` creates.
 pub const DEFAULT_DOCS_DIR: &str = "oxispec";
 
+/// The folders below `docs_dir` that OxiSpec writes into, by the name `Config::dir` takes.
+pub const KIND_DIRS: &[&str] = &[
+    "requirements",
+    "changes",
+    "adr",
+    "releases",
+    "vocabulary",
+    "machines",
+    "debt",
+    "test-plans",
+    "risks",
+    "prd",
+    "entities",
+    "architecture",
+];
+
 /// The folder of a project whose config has no `docs_dir`: the name before the folder could be chosen.
 pub const LEGACY_DOCS_DIR: &str = "specs";
 

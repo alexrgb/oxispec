@@ -14,7 +14,7 @@ links:
 ---
 ```
 
-Files live where you like, but `oxispec new` puts them in one folder, `oxispec/` by default: `oxispec/requirements/<domain>/`, `oxispec/adr/`, `oxispec/changes/`, `oxispec/debt/`, `oxispec/prd/`. The folder is `docs_dir` in the config, and `oxispec init --docs-dir docs/spec` picks another. A project whose config has no `docs_dir` (made before it could be chosen) keeps writing in `specs/`.
+Files live where you like, but `oxispec new` puts them in one folder, `oxispec/` by default: `oxispec/requirements/<domain>/`, `oxispec/adr/`, `oxispec/changes/`, `oxispec/debt/`, `oxispec/prd/`. The folder is `docs_dir` in the config, and `oxispec init --docs-dir docs/spec` picks another. A project whose config has no `docs_dir` (made before it could be chosen) keeps writing in `specs/`. `oxispec move-docs DIR` moves the documents to another folder later.
 
 ## IDs
 

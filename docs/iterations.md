@@ -93,6 +93,7 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | 71 | `feat/import-archived-changes` | `import plan start --include-archive` makes each archived OpenSpec change a change set: `merged`, `approved_by: OpenSpec archive`, `approved_on` from the date in the folder name, linked like an open change. A plan also skips changes that an earlier import wrote. Not built: `domains:` override in the config. |
 | 72 | `feat/import-domains` | `domains:` in the config chooses the domain an import gives: by the name of a spec (its folder, and the IDs of requirements with no ID in the source: `analytics-and-reports: REPORTS`) or by the prefix of a source ID (`CAR: SLIDES` gives `REQ-SLIDES-1` with `CAR-1` as alias). Deltas still find their requirements. A domain that is not letters and digits is refused. |
 | 73 | `feat/configurable-docs-dir` | The folder of the documents is a setting: `docs_dir` in the config, `oxispec init --docs-dir`. A new project uses `oxispec/` (the architecture model in `oxispec/architecture/`); a config with no `docs_dir` still means `specs`, so existing projects do not move. A folder that is absolute, reaches out with `..` or starts with a dot is refused. |
+| 74 | `feat/move-docs` | `oxispec move-docs DIR [--dry-run]` moves the documents to another folder at any time and sets `docs_dir` (the key goes away when the folder is `specs` again). IDs and links stay, `check` finds the same nodes. It refuses a clash before moving anything, undoes a move that fails part way, and lists the files that still name the old folder. Not built: rewriting those files, staging with git. |
 | 23+ | later | OIDC and richer policies for server mode, natural language layer, workspaces and federation | See design sections 10, 14 and 19 |
 
 The plan changes as we learn. Change it in a pull request, like anything else.
@@ -179,4 +180,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 71**: archived changes can be imported as merged change sets.
 - **Iteration 72**: `domains:` in the config chooses the domain of imported IDs.
 - **Iteration 73**: the folder of the documents is a setting, and `oxispec/` is the default for new projects.
+- **Iteration 74**: `move-docs` moves the documents to another folder.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

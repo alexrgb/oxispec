@@ -8099,3 +8099,149 @@ fn a_folder_outside_the_project_is_refused() {
         out.stderr
     );
 }
+
+fn moved_project(p: &Path) {
+    assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);
+    assert_eq!(run(p, &["new", "requirement", "auth", "Timeout"]).code, 0);
+    assert_eq!(run(p, &["new", "adr", "Use a queue"]).code, 0);
+    assert_eq!(
+        run(p, &["link", "REQ-AUTH-0001", "decided-by", "ADR-0001"]).code,
+        0
+    );
+}
+
+fn node_count(p: &Path) -> String {
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    out.stdout.lines().last().unwrap_or("").to_string()
+}
+
+// verifies: REQ-PROJECT-0005.S1
+// verifies: REQ-PROJECT-0005.S2
+// verifies: REQ-PROJECT-0005.S5
+#[test]
+fn the_documents_can_be_moved_to_another_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    moved_project(p);
+    let before = node_count(p);
+    fs::write(
+        p.join("README.md"),
+        "See oxispec/requirements/auth for the specs.\n",
+    )
+    .unwrap();
+
+    let out = run(p, &["move-docs", "docs/spec", "--dry-run"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("would move oxispec/adr"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("README.md (1)"),
+        "a file that names the folder is listed: {}",
+        out.stdout
+    );
+    assert!(p.join("oxispec/adr").is_dir() && !p.join("docs/spec").exists());
+
+    let out = run(p, &["move-docs", "docs/spec"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(p.join("docs/spec/adr").is_dir());
+    assert!(p.join("docs/spec/requirements/auth").is_dir());
+    assert!(!p.join("oxispec").exists(), "the old folder is gone");
+    assert!(
+        fs::read_to_string(p.join(".oxispec/config.yaml"))
+            .unwrap()
+            .contains("docs_dir: docs/spec\n")
+    );
+    assert_eq!(
+        fs::read_to_string(p.join("README.md")).unwrap(),
+        "See oxispec/requirements/auth for the specs.\n",
+        "the file that names the folder is left alone"
+    );
+    // The same nodes, the same link, and the next node goes to the new place.
+    assert_eq!(node_count(p), before);
+    let out = run(p, &["show", "REQ-AUTH-0001"]);
+    assert!(out.stdout.contains("ADR-0001"), "{}", out.stdout);
+    assert_eq!(run(p, &["new", "requirement", "auth", "Lock"]).code, 0);
+    assert_eq!(
+        fs::read_dir(p.join("docs/spec/requirements/auth"))
+            .unwrap()
+            .count(),
+        2
+    );
+    assert!(!p.join("oxispec").exists());
+}
+
+// verifies: REQ-PROJECT-0005.S3
+#[test]
+fn a_project_from_before_can_move_and_come_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    moved_project(p);
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, text.replace("docs_dir: oxispec\n", "")).unwrap();
+    // Put the files where such a project keeps them.
+    fs::rename(p.join("oxispec/requirements"), p.join("specs-tmp")).unwrap();
+    fs::create_dir_all(p.join("specs")).unwrap();
+    fs::rename(p.join("specs-tmp"), p.join("specs/requirements")).unwrap();
+    fs::rename(p.join("oxispec/adr"), p.join("specs/adr")).unwrap();
+    fs::create_dir_all(p.join("architecture")).unwrap();
+    fs::rename(p.join("oxispec/architecture"), p.join("architecture/model")).unwrap();
+    fs::remove_dir_all(p.join("oxispec")).unwrap();
+    let before = node_count(p);
+
+    let out = run(p, &["move-docs", "oxispec"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(p.join("oxispec/requirements/auth").is_dir());
+    assert!(p.join("oxispec/architecture").is_dir());
+    assert!(!p.join("architecture").exists() && !p.join("specs").exists());
+    assert_eq!(node_count(p), before);
+
+    let out = run(p, &["move-docs", "specs"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(p.join("specs/requirements/auth").is_dir());
+    assert!(p.join("architecture/model").is_dir());
+    assert!(!p.join("oxispec").exists());
+    assert!(
+        !fs::read_to_string(&config).unwrap().contains("docs_dir"),
+        "{}",
+        fs::read_to_string(&config).unwrap()
+    );
+    assert_eq!(node_count(p), before);
+}
+
+// verifies: REQ-PROJECT-0005.S4
+#[test]
+fn a_move_that_is_in_the_way_is_refused_before_anything_moves() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    moved_project(p);
+    let config = p.join(".oxispec/config.yaml");
+    let config_before = fs::read_to_string(&config).unwrap();
+    let refused = |to: &str| {
+        let out = run(p, &["move-docs", to]);
+        assert_ne!(out.code, 0, "`{to}` was accepted: {}", out.stdout);
+        assert_eq!(fs::read_to_string(&config).unwrap(), config_before, "{to}");
+        assert!(p.join("oxispec/adr").is_dir(), "{to}");
+        format!("{}{}", out.stdout, out.stderr)
+    };
+    assert!(refused("oxispec").contains("already"));
+    assert!(refused("oxispec/inner").contains("inside"));
+    refused("../outside");
+    refused("/tmp/outside");
+    refused(".git/docs");
+    // A folder that already has an `adr` is not written over, and the other folders stay.
+    fs::create_dir_all(p.join("docs/adr")).unwrap();
+    fs::write(p.join("docs/adr/keep.md"), "mine\n").unwrap();
+    let said = refused("docs");
+    assert!(said.contains("docs/adr"), "{said}");
+    assert_eq!(
+        fs::read_to_string(p.join("docs/adr/keep.md")).unwrap(),
+        "mine\n"
+    );
+    assert!(p.join("oxispec/requirements/auth").is_dir());
+    assert!(!p.join("docs/requirements").exists());
+}
