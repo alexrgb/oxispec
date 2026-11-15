@@ -5,7 +5,7 @@ status: accepted
 date: 2026-11-06
 ---
 ### Requirement: A plan proposes what each file becomes
-The system SHALL propose, for the files of another tool, a requirement for each spec and a change set for each open change or set of design notes, SHALL link a change set to the requirements it modifies, and SHALL allow notes to become a decision.
+The system SHALL propose, for the files of another tool, a requirement for each spec and a change set for each open change or set of design notes (and for each archived change, when asked), SHALL link a change set to the requirements it modifies, and SHALL allow notes to become a decision.
 
 #### Scenario: A proposal {#S1}
 - **WHEN** a folder has specs, an open change and design notes
@@ -30,3 +30,7 @@ The system SHALL propose, for the files of another tool, a requirement for each 
 #### Scenario: A delta names a requirement by its ID {#S6}
 - **WHEN** a delta of an open change names `BIN-1 …` and a requirement has that alias
 - **THEN** the change set links that requirement
+
+#### Scenario: Archived changes {#S7}
+- **WHEN** a plan is started for OpenSpec with `--include-archive`
+- **THEN** each archived change is a change set that is `merged`, approved by the archive and dated by its folder, and without the flag the archive is one skipped item

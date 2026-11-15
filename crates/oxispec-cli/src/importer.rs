@@ -462,6 +462,7 @@ pub fn plan_start(
     dir: Option<&Path>,
     force: bool,
     only: &[String],
+    include_archive: bool,
     json: bool,
 ) -> Result<()> {
     let cfg = config::load(root)?;
@@ -500,7 +501,7 @@ pub fn plan_start(
             "there is an import plan already; look at it with `oxispec import plan show`, or pass `--force` to start again"
         );
     }
-    let plan = import_plan::propose(&dir, source, from, &|p| shown(root, p))
+    let plan = import_plan::propose(&dir, source, from, &|p| shown(root, p), include_archive)
         .with_context(|| format!("cannot read {}", dir.display()))?;
     if plan.items.is_empty() {
         bail!("nothing to import was found in {}", dir.display());
@@ -508,12 +509,12 @@ pub fn plan_start(
     let mut plan = plan;
     let done = already_imported(&root.join("specs"));
     for item in &mut plan.items {
-        if item.role == import_plan::Role::Spec
+        if item.kind != Kind::Skip
             && item.sources.iter().all(|s| done.contains(s))
             && !item.sources.is_empty()
         {
             item.kind = import_plan::Kind::Skip;
-            item.why = "already imported by `oxispec import specs`".to_string();
+            item.why = "already imported by an earlier import".to_string();
         }
     }
     if !only_kinds.is_empty() {

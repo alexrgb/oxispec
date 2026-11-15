@@ -104,14 +104,43 @@ fn markdown_files(dir: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
     Ok(())
 }
 
+/// `2024-05-01` at the start of a name, as the archive of OpenSpec puts it.
+fn date_prefix(name: &str) -> Option<&str> {
+    let head = name.get(..10)?;
+    let b = head.as_bytes();
+    let shaped = b.iter().enumerate().all(|(i, c)| match i {
+        4 | 7 => *c == b'-',
+        _ => c.is_ascii_digit(),
+    });
+    shaped.then_some(head)
+}
+
+/// The name of an archived change without its date: `2024-05-01-add-2fa` as `add-2fa`.
+fn without_date(name: &str) -> &str {
+    match date_prefix(name) {
+        Some(d) => name[d.len()..].trim_start_matches('-'),
+        None => name,
+    }
+}
+
+/// Where an item sits in the archive: the name of its folder there, when it does.
+fn archived_as(item: &Item) -> Option<String> {
+    let first = item.sources.first()?;
+    let parts: Vec<&str> = first.split('/').collect();
+    let at = parts.windows(2).position(|w| w == ["changes", "archive"])?;
+    parts.get(at + 2).map(|s| (*s).to_string())
+}
+
 // spec: REQ-IMPORT-0002
 /// Proposes what to make of what `import::find` finds under `dir`. `shown`
-/// turns a path into the text the plan keeps.
+/// turns a path into the text the plan keeps. With `include_archive` each
+/// archived change is a change set of its own, instead of one skipped item.
 pub fn propose(
     dir: &Path,
     source: Source,
     from: &str,
     shown: &dyn Fn(&Path) -> String,
+    include_archive: bool,
 ) -> io::Result<Plan> {
     let found = import::find(dir, source)?;
     let mut items = Vec::new();
@@ -144,6 +173,19 @@ pub fn propose(
         let parent = u.path.parent().map(Path::to_path_buf).unwrap_or_default();
         if u.path.is_dir() {
             if file_name(&parent) == "changes" {
+                if include_archive && file_name(&u.path) == "archive" {
+                    let mut folders: Vec<PathBuf> = fs::read_dir(&u.path)?
+                        .filter_map(|e| e.ok().map(|e| e.path()))
+                        .filter(|p| p.is_dir())
+                        .collect();
+                    folders.sort();
+                    for f in folders {
+                        let mut files = Vec::new();
+                        markdown_files(&f, &mut files)?;
+                        changes.push((f, files));
+                    }
+                    continue;
+                }
                 let mut files = Vec::new();
                 markdown_files(&u.path, &mut files)?;
                 changes.push((u.path.clone(), files));
@@ -172,7 +214,15 @@ pub fn propose(
                 Role::Change,
                 "Archived changes".into(),
                 files,
-                "archived changes are history, and git keeps it",
+                "archived changes are history, and git keeps it; `--include-archive` makes each a change set",
+            );
+        } else if folder.parent().map(file_name).as_deref() == Some("archive") {
+            add(
+                Kind::Change,
+                Role::Change,
+                humanize(without_date(&name)),
+                files,
+                "an archived change: a merged change set, with the archive as its approval",
             );
         } else {
             add(
@@ -404,7 +454,22 @@ pub fn render_change(root: &Path, item: &Item, id: &str, known: &[Known]) -> io:
             extra.push((import_title(&stem), demote(&text, 2)));
         }
     }
-    let mut out = format!("---\nid: {id}\ntype: change\nstatus: draft\n");
+    let mut out = format!("---\nid: {id}\ntype: change\n");
+    match archived_as(item) {
+        Some(folder) => {
+            // The archive is where OpenSpec records that a change was accepted and merged,
+            // so it stands as the approval; the date is the one in the folder's name.
+            out.push_str("status: merged\napproved_by: OpenSpec archive\n");
+            if let Some(d) = date_prefix(&folder) {
+                out.push_str(&format!("approved_on: \"{d}\"\n"));
+            }
+            notes.push(
+                "archived in the source: it is `merged`, and `approved_by` names the archive, not a person"
+                    .into(),
+            );
+        }
+        None => out.push_str("status: draft\n"),
+    }
     if !links.is_empty() {
         out.push_str("links:\n  changes:\n");
         for l in &links {
@@ -550,6 +615,7 @@ mod tests_of_plan {
             Source::OpenSpec,
             "openspec",
             &shown(root),
+            false,
         )
         .unwrap();
         let kinds: Vec<_> = plan
@@ -581,6 +647,7 @@ mod tests_of_plan {
             Source::OpenSpec,
             "openspec",
             &shown(root),
+            false,
         )
         .unwrap();
         let known = vec![Known {
@@ -624,6 +691,7 @@ mod tests_of_plan {
             Source::OpenSpec,
             "openspec",
             &shown(root),
+            false,
         )
         .unwrap();
         let (profiles, _) = crate::formats::available(&crate::config::Config::new(

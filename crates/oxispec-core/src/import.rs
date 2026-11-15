@@ -216,7 +216,7 @@ pub fn find(dir: &Path, source: Source) -> io::Result<Found> {
     {
         for d in sorted_entries(&changes)?.into_iter().filter(|p| p.is_dir()) {
             let reason = if file_name(&d) == "archive" {
-                "archived changes are history, not specs"
+                "archived changes are history, not specs; `oxispec import plan start --include-archive` makes them change sets"
             } else {
                 "an open change; `oxispec import plan start` makes it a change set"
             };
