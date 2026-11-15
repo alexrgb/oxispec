@@ -92,6 +92,63 @@ fn undo(done: &[(PathBuf, PathBuf)]) {
     }
 }
 
+/// One folder of the documents: where it is, where it would go, and what is in the way.
+struct Row {
+    kind: &'static str,
+    src: PathBuf,
+    dst: PathBuf,
+    /// Why it cannot move: something is already at the new place.
+    clash: Option<String>,
+}
+
+/// What is at the new folder now.
+struct Target {
+    exists: bool,
+    is_file: bool,
+    /// The names in it, with whether each is a folder.
+    entries: Vec<(String, bool)>,
+}
+
+fn look_at(path: &Path) -> Target {
+    let mut entries: Vec<(String, bool)> = fs::read_dir(path)
+        .map(|d| {
+            d.flatten()
+                .map(|e| {
+                    (
+                        e.file_name().to_string_lossy().into_owned(),
+                        e.path().is_dir(),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    entries.sort();
+    Target {
+        exists: path.exists(),
+        is_file: path.is_file(),
+        entries,
+    }
+}
+
+fn clash_of(dst: &Path) -> Option<String> {
+    if dst.is_file() {
+        Some("a file is there".to_string())
+    } else if dst.is_dir() && !is_empty_dir(dst) {
+        let n = fs::read_dir(dst).map_or(0, |d| d.count());
+        Some(format!("a folder with {n} item(s) is there"))
+    } else {
+        None
+    }
+}
+
+fn name_of(entry: &(String, bool)) -> String {
+    if entry.1 {
+        format!("{}/", entry.0)
+    } else {
+        entry.0.clone()
+    }
+}
+
 // spec: REQ-PROJECT-0005
 pub fn move_docs(root: &Path, to: &str, dry_run: bool, json: bool) -> Result<()> {
     let mut cfg = config::load(root)?;
@@ -110,31 +167,37 @@ pub fn move_docs(root: &Path, to: &str, dry_run: bool, json: bool) -> Result<()>
     target.docs_dir = to.clone();
 
     // What moves: the folders of the kinds of nodes, from where they are to where they will be.
-    let mut pairs: Vec<(PathBuf, PathBuf)> = Vec::new();
-    let mut conflicts: Vec<PathBuf> = Vec::new();
+    let mut rows: Vec<Row> = Vec::new();
     for kind in config::KIND_DIRS {
         let src = root.join(cfg.dir(kind));
-        let dst = root.join(target.dir(kind));
         if !src.is_dir() {
             continue;
         }
-        if dst.exists() && !is_empty_dir(&dst) {
-            conflicts.push(target.dir(kind));
-        }
-        pairs.push((src, dst));
+        let dst = root.join(target.dir(kind));
+        let clash = clash_of(&dst);
+        rows.push(Row {
+            kind,
+            src,
+            dst,
+            clash,
+        });
     }
-    if !conflicts.is_empty() {
-        let list: Vec<_> = conflicts.iter().map(|c| shown(c)).collect();
-        bail!(
-            "{} exists already, so nothing was moved; move it away or pick another folder",
-            list.join(", ")
-        );
+    let at_target = look_at(&root.join(&to));
+    if at_target.is_file {
+        bail!("`{to}` is a file; pick a folder");
     }
+    let clashes: Vec<&Row> = rows.iter().filter(|r| r.clash.is_some()).collect();
+    let rel = |p: &Path| shown(p.strip_prefix(root).unwrap_or(p));
 
     let mut mentions = Vec::new();
     scan(root, root, &from, &mut 0, &mut mentions);
 
-    if !dry_run {
+    let mut error = None;
+    if clashes.is_empty() && !dry_run {
+        let pairs: Vec<(PathBuf, PathBuf)> = rows
+            .iter()
+            .map(|r| (r.src.clone(), r.dst.clone()))
+            .collect();
         let mut done: Vec<(PathBuf, PathBuf)> = Vec::new();
         for (src, dst) in &pairs {
             let step = (|| -> std::io::Result<()> {
@@ -152,8 +215,8 @@ pub fn move_docs(root: &Path, to: &str, dry_run: bool, json: bool) -> Result<()>
                     undo(&done);
                     bail!(
                         "cannot move {} to {}: {e}; the moves so far were undone",
-                        src.display(),
-                        dst.display()
+                        rel(src),
+                        rel(dst)
                     );
                 }
             }
@@ -174,21 +237,40 @@ pub fn move_docs(root: &Path, to: &str, dry_run: bool, json: bool) -> Result<()>
             }
         }
         crate::ensure_module_dirs(root, &cfg)?;
+    } else if !clashes.is_empty() {
+        error = Some(format!(
+            "nothing was moved: {} of {} folder(s) clash with what is in {to}/",
+            clashes.len(),
+            rows.len()
+        ));
     }
+    let status = |r: &Row| match (&r.clash, dry_run) {
+        (Some(_), _) => "clash",
+        (None, true) => "can move",
+        (None, false) => "moved",
+    };
 
     if json {
-        let moved: Vec<_> = pairs
+        let folders: Vec<_> = rows
             .iter()
-            .map(|(s, d)| {
+            .map(|r| {
                 json!({
-                    "from": shown(s.strip_prefix(root).unwrap_or(s)),
-                    "to": shown(d.strip_prefix(root).unwrap_or(d)),
+                    "kind": r.kind,
+                    "from": rel(&r.src),
+                    "to": rel(&r.dst),
+                    "status": status(r),
+                    "reason": r.clash,
                 })
             })
             .collect();
         let named: Vec<_> = mentions
             .iter()
             .map(|m| json!({"path": shown(&m.path), "count": m.count}))
+            .collect();
+        let entries: Vec<_> = at_target
+            .entries
+            .iter()
+            .map(|(name, dir)| json!({"name": name, "folder": dir}))
             .collect();
         outln!(
             "{}",
@@ -197,29 +279,75 @@ pub fn move_docs(root: &Path, to: &str, dry_run: bool, json: bool) -> Result<()>
                 "from": from,
                 "to": to,
                 "dry_run": dry_run,
-                "moved": moved,
+                "can_move": clashes.is_empty(),
+                "target": {"exists": at_target.exists, "entries": entries},
+                "folders": folders,
                 "mentions": named,
             }))?
         );
+        if let Some(e) = error {
+            bail!(e);
+        }
         return Ok(());
     }
-    for (s, d) in &pairs {
-        outln!(
-            "{} {} -> {}",
-            if dry_run { "would move" } else { "moved" },
-            shown(s.strip_prefix(root).unwrap_or(s)),
-            shown(d.strip_prefix(root).unwrap_or(d))
-        );
-    }
-    if pairs.is_empty() {
+
+    outln!("documents: {from}/ -> {to}/");
+    outln!(
+        "{to}/ {}",
+        match (at_target.exists, at_target.entries.is_empty()) {
+            (false, _) => "does not exist; it will be created".to_string(),
+            (true, true) => "exists and is empty".to_string(),
+            (true, false) => format!(
+                "exists and has {} item(s): {}",
+                at_target.entries.len(),
+                at_target
+                    .entries
+                    .iter()
+                    .map(name_of)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    );
+    if rows.is_empty() {
         outln!("no document folders to move");
     }
-    if dry_run {
-        outln!("nothing was changed; run without --dry-run to move the documents to {to}/");
+    let width = rows.iter().map(|r| rel(&r.src).len()).max().unwrap_or(0);
+    let width_to = rows.iter().map(|r| rel(&r.dst).len()).max().unwrap_or(0);
+    for r in &rows {
+        outln!(
+            "  {:<width$}  ->  {:<width_to$}   {}",
+            rel(&r.src),
+            rel(&r.dst),
+            match &r.clash {
+                Some(why) => format!("CLASH, {why}"),
+                None => status(r).to_string(),
+            }
+        );
+    }
+    if clashes.is_empty() {
+        if dry_run {
+            outln!(
+                "all {} folder(s) can move; nothing was changed. Run without --dry-run to move them",
+                rows.len()
+            );
+        } else {
+            outln!("the documents are in {to}/ now, and the config says so");
+            if root.join(".git").exists() {
+                outln!("the files moved on disk; `git add -A` stages them as renames");
+            }
+        }
     } else {
-        outln!("the documents are in {to}/ now, and the config says so");
-        if root.join(".git").exists() {
-            outln!("the files moved on disk; `git add -A` stages them as renames");
+        outln!(
+            "{} of {} folder(s) clash with what is in {to}/. The move is all or nothing, so that `docs_dir` can name one folder, and nothing was changed.",
+            clashes.len(),
+            rows.len()
+        );
+        outln!(
+            "Rename or move these in {to}/ (the names of OxiSpec's folders stay as they are), then run the command again:"
+        );
+        for r in &clashes {
+            outln!("    {}", rel(&r.dst));
         }
     }
     if !mentions.is_empty() {
@@ -230,6 +358,9 @@ pub fn move_docs(root: &Path, to: &str, dry_run: bool, json: bool) -> Result<()>
         if mentions.len() > 20 {
             outln!("    and {} more", mentions.len() - 20);
         }
+    }
+    if let Some(e) = error {
+        bail!(e);
     }
     Ok(())
 }

@@ -26,3 +26,8 @@ The system SHALL move the documents of a project to another folder on request an
 #### Scenario: Files that name the old folder {#S5}
 - **WHEN** a file outside the documents says `specs/` in its text
 - **THEN** the move lists that file and does not change it
+
+#### Scenario: A report {#S6}
+- **WHEN** the move is run, with `--dry-run` or without, and the new folder is missing, empty or has things in it
+- **THEN** it says whether the folder exists and what is in it, shows for each folder of the documents where it goes and whether it can move or clashes, and for a clash names the folders to rename or move away
+

@@ -8136,7 +8136,7 @@ fn the_documents_can_be_moved_to_another_folder() {
     let out = run(p, &["move-docs", "docs/spec", "--dry-run"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     assert!(
-        out.stdout.contains("would move oxispec/adr"),
+        out.stdout.contains("oxispec/adr") && out.stdout.contains("can move"),
         "{}",
         out.stdout
     );
@@ -8248,4 +8248,78 @@ fn a_move_that_is_in_the_way_is_refused_before_anything_moves() {
     );
     assert!(p.join("oxispec/requirements/auth").is_dir());
     assert!(!p.join("docs/requirements").exists());
+}
+
+// verifies: REQ-PROJECT-0005.S6
+#[test]
+fn the_move_reports_the_new_folder_and_what_clashes() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    moved_project(p);
+    // A new folder that is not there yet.
+    let out = run(p, &["move-docs", "docs", "--dry-run"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout
+            .contains("docs/ does not exist; it will be created"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("can move"), "{}", out.stdout);
+    // A folder with things in it, two of which have the names of OxiSpec's folders.
+    for d in ["docs/adr", "docs/changes", "docs/notes"] {
+        fs::create_dir_all(p.join(d)).unwrap();
+        fs::write(p.join(d).join("x.md"), "x\n").unwrap();
+    }
+    fs::write(p.join("docs/README.md"), "readme\n").unwrap();
+    for dry in [true, false] {
+        let mut args = vec!["move-docs", "docs"];
+        if dry {
+            args.push("--dry-run");
+        }
+        let out = run(p, &args);
+        assert_ne!(out.code, 0, "{}", out.stdout);
+        let o = &out.stdout;
+        assert!(
+            o.contains("docs/ exists and has 4 item(s): README.md, adr/, changes/, notes/"),
+            "{o}"
+        );
+        assert!(o.contains("CLASH, a folder with 1 item(s) is there"), "{o}");
+        assert!(o.contains("oxispec/requirements"), "{o}");
+        assert!(o.contains("2 of "), "{o}");
+        assert!(o.contains("Rename or move these in docs/"), "{o}");
+        assert!(
+            o.contains("    docs/adr\n") && o.contains("    docs/changes\n"),
+            "{o}"
+        );
+        assert!(
+            !o.contains("    docs/notes"),
+            "a folder that does not clash is not asked for: {o}"
+        );
+    }
+    // Nothing moved, and the same facts are in the JSON.
+    assert!(p.join("oxispec/adr").is_dir() && !p.join("docs/requirements").exists());
+    let out = run(p, &["move-docs", "docs", "--dry-run", "--json"]);
+    assert_ne!(out.code, 0);
+    let v: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+    assert_eq!(v["can_move"], false);
+    assert_eq!(v["target"]["exists"], true);
+    let clashing: Vec<_> = v["folders"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["status"] == "clash")
+        .map(|f| f["to"].as_str().unwrap())
+        .collect();
+    assert_eq!(clashing, ["docs/changes", "docs/adr"]);
+    // After the person renames them, the move goes through and leaves the rest alone.
+    fs::rename(p.join("docs/adr"), p.join("docs/old-adr")).unwrap();
+    fs::rename(p.join("docs/changes"), p.join("docs/old-changes")).unwrap();
+    let out = run(p, &["move-docs", "docs"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(p.join("docs/adr").is_dir() && p.join("docs/notes/x.md").is_file());
+    assert_eq!(
+        fs::read_to_string(p.join("docs/README.md")).unwrap(),
+        "readme\n"
+    );
 }
