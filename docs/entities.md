@@ -10,7 +10,7 @@ It needs the `consistency` module (the same as claims, because the attributes of
 oxispec new entity "Order"
 ```
 
-This writes `specs/entities/0001-order.md`. Its `entity` block has a name and, if the thing has them, typed attributes:
+This writes `oxispec/entities/0001-order.md`. Its `entity` block has a name and, if the thing has them, typed attributes:
 
 ````markdown
 ```entity

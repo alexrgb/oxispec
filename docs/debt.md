@@ -1,6 +1,6 @@
 # Tech debt
 
-Tech debt is a backlog of shortcuts a team took on purpose, kept as nodes of type `debt` in `specs/debt/`. It needs the `debt` module (`oxispec modules add debt`, included in the `standard` preset). An item is a node and not a comment in the code, so it has an owner, can be queried and linked, and a release can be held to a limit on it.
+Tech debt is a backlog of shortcuts a team took on purpose, kept as nodes of type `debt` in `oxispec/debt/`. It needs the `debt` module (`oxispec modules add debt`, included in the `standard` preset). An item is a node and not a comment in the code, so it has an owner, can be queried and linked, and a release can be held to a limit on it.
 
 ## An item
 

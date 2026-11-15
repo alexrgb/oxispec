@@ -166,7 +166,14 @@ pub fn import(root: &Path, opts: &ImportOptions, cache: bool) -> Result<()> {
         );
     }
     let files = adr::read_dir(&dir)?;
-    let records = adr::import(&files, dialect, offset, &target)?;
+    let adr_dir = cfg.dir("adr");
+    let records: Vec<_> = adr::import(&files, dialect, offset, &target)?
+        .into_iter()
+        .map(|mut r| {
+            r.path = adr_dir.join(&r.path).to_string_lossy().replace('\\', "/");
+            r
+        })
+        .collect();
     let graph = load_graph(root, cache);
     let clashes: Vec<String> = records
         .iter()

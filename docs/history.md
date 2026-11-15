@@ -30,11 +30,11 @@ oxispec history REQ-AUTH-0001
 ```
 
 ```text
-REQ-AUTH-0001  specs/requirements/auth/session-timeout.md
+REQ-AUTH-0001  oxispec/requirements/auth/session-timeout.md
   uncommitted
       text changed
   1953dc2  2026-10-28  Ann  rename file
-      moved: specs/requirements/auth/admin-session-timeout.md -> specs/requirements/auth/session-timeout.md
+      moved: oxispec/requirements/auth/admin-session-timeout.md -> oxispec/requirements/auth/session-timeout.md
   ef17c3e  2026-10-28  Ann  accept the timeout requirement
       status: draft -> accepted; link added: decided-by ADR-0001
   efd148b  2026-10-28  Ann  add auth requirement and adr
@@ -58,8 +58,8 @@ oxispec diff v1.0 v2.0         # between two revisions
 
 ```text
 from efd148b (add auth requirement and adr) to the working tree
-+ REQ-AUTH-0002  specs/requirements/auth/password-length.md
-~ REQ-AUTH-0001  specs/requirements/auth/session-timeout.md
++ REQ-AUTH-0002  oxispec/requirements/auth/password-length.md
+~ REQ-AUTH-0001  oxispec/requirements/auth/session-timeout.md
     status: draft -> accepted
     link added: decided-by ADR-0001
 findings: 0 new, 0 fixed

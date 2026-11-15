@@ -34,7 +34,7 @@ oxispec new requirement auth "Admin session timeout"
 ```
 
 ```text
-created REQ-AUTH-0001 (specs/requirements/auth/admin-session-timeout.md)
+created REQ-AUTH-0001 (oxispec/requirements/auth/admin-session-timeout.md)
 ```
 
 Open the file. The command wrote a template:
@@ -73,7 +73,7 @@ oxispec new adr "Use Postgres for sessions"
 oxispec link REQ-AUTH-0001 decided-by ADR-0001
 ```
 
-Fill in the decision record (`specs/adr/0001-use-postgres-for-sessions.md`) with the context and the choice. `link` writes the link into the front matter of the first node:
+Fill in the decision record (`oxispec/adr/0001-use-postgres-for-sessions.md`) with the context and the choice. `link` writes the link into the front matter of the first node:
 
 ```yaml
 links:

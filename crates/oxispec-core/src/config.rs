@@ -12,6 +12,12 @@ pub const CONFIG_PATH: &str = ".oxispec/config.yaml";
 /// The project format this version reads and writes. See docs/versioning.md.
 pub const FORMAT: u32 = 1;
 
+/// The folder for the documents of a project that `oxispec init` creates.
+pub const DEFAULT_DOCS_DIR: &str = "oxispec";
+
+/// The folder of a project whose config has no `docs_dir`: the name before the folder could be chosen.
+pub const LEGACY_DOCS_DIR: &str = "specs";
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{0}: {1}")]
@@ -99,6 +105,13 @@ pub struct Config {
     pub topology: String,
     #[serde(default)]
     pub id_scheme: IdScheme,
+    /// The folder, relative to the project, where the documents are written: `<docs_dir>/requirements`,
+    /// `<docs_dir>/adr` and so on. A config without it means `specs`.
+    #[serde(
+        default = "legacy_docs_dir",
+        skip_serializing_if = "is_legacy_docs_dir"
+    )]
+    pub docs_dir: String,
     #[serde(default, skip_serializing_if = "TraceConfig::is_default")]
     pub trace: TraceConfig,
     /// How the operations of an API are embedded for `oxispec api index`.
@@ -181,6 +194,34 @@ fn default_topology() -> String {
     "single".to_string()
 }
 
+fn legacy_docs_dir() -> String {
+    LEGACY_DOCS_DIR.to_string()
+}
+
+fn is_legacy_docs_dir(dir: &String) -> bool {
+    dir == LEGACY_DOCS_DIR
+}
+
+/// Whether `dir` can be the folder of the documents: a relative path of plain folder names, none
+/// of which is hidden, so it cannot reach out of the project or into `.oxispec` or `.git`.
+pub fn check_docs_dir(dir: &str) -> Result<(), String> {
+    let plain = !dir.is_empty()
+        && !dir.contains('\\')
+        && !dir.starts_with('/')
+        && dir
+            .trim_end_matches('/')
+            .split('/')
+            .all(|part| !part.is_empty() && !part.starts_with('.'))
+        && !Path::new(dir).has_root();
+    if plain {
+        Ok(())
+    } else {
+        Err(format!(
+            "`{dir}` is not a folder inside the project; use a relative path with plain names, such as `oxispec` or `docs/oxispec`"
+        ))
+    }
+}
+
 impl Config {
     pub fn new(modules: Vec<String>, id_scheme: IdScheme) -> Self {
         Self {
@@ -196,7 +237,20 @@ impl Config {
             debt: DebtConfig::default(),
             compliance: ComplianceConfig::default(),
             domains: BTreeMap::new(),
+            docs_dir: DEFAULT_DOCS_DIR.to_string(),
         }
+    }
+
+    // spec: REQ-PROJECT-0004
+    /// The folder, relative to the project, for the nodes of one kind: `requirements`, `adr`,
+    /// `changes`, `releases`. The architecture model of a project that keeps the old `specs`
+    /// folder stays in `architecture/model`, where it always was.
+    pub fn dir(&self, sub: &str) -> PathBuf {
+        let root = self.docs_dir.trim_end_matches('/');
+        if sub == "architecture" && root == LEGACY_DOCS_DIR {
+            return PathBuf::from("architecture/model");
+        }
+        PathBuf::from(root).join(sub)
     }
 
     pub fn has(&self, module: &str) -> bool {
@@ -222,6 +276,9 @@ fn parse_text(path: &Path, text: &str) -> Result<Config, Error> {
             FORMAT,
         ));
     }
+    if let Err(why) = check_docs_dir(&config.docs_dir) {
+        return Err(Error::Yaml(path.to_path_buf(), format!("docs_dir: {why}")));
+    }
     for (name, domain) in &config.domains {
         let letters = domain.chars().all(|c| c.is_ascii_alphanumeric());
         let starts = domain
@@ -244,6 +301,11 @@ pub fn load(root: &Path) -> Result<Config, Error> {
     let path = root.join(CONFIG_PATH);
     let text = std::fs::read_to_string(&path).map_err(|e| Error::Io(path.clone(), e))?;
     parse_text(&path, &text)
+}
+
+/// The folder, relative to the project at `project`, for the nodes of one kind. See [`Config::dir`].
+pub fn node_dir(project: &Path, sub: &str) -> Result<PathBuf, Error> {
+    Ok(load(project)?.dir(sub))
 }
 
 pub fn save(root: &Path, config: &Config) -> Result<(), Error> {

@@ -5,7 +5,7 @@ Write a change as a change set, so a person can review it before the specs chang
 ## Steps
 
 1. Explore first (the `oxispec-explore` skill). Look for an existing requirement to change before you add a new one.
-2. Create the change set: `oxispec new change "Short title"`. It writes `specs/changes/NNNN-title.md`. Fill in why, what changes and the impact.
+2. Create the change set: `oxispec new change "Short title"`. It writes `NNNN-title.md` in the `changes` folder of the documents (`oxispec/` unless the config says another). Fill in why, what changes and the impact.
 3. Edit or add the nodes the change touches:
    - a new requirement: `oxispec new requirement <domain> "Title"`, then write the statement and its scenarios in the file;
    - an existing requirement: edit the file, and raise `version` in the frontmatter when the meaning changes.
