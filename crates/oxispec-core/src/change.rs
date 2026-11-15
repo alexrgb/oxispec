@@ -12,6 +12,28 @@ pub const STATUSES: &[&str] = &["draft", "in-review", "approved", "merged", "rev
 ///              +------------+   (changes after approval go back to review)
 /// ```
 // spec: REQ-CHANGE-0001
+/// The tasks of change sets that name this node or one of its scenarios, with the change set
+/// each belongs to, in the order of the change sets.
+pub fn tasks_naming<'a>(
+    graph: &'a crate::graph::Graph,
+    node_id: &str,
+) -> Vec<(&'a crate::node::Node, &'a crate::node::Task)> {
+    let mut out = Vec::new();
+    for change in graph.nodes.iter().filter(|n| n.ty == "change") {
+        for task in &change.tasks {
+            let names = task.refs.iter().any(|r| {
+                graph
+                    .get(crate::id::base_of(r))
+                    .is_some_and(|n| n.id == node_id)
+            });
+            if names {
+                out.push((change, task));
+            }
+        }
+    }
+    out
+}
+
 pub fn next_statuses(from: &str) -> &'static [&'static str] {
     match from {
         "draft" => &["in-review"],

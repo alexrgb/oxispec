@@ -102,6 +102,21 @@ pub struct TextBlock {
     pub text: String,
 }
 
+/// One checkbox under the `## Tasks` heading of a change set: `- [x] 1.2 Guard (REQ-POST-0003.S2)`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Task {
+    /// The number the task starts with (`1.2`), when it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub number: Option<String>,
+    /// The text after the checkbox and the number.
+    pub text: String,
+    pub done: bool,
+    pub line: usize,
+    /// IDs written in the text (`REQ-POST-0003`, `REQ-POST-0003.S2`), in the order written.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub refs: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
     pub id: String,
@@ -162,6 +177,9 @@ pub struct Node {
     /// `entity` blocks, read by [`crate::entities`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entities: Vec<TextBlock>,
+    /// The tasks of a change set: the checkboxes under its `## Tasks` heading.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tasks: Vec<Task>,
     /// Headings of level 2 and 3 outside code blocks.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub headings: Vec<Heading>,
@@ -171,6 +189,14 @@ pub struct Node {
 }
 
 impl Node {
+    /// How many tasks are done and how many there are.
+    pub fn progress(&self) -> (usize, usize) {
+        (
+            self.tasks.iter().filter(|t| t.done).count(),
+            self.tasks.len(),
+        )
+    }
+
     /// True when some scenario heading in this node carries the anchor.
     pub fn has_scenario(&self, anchor: &str) -> bool {
         self.requirements

@@ -2471,6 +2471,31 @@ fn show(
             );
         }
     }
+    if !node.tasks.is_empty() {
+        let (done, total) = node.progress();
+        outln!("tasks: {done}/{total} done");
+        for t in &node.tasks {
+            outln!(
+                "  [{}] {}{}",
+                if t.done { "x" } else { " " },
+                t.number.as_ref().map_or(String::new(), |n| format!("{n} ")),
+                t.text
+            );
+        }
+    }
+    let named = oxispec_core::change::tasks_naming(&graph, &node.id);
+    if !named.is_empty() {
+        outln!("tasks that name it:");
+        for (change, t) in named {
+            outln!(
+                "  [{}] {} {}{}",
+                if t.done { "x" } else { " " },
+                change.id,
+                t.number.as_ref().map_or(String::new(), |n| format!("{n} ")),
+                t.text
+            );
+        }
+    }
     if !node.links.is_empty() {
         outln!("links:");
         for (kind, targets) in &node.links {
@@ -2605,6 +2630,8 @@ status: draft
 ## What changes
 
 ## Impact
+
+## Tasks
 ";
 
 const VOCABULARY_TEMPLATE: &str = "---

@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::finding::Finding;
 use crate::node::{
-    ClaimLine, Frontmatter, Heading, Node, OneOrMany, RequirementBlock, Scenario, TextBlock,
+    ClaimLine, Frontmatter, Heading, Node, OneOrMany, RequirementBlock, Scenario, Task, TextBlock,
 };
 
 /// Where the frontmatter sits in a file.
@@ -113,6 +113,91 @@ pub fn parse_headings(body: &str, line_offset: usize) -> Vec<Heading> {
         }
     }
     headings
+}
+
+/// The checkboxes under a `## Tasks` heading, until the next `##` heading. Code blocks are skipped.
+/// A task may start with a number (`1.2`) and may write IDs, which [`Task::refs`] keeps.
+pub fn parse_tasks(body: &str, line_offset: usize) -> Vec<Task> {
+    let mut tasks = Vec::new();
+    let mut in_fence = false;
+    let mut in_tasks = false;
+    for (i, line) in body.lines().enumerate() {
+        let t = line.trim_start();
+        if t.starts_with("```") || t.starts_with("~~~") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        if let Some(h) = line.strip_prefix("## ") {
+            in_tasks = h.trim().eq_ignore_ascii_case("tasks");
+            continue;
+        }
+        if !in_tasks {
+            continue;
+        }
+        let Some(rest) = t.strip_prefix(['-', '*']) else {
+            continue;
+        };
+        let rest = rest.trim_start();
+        let (done, text) = if let Some(r) = rest.strip_prefix("[ ]") {
+            (false, r)
+        } else if let Some(r) = rest
+            .strip_prefix("[x]")
+            .or_else(|| rest.strip_prefix("[X]"))
+        {
+            (true, r)
+        } else {
+            continue;
+        };
+        let text = text.trim();
+        let word: &str = text.split_whitespace().next().unwrap_or("");
+        let numbered = word.starts_with(|c: char| c.is_ascii_digit())
+            && word
+                .trim_end_matches(['.', ')'])
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == '.');
+        let (number, text) = if numbered {
+            (
+                Some(word.trim_end_matches(['.', ')']).to_string()),
+                text[word.len()..].trim_start(),
+            )
+        } else {
+            (None, text)
+        };
+        tasks.push(Task {
+            number,
+            text: text.to_string(),
+            done,
+            line: line_offset + i + 1,
+            refs: task_refs(text),
+        });
+    }
+    tasks
+}
+
+/// The IDs written in a task: words that begin with capitals (`REQ-`, `CHG-`), with an optional
+/// scenario (`.S2`). Words such as `pre-commit` or `e2e` are not taken for IDs.
+fn task_refs(text: &str) -> Vec<String> {
+    let mut refs: Vec<String> = Vec::new();
+    for word in text
+        .split(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | ':' | '_' | '/')))
+    {
+        let word = word.trim_end_matches(['.', ':']);
+        let Some(parsed) = crate::id::parse(word) else {
+            continue;
+        };
+        let first = parsed.base.split('-').next().unwrap_or("");
+        let capitals = first.len() >= 2
+            && first
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit());
+        if capitals && !refs.iter().any(|r| r == word) {
+            refs.push(word.to_string());
+        }
+    }
+    refs
 }
 
 /// The step keyword a line starts with, if it is a step: `- **WHEN** x`,
@@ -408,6 +493,11 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
     } else {
         Vec::new()
     };
+    let tasks = if ty == "change" {
+        parse_tasks(body, consumed)
+    } else {
+        Vec::new()
+    };
     let Blocks {
         claims,
         vocabulary,
@@ -448,6 +538,7 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
             .map(|(k, v)| (k, v.into_vec()))
             .collect(),
         requirements,
+        tasks,
         headings: parse_headings(body, consumed),
         claims,
         vocabulary,
@@ -639,5 +730,21 @@ mod tests {
         let bare = quoted.replace("\"2026-10-28\"", "2026-10-28");
         let node = parse_file_text(Path::new("c.md"), &bare).0.unwrap();
         assert_eq!(node.approved_on.as_deref(), Some("2026-10-28"));
+    }
+
+    // verifies: REQ-CHANGE-0005.S1
+    #[test]
+    fn tasks_are_the_checkboxes_under_the_tasks_heading() {
+        let body = "# C\n\n- [ ] not a task\n\n## Tasks\n\n#### 1. API\n\n- [x] 1.1 Guard (REQ-POST-0003.S2)\n* [ ] 1.2. Test it, not pre-commit or e2e\n- [X] no number REQ-A-0001 and REQ-A-0001\n- plain bullet\n```\n- [ ] in code\n```\n\n## Impact\n\n- [ ] after\n";
+        let tasks = parse_tasks(body, 5);
+        assert_eq!(tasks.len(), 3);
+        assert!(tasks[0].done && tasks[0].number.as_deref() == Some("1.1"));
+        assert_eq!(tasks[0].text, "Guard (REQ-POST-0003.S2)");
+        assert_eq!(tasks[0].refs, vec!["REQ-POST-0003.S2"]);
+        assert_eq!(tasks[0].line, 5 + 9);
+        assert!(!tasks[1].done && tasks[1].number.as_deref() == Some("1.2"));
+        assert!(tasks[1].refs.is_empty(), "{:?}", tasks[1].refs);
+        assert!(tasks[2].done && tasks[2].number.is_none());
+        assert_eq!(tasks[2].refs, vec!["REQ-A-0001"]);
     }
 }

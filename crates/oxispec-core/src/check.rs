@@ -5,6 +5,7 @@
 //! E007 requirement without SHALL or MUST            E008 requirement node without requirements
 //! E009 link to a scenario that does not exist       E010 duplicate scenario anchor
 //! E011 invalid scenario anchor
+//! W027 task names an ID that does not exist  W028 merged change set with open tasks
 //! E012 change set with a missing or unknown status
 //! E013 approved or merged change set without `approved_by`
 //! E042 alias that is invalid, is another node's ID, or belongs to two nodes
@@ -44,6 +45,7 @@ fn run_checks(graph: &Graph) -> Vec<Finding> {
         }
         if node.ty == "change" {
             change_set(node, &mut findings);
+            tasks(graph, node, &mut findings);
         }
     }
     supersede_cycles(graph, &mut findings);
@@ -287,6 +289,50 @@ fn change_set(node: &Node, out: &mut Vec<Finding>) {
             .at(&node.path, Some(1))
             .node(&node.id),
         ),
+    }
+}
+
+/// A task that names an ID which does not exist, and a merged change set with tasks still open.
+/// A word such as `TC-POST-040` is only an ID that is missing when nodes of that kind exist: the
+/// first part of the ID (`REQ`) is used by some node.
+// spec: REQ-CHANGE-0005
+fn tasks(graph: &Graph, node: &Node, out: &mut Vec<Finding>) {
+    let kinds: std::collections::HashSet<&str> = graph
+        .nodes
+        .iter()
+        .filter_map(|n| n.id.split('-').next())
+        .collect();
+    for task in &node.tasks {
+        for target in &task.refs {
+            let kind = id::base_of(target).split('-').next().unwrap_or("");
+            let why = match resolve_link(graph, target) {
+                LinkResolution::MissingNode if kinds.contains(kind) => "does not exist".to_string(),
+                LinkResolution::MissingScenario(anchor) => {
+                    format!("has no scenario with anchor {{#{anchor}}}")
+                }
+                _ => continue,
+            };
+            out.push(
+                Finding::warning("W027", format!("a task names {target}, which {why}"))
+                    .at(&node.path, Some(task.line))
+                    .node(&node.id),
+            );
+        }
+    }
+    let open = node.tasks.iter().filter(|t| !t.done).count();
+    if node.status.as_deref() == Some("merged") && open > 0 {
+        let first = node.tasks.iter().find(|t| !t.done).map(|t| t.line);
+        out.push(
+            Finding::warning(
+                "W028",
+                format!(
+                    "change set is merged but {open} of {} tasks are still open",
+                    node.tasks.len()
+                ),
+            )
+            .at(&node.path, first)
+            .node(&node.id),
+        );
     }
 }
 
@@ -604,5 +650,40 @@ mod tests {
             "---\nid: CHG-0001\ntype: change\nstatus: draft\nlinks:\n  changes: REQ-A-0001\n---\n";
         let r = "---\nid: REQ-A-0001\ntype: requirement\n---\n### Requirement: X\nIt SHALL.\n\n#### Scenario: S\n";
         assert!(codes(&graph(&[("c.md", c), ("r.md", r)])).is_empty());
+    }
+
+    fn change_with(status: &str, tasks: &str) -> String {
+        format!(
+            "---\nid: CHG-0001\ntype: change\nstatus: {status}\napproved_by: Ann\n---\n# CHG-0001: T\n\n## Tasks\n\n{tasks}"
+        )
+    }
+
+    const REQ_A: &str = "---\nid: REQ-A-0001\ntype: requirement\n---\n### Requirement: X\nIt SHALL.\n\n#### Scenario: S {#S1}\n- **WHEN** a\n- **THEN** b\n";
+
+    // verifies: REQ-CHANGE-0005.S3
+    #[test]
+    fn a_task_that_names_what_is_missing_is_warned_about() {
+        let run = |tasks: &str| {
+            codes(&graph(&[
+                ("r.md", REQ_A),
+                ("c.md", &change_with("draft", tasks)),
+            ]))
+        };
+        assert!(run("- [ ] 1.1 Do REQ-A-0001.S1 and REQ-A-0001\n").is_empty());
+        assert_eq!(run("- [ ] 1.1 Do REQ-A-0002\n"), vec!["W027"]);
+        assert_eq!(run("- [ ] 1.1 Do REQ-A-0001.S9\n"), vec!["W027"]);
+        // No node of this kind exists, so it is only a word that looks like an ID.
+        assert!(run("- [ ] 1.1 Plan TC-POST-040\n").is_empty());
+    }
+
+    // verifies: REQ-CHANGE-0005.S4
+    #[test]
+    fn a_merged_change_set_with_open_tasks_is_warned_about() {
+        let run =
+            |status: &str, tasks: &str| codes(&graph(&[("c.md", &change_with(status, tasks))]));
+        assert_eq!(run("merged", "- [x] a\n- [ ] b\n"), vec!["W028"]);
+        assert!(run("merged", "- [x] a\n- [x] b\n").is_empty());
+        assert!(run("merged", "").is_empty());
+        assert!(run("draft", "- [ ] b\n").is_empty());
     }
 }

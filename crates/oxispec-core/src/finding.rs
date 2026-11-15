@@ -240,6 +240,14 @@ pub const CODES: &[(&str, &str)] = &[
         "W026",
         "A node is about an entity that changed since the node was confirmed",
     ),
+    (
+        "W027",
+        "A task of a change set names a node or scenario that does not exist",
+    ),
+    (
+        "W028",
+        "A change set is merged but some of its tasks are still open",
+    ),
     ("I001", "A link to another project is not checked"),
     (
         "I002",
