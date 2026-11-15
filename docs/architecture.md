@@ -2,7 +2,7 @@
 
 Hand-drawn diagrams go stale because each picture repeats the same boxes. OxiSpec keeps a **model**: you describe each element and each relationship once, and every view is generated from it. It needs the `architecture` module (`oxispec modules add architecture`, included in the `standard` preset).
 
-Make elements with `oxispec new architecture system|person|container|component|environment "Name"`. Each is a node, written to `architecture/model/`, with one fenced `architecture` block of YAML:
+Make elements with `oxispec new architecture system|person|container|component|environment "Name"`. Each is a node, written to `architecture/` in the folder of the documents (`oxispec/architecture/`; `architecture/model/` in a project whose config has no `docs_dir`), with one fenced `architecture` block of YAML:
 
 ````markdown
 ---
