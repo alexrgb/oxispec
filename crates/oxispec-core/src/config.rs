@@ -15,6 +15,22 @@ pub const FORMAT: u32 = 1;
 /// The folder for the documents of a project that `oxispec init` creates.
 pub const DEFAULT_DOCS_DIR: &str = "oxispec";
 
+/// The folders below `docs_dir` that OxiSpec writes into, by the name `Config::dir` takes.
+pub const KIND_DIRS: &[&str] = &[
+    "requirements",
+    "changes",
+    "adr",
+    "releases",
+    "vocabulary",
+    "machines",
+    "debt",
+    "test-plans",
+    "risks",
+    "prd",
+    "entities",
+    "architecture",
+];
+
 /// The folder of a project whose config has no `docs_dir`: the name before the folder could be chosen.
 pub const LEGACY_DOCS_DIR: &str = "specs";
 
@@ -106,11 +122,8 @@ pub struct Config {
     #[serde(default)]
     pub id_scheme: IdScheme,
     /// The folder, relative to the project, where the documents are written: `<docs_dir>/requirements`,
-    /// `<docs_dir>/adr` and so on. A config without it means `specs`.
-    #[serde(
-        default = "legacy_docs_dir",
-        skip_serializing_if = "is_legacy_docs_dir"
-    )]
+    /// `<docs_dir>/adr` and so on. A config without it means `specs`; it is written whenever the config is saved.
+    #[serde(default = "legacy_docs_dir")]
     pub docs_dir: String,
     #[serde(default, skip_serializing_if = "TraceConfig::is_default")]
     pub trace: TraceConfig,
@@ -196,10 +209,6 @@ fn default_topology() -> String {
 
 fn legacy_docs_dir() -> String {
     LEGACY_DOCS_DIR.to_string()
-}
-
-fn is_legacy_docs_dir(dir: &String) -> bool {
-    dir == LEGACY_DOCS_DIR
 }
 
 /// Whether `dir` can be the folder of the documents: a relative path of plain folder names, none

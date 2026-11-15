@@ -186,9 +186,11 @@ Not built yet, from the design: pinned code commits, test results and coverage t
 
 ## Where the documents are
 
-`oxispec init` creates the documents of a project in `oxispec/`: `oxispec/requirements/<domain>/`, `oxispec/adr/`, `oxispec/changes/`, `oxispec/releases/` and the folders of the other modules; the architecture model is in `oxispec/architecture/`. `oxispec init --docs-dir docs/spec` puts them in another folder, which is stored as `docs_dir` in the config. It is a relative path of plain folder names, with none that starts with a dot; `init` and every command that reads the config refuse anything else. Files that are already there are found wherever they are, because nodes are found by their front matter, so moving a project to another folder means moving the files and changing `docs_dir`.
+`oxispec init` creates the documents of a project in `oxispec/`: `oxispec/requirements/<domain>/`, `oxispec/adr/`, `oxispec/changes/`, `oxispec/releases/` and the folders of the other modules; the architecture model is in `oxispec/architecture/`. `oxispec init --docs-dir docs/spec` puts them in another folder, which is stored as `docs_dir` in the config. It is a relative path of plain folder names, with none that starts with a dot; `init` and every command that reads the config refuse anything else. Files that are already there are found wherever they are, because nodes are found by their front matter, so the folder can be changed at any time with `oxispec move-docs DIR`.
 
-A config with no `docs_dir`, as projects had before the folder could be chosen, means `specs` (and `architecture/model` for the architecture model), so nothing has to move. This repository's own specs are one such project.
+**Moving the documents.** `oxispec move-docs docs/spec` moves the folders of the documents (`requirements`, `adr`, `changes`, `releases` and the others that exist, and the architecture model) to the new folder and sets `docs_dir`. IDs and links name no paths, so nothing inside a file changes, and `check` finds the same nodes. `--dry-run` shows the moves and writes nothing. It refuses, before anything moves, a folder that is the same as the old one, inside it or around it, a folder that is not inside the project, and a folder that already has a folder of the same name with something in it. A failure part way undoes the moves. The command lists the files, such as a README, that name the old folder; it does not change them. It moves the files on disk and leaves git alone, so `git add -A` then stages them as renames. Moving back to `specs` sets `docs_dir: specs`.
+
+A config with no `docs_dir`, as projects had before the folder could be chosen, means `specs` (and `architecture/model` for the architecture model), so nothing has to move; the key is written, as `docs_dir: specs`, the next time the config is saved. This repository's own specs are one such project.
 
 ## Project config
 
@@ -201,7 +203,7 @@ modules:
 - specs
 topology: single
 id_scheme: sequential
-docs_dir: oxispec          # where documents are written; without it, `specs`
+docs_dir: oxispec          # where documents are written; a config without it means `specs`
 agents: [claude, cursor]   # only with the agents module; see agents.md
 trace:
   exclude: ["vendor/**"]   # optional

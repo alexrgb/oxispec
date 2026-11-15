@@ -35,6 +35,7 @@ mod history;
 mod importer;
 mod machines;
 mod mcp;
+mod movedocs;
 mod reference;
 mod releases;
 mod risks;
@@ -109,6 +110,17 @@ enum Command {
         /// relative to the project. Default: oxispec
         #[arg(long, value_name = "DIR")]
         docs_dir: Option<String>,
+    },
+    /// Move the documents to another folder and set `docs_dir` in the config. IDs and links do
+    /// not change. Files that mention the old folder are listed and left alone
+    MoveDocs {
+        /// The new folder, relative to the project, such as `docs/spec`
+        dir: String,
+        /// Show what would move and write nothing
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        json: bool,
     },
     /// The languages the trace scan knows: which have a grammar, which are read by their
     /// comment leaders, and which the project chose in `trace.languages`
@@ -1091,6 +1103,12 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     docs_dir: docs_dir.as_deref(),
                 },
             )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::MoveDocs { dir, dry_run, json } => {
+            let root = project_root(cli.root.as_deref())?;
+            let _lock = lock_project(&root)?;
+            movedocs::move_docs(&root, &dir, dry_run, json)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Languages { json } => {

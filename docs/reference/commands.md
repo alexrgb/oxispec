@@ -4,7 +4,7 @@ Written by `oxispec docs reference` from the program itself. Do not edit it by h
 
 Every command also accepts `--root <ROOT>` (the project folder; default: the nearest parent with `.oxispec/config.yaml`), `--no-cache` (do not read or write the local index) and `--help`.
 
-Commands: [`init`](#oxispec-init), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`entities`](#oxispec-entities), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`list`](#oxispec-list), [`show`](#oxispec-show)
+Commands: [`init`](#oxispec-init), [`move-docs`](#oxispec-move-docs), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`entities`](#oxispec-entities), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`list`](#oxispec-list), [`show`](#oxispec-show)
 
 ## `oxispec init`
 
@@ -21,6 +21,18 @@ Usage: oxispec init [OPTIONS]
 - `--agents <AGENTS>`: AI clients that get skills when the agents module is on, comma separated: claude, cursor, copilot, gemini, agents, or none (default: claude,cursor,copilot,gemini).
 - `--languages <LANGUAGES>`: The languages of the project, comma separated (see `oxispec languages`). The trace scan then reads only their files. Default: every text file.
 - `--docs-dir <DIR>`: The folder for the documents (requirements, decisions, change sets and the rest), relative to the project. Default: oxispec.
+
+## `oxispec move-docs`
+
+Move the documents to another folder and set `docs_dir` in the config. IDs and links do not change. Files that mention the old folder are listed and left alone
+
+```text
+Usage: oxispec move-docs [OPTIONS] <DIR>
+```
+
+- `<DIR>`: The new folder, relative to the project, such as `docs/spec`.
+- `--dry-run`: Show what would move and write nothing.
+- `--json`
 
 ## `oxispec languages`
 
