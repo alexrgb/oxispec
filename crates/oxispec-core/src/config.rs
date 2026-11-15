@@ -122,11 +122,8 @@ pub struct Config {
     #[serde(default)]
     pub id_scheme: IdScheme,
     /// The folder, relative to the project, where the documents are written: `<docs_dir>/requirements`,
-    /// `<docs_dir>/adr` and so on. A config without it means `specs`.
-    #[serde(
-        default = "legacy_docs_dir",
-        skip_serializing_if = "is_legacy_docs_dir"
-    )]
+    /// `<docs_dir>/adr` and so on. A config without it means `specs`; it is written whenever the config is saved.
+    #[serde(default = "legacy_docs_dir")]
     pub docs_dir: String,
     #[serde(default, skip_serializing_if = "TraceConfig::is_default")]
     pub trace: TraceConfig,
@@ -212,10 +209,6 @@ fn default_topology() -> String {
 
 fn legacy_docs_dir() -> String {
     LEGACY_DOCS_DIR.to_string()
-}
-
-fn is_legacy_docs_dir(dir: &String) -> bool {
-    dir == LEGACY_DOCS_DIR
 }
 
 /// Whether `dir` can be the folder of the documents: a relative path of plain folder names, none

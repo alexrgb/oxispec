@@ -8057,9 +8057,11 @@ fn a_project_without_docs_dir_keeps_writing_in_specs() {
     let out = run(p, &["new", "architecture", "component", "Shop"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     assert!(p.join("architecture/model").is_dir(), "{}", out.stdout);
-    // Saving the config again does not add the key.
+    // Saving the config says the folder out loud.
     assert!(
-        !fs::read_to_string(&config).unwrap().contains("docs_dir"),
+        fs::read_to_string(&config)
+            .unwrap()
+            .contains("docs_dir: specs\n"),
         "{}",
         fs::read_to_string(&config).unwrap()
     );
@@ -8206,7 +8208,9 @@ fn a_project_from_before_can_move_and_come_back() {
     assert!(p.join("architecture/model").is_dir());
     assert!(!p.join("oxispec").exists());
     assert!(
-        !fs::read_to_string(&config).unwrap().contains("docs_dir"),
+        fs::read_to_string(&config)
+            .unwrap()
+            .contains("docs_dir: specs\n"),
         "{}",
         fs::read_to_string(&config).unwrap()
     );

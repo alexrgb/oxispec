@@ -17,7 +17,7 @@ The system SHALL move the documents of a project to another folder on request an
 
 #### Scenario: Back to the old folder {#S3}
 - **WHEN** the documents of a project from before (no `docs_dir`) are moved to `oxispec` and then back to `specs`
-- **THEN** the architecture model goes from `architecture/model` to `oxispec/architecture` and back, and the config has no `docs_dir` again
+- **THEN** the architecture model goes from `architecture/model` to `oxispec/architecture` and back, and the config says `docs_dir: specs`
 
 #### Scenario: What is in the way {#S4}
 - **WHEN** the new folder is the same as the old, one is inside the other, is not a folder of the project, or already has a folder that would be overwritten
