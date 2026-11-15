@@ -20,6 +20,11 @@ struct Mention {
     count: usize,
 }
 
+/// A path as it is shown: with `/` on every system.
+fn shown(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
 fn is_empty_dir(path: &Path) -> bool {
     path.is_dir() && fs::read_dir(path).is_ok_and(|mut d| d.next().is_none())
 }
@@ -119,7 +124,7 @@ pub fn move_docs(root: &Path, to: &str, dry_run: bool, json: bool) -> Result<()>
         pairs.push((src, dst));
     }
     if !conflicts.is_empty() {
-        let list: Vec<_> = conflicts.iter().map(|c| c.display().to_string()).collect();
+        let list: Vec<_> = conflicts.iter().map(|c| shown(c)).collect();
         bail!(
             "{} exists already, so nothing was moved; move it away or pick another folder",
             list.join(", ")
@@ -176,14 +181,14 @@ pub fn move_docs(root: &Path, to: &str, dry_run: bool, json: bool) -> Result<()>
             .iter()
             .map(|(s, d)| {
                 json!({
-                    "from": s.strip_prefix(root).unwrap_or(s).to_string_lossy().replace('\\', "/"),
-                    "to": d.strip_prefix(root).unwrap_or(d).to_string_lossy().replace('\\', "/"),
+                    "from": shown(s.strip_prefix(root).unwrap_or(s)),
+                    "to": shown(d.strip_prefix(root).unwrap_or(d)),
                 })
             })
             .collect();
         let named: Vec<_> = mentions
             .iter()
-            .map(|m| json!({"path": m.path.to_string_lossy().replace('\\', "/"), "count": m.count}))
+            .map(|m| json!({"path": shown(&m.path), "count": m.count}))
             .collect();
         outln!(
             "{}",
@@ -202,8 +207,8 @@ pub fn move_docs(root: &Path, to: &str, dry_run: bool, json: bool) -> Result<()>
         outln!(
             "{} {} -> {}",
             if dry_run { "would move" } else { "moved" },
-            s.strip_prefix(root).unwrap_or(s).display(),
-            d.strip_prefix(root).unwrap_or(d).display()
+            shown(s.strip_prefix(root).unwrap_or(s)),
+            shown(d.strip_prefix(root).unwrap_or(d))
         );
     }
     if pairs.is_empty() {
@@ -220,7 +225,7 @@ pub fn move_docs(root: &Path, to: &str, dry_run: bool, json: bool) -> Result<()>
     if !mentions.is_empty() {
         outln!("these files name `{from}/` and are not changed; look at them:");
         for m in mentions.iter().take(20) {
-            outln!("    {} ({})", m.path.display(), m.count);
+            outln!("    {} ({})", shown(&m.path), m.count);
         }
         if mentions.len() > 20 {
             outln!("    and {} more", mentions.len() - 20);
