@@ -6991,6 +6991,83 @@ fn a_requirement_keeps_the_id_its_source_gave_it_as_an_alias() {
     assert!(out.stdout.contains("4 node(s)"), "{}", out.stdout);
 }
 
+// verifies: REQ-IMPORT-0001.S9
+#[test]
+fn domains_in_the_config_choose_the_domain_of_an_import() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    let write = |rel: &str, text: &str| {
+        let f = p.join(rel);
+        fs::create_dir_all(f.parent().unwrap()).unwrap();
+        fs::write(f, text).unwrap();
+    };
+    let block = |title: &str| {
+        format!(
+            "### Requirement: {title}\nThe system SHALL work.\n\n#### Scenario: A\n- **WHEN** a\n- **THEN** b\n\n"
+        )
+    };
+    write(
+        "openspec/specs/analytics-and-reports/spec.md",
+        &format!("# S\n\n## Requirements\n\n{}", block("Shows a chart")),
+    );
+    write(
+        "openspec/specs/carousels/spec.md",
+        &format!("# S\n\n## Requirements\n\n{}", block("CAR-1 Slides")),
+    );
+    write("openspec/changes/tweak/proposal.md", "## Why\nBetter.\n");
+    write(
+        "openspec/changes/tweak/specs/analytics-and-reports/spec.md",
+        "## MODIFIED Requirements\n### Requirement: Shows a chart\nThe system SHALL draw it.\n",
+    );
+    let config = p.join(".oxispec/config.yaml");
+    let before = fs::read_to_string(&config).unwrap();
+    // A domain that is not letters and digits is refused.
+    fs::write(
+        &config,
+        format!("{before}domains:\n  carousels: \"1 bad\"\n"),
+    )
+    .unwrap();
+    let out = run(p, &["import", "plan", "start", "--from", "openspec"]);
+    assert_ne!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        format!("{}{}", out.stdout, out.stderr).contains("domains"),
+        "{}{}",
+        out.stdout,
+        out.stderr
+    );
+    fs::write(
+        &config,
+        format!("{before}domains:\n  analytics-and-reports: REPORTS\n  CAR: slides\n"),
+    )
+    .unwrap();
+    let out = run(p, &["import", "plan", "start", "--from", "openspec"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["import", "apply"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        p.join("specs/requirements/reports/shows-a-chart.md")
+            .is_file(),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["list", "--type", "requirement"]);
+    assert!(out.stdout.contains("REQ-REPORTS-0001"), "{}", out.stdout);
+    assert!(out.stdout.contains("REQ-SLIDES-1"), "{}", out.stdout);
+    assert!(!out.stdout.contains("REQ-CAR"), "{}", out.stdout);
+    let out = run(p, &["show", "CAR-1"]);
+    assert!(out.stdout.contains("REQ-SLIDES-1"), "{}", out.stdout);
+    // The delta found the requirement by its title, in the folder the domain gave.
+    let change = fs::read_dir(p.join("specs/changes"))
+        .unwrap()
+        .flatten()
+        .map(|e| fs::read_to_string(e.path()).unwrap())
+        .next()
+        .unwrap();
+    assert!(change.contains("- REQ-REPORTS-0001"), "{change}");
+    assert_eq!(run(p, &["check"]).code, 0);
+}
+
 // verifies: REQ-IMPORT-0002.S6
 #[test]
 fn a_change_set_links_the_requirement_a_delta_names_by_its_source_id() {

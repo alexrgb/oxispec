@@ -361,7 +361,13 @@ fn delta_entries(text: &str) -> Vec<(&'static str, String)> {
 
 /// A change set from a proposal, design, tasks and the spec deltas of a change,
 /// or from any files: each file that is not one of these is a section.
-pub fn render_change(root: &Path, item: &Item, id: &str, known: &[Known]) -> io::Result<Made> {
+pub fn render_change(
+    root: &Path,
+    item: &Item,
+    id: &str,
+    known: &[Known],
+    domains: &BTreeMap<String, String>,
+) -> io::Result<Made> {
     let mut files: Vec<&String> = item.sources.iter().collect();
     files.sort_by_key(|f| file_rank(f));
     let (mut why, mut what, mut impact) = (String::new(), String::new(), String::new());
@@ -413,7 +419,7 @@ pub fn render_change(root: &Path, item: &Item, id: &str, known: &[Known]) -> io:
                 .and_then(|i| parts.get(i))
                 .copied()
                 .unwrap_or("");
-            let group = import::domain_of(capability).to_ascii_lowercase();
+            let group = import::domain_for(domains, capability).to_ascii_lowercase();
             let mut listing = String::new();
             for (op, name) in delta_entries(&text) {
                 listing.push_str(&format!("- {op}: {name}\n"));
@@ -656,7 +662,8 @@ mod tests_of_plan {
             aliases: Vec::new(),
             group: "auth".into(),
         }];
-        let made = render_change(root, &plan.items[2], "CHG-0001", &known).unwrap();
+        let made =
+            render_change(root, &plan.items[2], "CHG-0001", &known, &BTreeMap::new()).unwrap();
         let t = &made.text;
         assert!(
             t.contains("type: change\nstatus: draft\nlinks:\n  changes:\n    - REQ-AUTH-0001\n"),

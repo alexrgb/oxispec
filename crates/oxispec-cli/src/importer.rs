@@ -1,7 +1,7 @@
 //! `oxispec import specs`: specs written for OpenSpec, Spec Kit, Kiro or plain
 //! markdown, brought in as requirement nodes.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -90,6 +90,7 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
     let mut ids = Ids::new(
         load_graph(root, cache),
         opts.scheme.unwrap_or(cfg.id_scheme),
+        cfg.domains.clone(),
     );
     let keep_ids = keeps_ids(source);
     ids.reserve(&drafts.iter().collect::<Vec<_>>(), keep_ids);
@@ -249,16 +250,20 @@ fn nodes_of(
     paths: &mut HashSet<PathBuf>,
     keep_ids: bool,
 ) -> Result<Vec<Node>> {
-    let folder = d.domain().to_ascii_lowercase();
+    let domain = import::domain_for(&ids.domains, &d.name);
+    let folder = domain.to_ascii_lowercase();
     let dir = PathBuf::from("specs/requirements").join(&folder);
     let mut out = Vec::new();
     let fallback = if keep_ids {
         d.blocks
             .iter()
             .find_map(|b| import::source_id(&b.title))
-            .map_or_else(|| d.domain(), |(prefix, _)| prefix)
+            .map_or_else(
+                || domain.clone(),
+                |(prefix, _)| import::domain_for_prefix(&ids.domains, &prefix),
+            )
     } else {
-        d.domain()
+        domain.clone()
     };
     for i in 0..d.node_count() {
         let title = d
@@ -270,18 +275,19 @@ fn nodes_of(
         let own = import::source_id(title).filter(|_| keep_ids);
         let id = match own {
             Some((prefix, number)) => {
-                let wanted = format!("REQ-{prefix}-{number}");
+                let domain = import::domain_for_prefix(&ids.domains, &prefix);
+                let wanted = format!("REQ-{domain}-{number}");
                 let alias = format!("{prefix}-{number}");
                 let id = if ids.scheme == IdScheme::Sequential && ids.claim(&wanted) {
                     wanted
                 } else if ids.scheme == IdScheme::Sequential {
-                    let id = ids.next(&format!("REQ-{prefix}-"))?;
+                    let id = ids.next(&format!("REQ-{domain}-"))?;
                     notes.push(format!(
                         "{wanted} is taken, so this requirement is {id}; it keeps {alias} as an alias"
                     ));
                     id
                 } else {
-                    ids.next(&format!("REQ-{prefix}-"))?
+                    ids.next(&format!("REQ-{domain}-"))?
                 };
                 if ids.graph.get(&alias).is_some() || !ids.aliases.insert(alias.clone()) {
                     notes.push(format!(
@@ -330,11 +336,14 @@ struct Ids {
     /// handed out in their place.
     reserved: HashSet<String>,
     aliases: HashSet<String>,
+    /// The `domains` of the config.
+    domains: BTreeMap<String, String>,
 }
 
 impl Ids {
-    fn new(graph: oxispec_core::Graph, scheme: IdScheme) -> Ids {
+    fn new(graph: oxispec_core::Graph, scheme: IdScheme, domains: BTreeMap<String, String>) -> Ids {
         Ids {
+            domains,
             graph,
             scheme,
             counters: HashMap::new(),
@@ -352,7 +361,8 @@ impl Ids {
         for d in drafts {
             for b in &d.blocks {
                 if let Some((prefix, number)) = import::source_id(&b.title) {
-                    self.reserved.insert(format!("REQ-{prefix}-{number}"));
+                    let domain = import::domain_for_prefix(&self.domains, &prefix);
+                    self.reserved.insert(format!("REQ-{domain}-{number}"));
                 }
             }
         }
@@ -667,7 +677,7 @@ fn build(root: &Path, plan: &Plan, status: Option<&str>, cache: bool) -> Result<
                 .unwrap_or_default(),
         })
         .collect();
-    let mut ids = Ids::new(graph, cfg.id_scheme);
+    let mut ids = Ids::new(graph, cfg.id_scheme, cfg.domains.clone());
     let mut outs: Vec<Out> = Vec::new();
     let live = |k: Kind| plan.items.iter().filter(move |i| i.kind == k);
     let mut paths: HashSet<PathBuf> = HashSet::new();
@@ -714,7 +724,7 @@ fn build(root: &Path, plan: &Plan, status: Option<&str>, cache: bool) -> Result<
     }
     for item in live(Kind::Change) {
         let id = ids.next("CHG-")?;
-        let made = import_plan::render_change(root, item, &id, &known)?;
+        let made = import_plan::render_change(root, item, &id, &known, &cfg.domains)?;
         let suffix = id.strip_prefix("CHG-").unwrap_or(&id);
         let rel =
             PathBuf::from("specs/changes").join(format!("{suffix}-{}.md", slug(&item.title)?));

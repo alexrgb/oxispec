@@ -119,6 +119,10 @@ pub struct Config {
     /// Traceability and sign-offs the project must have. See `compliance`.
     #[serde(default, skip_serializing_if = "ComplianceConfig::is_default")]
     pub compliance: ComplianceConfig,
+    /// The domain that an import gives to the IDs of a spec, by the name of the spec (its folder
+    /// or file) or by the prefix of an ID in the source. See `import::domain_for`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub domains: BTreeMap<String, String>,
 }
 
 /// A standard and level from the built-in list, and rules of the project's own.
@@ -191,6 +195,7 @@ impl Config {
             profiles: BTreeMap::new(),
             debt: DebtConfig::default(),
             compliance: ComplianceConfig::default(),
+            domains: BTreeMap::new(),
         }
     }
 
@@ -216,6 +221,21 @@ fn parse_text(path: &Path, text: &str) -> Result<Config, Error> {
             config.format,
             FORMAT,
         ));
+    }
+    for (name, domain) in &config.domains {
+        let letters = domain.chars().all(|c| c.is_ascii_alphanumeric());
+        let starts = domain
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic());
+        if name.trim().is_empty() || !letters || !starts {
+            return Err(Error::Yaml(
+                path.to_path_buf(),
+                format!(
+                    "domains: `{name}: {domain}` is not usable; a domain is letters and digits and starts with a letter"
+                ),
+            ));
+        }
     }
     Ok(config)
 }
