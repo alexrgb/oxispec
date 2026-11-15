@@ -289,16 +289,11 @@ fn parse_text(path: &Path, text: &str) -> Result<Config, Error> {
         return Err(Error::Yaml(path.to_path_buf(), format!("docs_dir: {why}")));
     }
     for (name, domain) in &config.domains {
-        let letters = domain.chars().all(|c| c.is_ascii_alphanumeric());
-        let starts = domain
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_alphabetic());
-        if name.trim().is_empty() || !letters || !starts {
+        if name.trim().is_empty() || !crate::id::is_domain(domain) {
             return Err(Error::Yaml(
                 path.to_path_buf(),
                 format!(
-                    "domains: `{name}: {domain}` is not usable; a domain is letters and digits and starts with a letter"
+                    "domains: `{name}: {domain}` is not usable; a domain is letters and digits, in parts joined by hyphens, and each part starts with a letter"
                 ),
             ));
         }

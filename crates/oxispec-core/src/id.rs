@@ -58,6 +58,48 @@ fn valid_base(b: &str) -> bool {
     !rest.is_empty() && rest.iter().all(|p| is_valid_segment(p))
 }
 
+/// Whether this is a domain for IDs (`AUTH`, `ACCOUNT-AND-PROFILE`): parts of letters and digits
+/// joined by single hyphens, each part starting with a letter, so that the number at the end of
+/// an ID is never taken for a part of the domain.
+pub fn is_domain(s: &str) -> bool {
+    !s.is_empty()
+        && s.split('-').all(|part| {
+            is_valid_segment(part) && part.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+        })
+}
+
+/// The domain a name gives, in capitals, with its hyphens: `account-and-profile` gives
+/// `ACCOUNT-AND-PROFILE`. Other characters separate words, a leading number is dropped, and a word
+/// that begins with a digit joins the one before it (`oauth-2-flow` gives `OAUTH2-FLOW`). `None`
+/// when the name has no letters.
+pub fn domain_from_name(name: &str) -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+    for word in name.split(|c: char| !c.is_ascii_alphanumeric()) {
+        if word.is_empty() {
+            continue;
+        }
+        let word = word.to_ascii_uppercase();
+        if word.starts_with(|c: char| c.is_ascii_digit()) {
+            match parts.last_mut() {
+                Some(last) => last.push_str(&word),
+                None => {
+                    let rest = word.trim_start_matches(|c: char| !c.is_ascii_alphabetic());
+                    if !rest.is_empty() {
+                        parts.push(rest.to_string());
+                    }
+                }
+            }
+        } else {
+            parts.push(word);
+        }
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("-"))
+    }
+}
+
 pub fn is_valid(s: &str) -> bool {
     parse(s).is_some()
 }
@@ -154,6 +196,42 @@ mod tests {
         for n in (0..2_000_000u32).step_by(7) {
             let suffix = random_suffix(n);
             assert!(suffix.parse::<u32>().is_err(), "{n} gave {suffix}");
+        }
+    }
+
+    // verifies: REQ-IMPORT-0001.S10
+    #[test]
+    fn a_name_gives_a_domain_with_its_hyphens() {
+        let d = domain_from_name;
+        assert_eq!(
+            d("account-and-profile").as_deref(),
+            Some("ACCOUNT-AND-PROFILE")
+        );
+        assert_eq!(d("001-user-auth").as_deref(), Some("USER-AUTH"));
+        assert_eq!(d("oauth-2-flow").as_deref(), Some("OAUTH2-FLOW"));
+        assert_eq!(d("Reading_Digest v2").as_deref(), Some("READING-DIGEST-V2"));
+        assert_eq!(d("--"), None);
+        assert_eq!(d("123"), None);
+        for name in [
+            "account-and-profile",
+            "001-user-auth",
+            "oauth-2-flow",
+            "a--b",
+        ] {
+            let domain = d(name).unwrap();
+            assert!(is_domain(&domain), "{domain}");
+            assert!(is_valid(&format!("REQ-{domain}-0001")), "{domain}");
+        }
+    }
+
+    // verifies: REQ-IMPORT-0001.S10
+    #[test]
+    fn a_domain_is_words_joined_by_hyphens() {
+        assert!(is_domain("AUTH"));
+        assert!(is_domain("ACCOUNT-AND-PROFILE"));
+        assert!(is_domain("OAUTH2-FLOW"));
+        for bad in ["", "-A", "A-", "A--B", "A-1", "1A", "A B", "A_B"] {
+            assert!(!is_domain(bad), "{bad:?}");
         }
     }
 }

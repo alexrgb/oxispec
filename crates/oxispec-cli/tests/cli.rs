@@ -7069,6 +7069,69 @@ fn domains_in_the_config_choose_the_domain_of_an_import() {
     assert_eq!(run(p, &["check"]).code, 0);
 }
 
+// verifies: REQ-IMPORT-0001.S10
+#[test]
+fn a_spec_name_with_hyphens_keeps_them_in_its_folder_and_ids() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    let cap = p.join("openspec/specs/account-and-profile");
+    fs::create_dir_all(&cap).unwrap();
+    fs::write(
+        cap.join("spec.md"),
+        "# Account\n\n## Requirements\n\n### Requirement: Edit the name\nThe system SHALL let the admin edit the name.\n\n#### Scenario: Saved\n- **WHEN** a\n- **THEN** b\n",
+    )
+    .unwrap();
+    let out = run(p, &["import", "plan", "start", "--from", "openspec"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["import", "apply"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        p.join("oxispec/requirements/account-and-profile/edit-the-name.md")
+            .is_file(),
+        "{}",
+        out.stdout
+    );
+    let out = run(p, &["list", "--type", "requirement"]);
+    assert!(
+        out.stdout.contains("REQ-ACCOUNT-AND-PROFILE-0001"),
+        "{}",
+        out.stdout
+    );
+    // The domain filter, a new requirement and the check all work with the hyphens.
+    let out = run(
+        p,
+        &[
+            "list",
+            "--type",
+            "requirement",
+            "--domain",
+            "account-and-profile",
+        ],
+    );
+    assert!(
+        out.stdout.contains("REQ-ACCOUNT-AND-PROFILE-0001"),
+        "{}",
+        out.stdout
+    );
+    let out = run(
+        p,
+        &[
+            "new",
+            "requirement",
+            "ACCOUNT-AND-PROFILE",
+            "Change the photo",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("REQ-ACCOUNT-AND-PROFILE-0002"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(run(p, &["check"]).code, 0);
+}
+
 // verifies: REQ-IMPORT-0002.S6
 #[test]
 fn a_change_set_links_the_requirement_a_delta_names_by_its_source_id() {
@@ -7918,7 +7981,7 @@ fn nodes_are_listed_by_type_and_domain_and_shown_with_their_text() {
     );
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     assert!(
-        out.stdout.contains("REQ-POSTCANDIDATES-0001"),
+        out.stdout.contains("REQ-POST-CANDIDATES-0001"),
         "{}",
         out.stdout
     );
