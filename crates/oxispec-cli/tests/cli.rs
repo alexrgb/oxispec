@@ -35,7 +35,7 @@ fn init_new_check_show_roundtrip() {
     let out = run(p, &["init", "--preset", "standard"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(p.join(".oxispec/config.yaml").is_file());
-    assert!(p.join("specs/adr").is_dir());
+    assert!(p.join("oxispec/adr").is_dir());
 
     let out = run(p, &["new", "requirement", "auth", "Admin session timeout"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
@@ -50,7 +50,7 @@ fn init_new_check_show_roundtrip() {
     assert!(out.stdout.contains("3 nodes checked: 0 errors"));
 
     // Link a requirement to the ADR, and show the reverse link.
-    let file = p.join("specs/requirements/auth/admin-session-timeout.md");
+    let file = p.join("oxispec/requirements/auth/admin-session-timeout.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(
         &file,
@@ -179,7 +179,7 @@ fn link_command_adds_links_and_checks_the_target() {
     );
 
     // The rest of the file is untouched.
-    let file = p.join("specs/requirements/auth/admin-session-timeout.md");
+    let file = p.join("oxispec/requirements/auth/admin-session-timeout.md");
     let text = fs::read_to_string(file).unwrap();
     assert!(text.contains("### Requirement: Admin session timeout"));
     assert!(text.contains("links:\n  decided-by:\n    - ADR-0001\n"));
@@ -215,7 +215,7 @@ fn link_command_refuses_bad_input() {
     }
     // Nothing was written by any of the failed attempts.
     assert_eq!(run(p, &["check"]).code, 0);
-    let text = fs::read_to_string(p.join("specs/requirements/auth/password-length.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/requirements/auth/password-length.md")).unwrap();
     assert!(!text.contains("links:"), "{text}");
 }
 
@@ -226,7 +226,7 @@ fn check_reports_a_link_to_a_missing_scenario() {
     let p = dir.path();
     project_with_two_requirements_and_an_adr(p);
 
-    let file = p.join("specs/requirements/auth/password-length.md");
+    let file = p.join("oxispec/requirements/auth/password-length.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(
         &file,
@@ -387,10 +387,10 @@ fn index_parses_files_once_and_then_reuses_them() {
     assert_eq!(second["cache_written"], false);
 
     // Change one file and delete another.
-    let changed = p.join("specs/requirements/auth/password-length.md");
+    let changed = p.join("oxispec/requirements/auth/password-length.md");
     let text = fs::read_to_string(&changed).unwrap();
     fs::write(&changed, format!("{text}\nMore detail.\n")).unwrap();
-    fs::remove_file(p.join("specs/requirements/auth/admin-session-timeout.md")).unwrap();
+    fs::remove_file(p.join("oxispec/requirements/auth/admin-session-timeout.md")).unwrap();
     let third = json(&run(p, &["index", "--json"]));
     assert_eq!(third["parsed"], 1);
     assert_eq!(third["reused"], 1);
@@ -412,7 +412,7 @@ fn commands_give_the_same_answers_with_and_without_the_cache() {
     let dir = tempfile::tempdir().unwrap();
     let p = dir.path();
     project_with_two_requirements_and_an_adr(p);
-    let file = p.join("specs/requirements/auth/password-length.md");
+    let file = p.join("oxispec/requirements/auth/password-length.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(
         &file,
@@ -496,7 +496,8 @@ fn git_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) {
 }
 
 fn auth_path(p: &Path, slug: &str) -> std::path::PathBuf {
-    p.join("specs/requirements/auth").join(format!("{slug}.md"))
+    p.join("oxispec/requirements/auth")
+        .join(format!("{slug}.md"))
 }
 
 /// Four nodes, committed:
@@ -571,7 +572,7 @@ fn check_changed_reports_only_what_the_change_touches() {
 
     // Deleting ADR-0001 breaks `a`, which links to it. The old ID comes from git.
     fs::write(&a, &original).unwrap();
-    let adr = fs::read_dir(p.join("specs/adr"))
+    let adr = fs::read_dir(p.join("oxispec/adr"))
         .unwrap()
         .flatten()
         .next()
@@ -681,8 +682,8 @@ fn project_with_history(p: &Path) {
         p,
         &[
             "mv",
-            "specs/requirements/auth/admin-session-timeout.md",
-            "specs/requirements/auth/session-timeout.md",
+            "oxispec/requirements/auth/admin-session-timeout.md",
+            "oxispec/requirements/auth/session-timeout.md",
         ],
     );
     git(p, &["commit", "-q", "-m", "rename the file"]);
@@ -699,12 +700,12 @@ fn history_lists_each_change_and_follows_a_renamed_file() {
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     let text = out.stdout;
     assert!(
-        text.contains("REQ-AUTH-0001  specs/requirements/auth/session-timeout.md"),
+        text.contains("REQ-AUTH-0001  oxispec/requirements/auth/session-timeout.md"),
         "{text}"
     );
     assert!(text.contains("rename the file"), "{text}");
     assert!(
-        text.contains("moved: specs/requirements/auth/admin-session-timeout.md"),
+        text.contains("moved: oxispec/requirements/auth/admin-session-timeout.md"),
         "{text}"
     );
     assert!(text.contains("accept the timeout requirement"), "{text}");
@@ -910,7 +911,7 @@ fn revisions_can_be_branches_tags_hashes_or_dates() {
         ],
     );
     git(p, &["tag", "specs-v1"]);
-    let file = p.join("specs/requirements/auth/login.md");
+    let file = p.join("oxispec/requirements/auth/login.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(&file, text.replace("status: draft", "status: accepted")).unwrap();
     git_env(p, &["add", "-A"], &[]);
@@ -1318,7 +1319,7 @@ fn a_tag_says_when_spec_changes_are_left_out() {
 // ---- change sets ----
 
 fn change_file(p: &Path) -> std::path::PathBuf {
-    p.join("specs/changes/0001-tighten-timeouts.md")
+    p.join("oxispec/changes/0001-tighten-timeouts.md")
 }
 
 fn project_with_a_change_set(p: &Path) {
@@ -1548,7 +1549,7 @@ fn a_first_release_is_prepared_checked_and_published() {
     assert_eq!(v["version"], "0.1.0");
     assert_eq!(v["base"], serde_json::Value::Null);
     assert_eq!(v["id"], "REL-0001");
-    let manifest = p.join("specs/releases/0.1.0.md");
+    let manifest = p.join("oxispec/releases/0.1.0.md");
     let text = fs::read_to_string(&manifest).unwrap();
     assert!(text.contains("type: release") && text.contains("version: \"0.1.0\""));
     assert!(text.contains("The first release."), "{text}");
@@ -1614,7 +1615,7 @@ fn a_release_waits_for_its_change_sets_to_be_approved() {
     assert_eq!(v["base"], "0.1.0");
     assert_eq!(v["bump"], "minor");
     assert_eq!(v["change_sets"][0]["id"], "CHG-0001");
-    let text = fs::read_to_string(p.join("specs/releases/0.2.0.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/releases/0.2.0.md")).unwrap();
     assert!(text.contains("includes: [CHG-0001]"), "{text}");
     assert!(text.contains("## Added") && text.contains("## Change sets"));
     commit_all(p, "prepare 0.2.0");
@@ -1668,7 +1669,7 @@ fn removing_a_requirement_is_breaking_and_a_low_version_only_warns() {
     );
     assert!(out.stdout.contains("## Breaking"), "{}", out.stdout);
     assert!(out.stdout.contains("removed requirement REQ-AUTH-0002"));
-    assert!(!p.join("specs/releases/0.2.0.md").exists());
+    assert!(!p.join("oxispec/releases/0.2.0.md").exists());
 
     // A patch version for a breaking change is allowed, with a warning.
     let out = run(p, &["release", "prepare", "0.1.1"]);
@@ -1826,7 +1827,7 @@ fn ci_writes_sarif_junit_and_a_pull_request_comment() {
     assert_eq!(results[0]["ruleId"], "E002");
     assert_eq!(
         results[0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
-        "specs/requirements/auth/broken.md"
+        "oxispec/requirements/auth/broken.md"
     );
 
     let junit = fs::read_to_string(p.join("out/junit.xml")).unwrap();
@@ -1841,7 +1842,7 @@ fn ci_writes_sarif_junit_and_a_pull_request_comment() {
         "{comment}"
     );
     assert!(
-        comment.contains("specs/requirements/auth/broken.md"),
+        comment.contains("oxispec/requirements/auth/broken.md"),
         "{comment}"
     );
 }
@@ -3402,7 +3403,7 @@ fn claims_project(p: &Path) {
     let out = run(p, &["new", "vocabulary", "Auth words"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("VOC-0001"), "{}", out.stdout);
-    let vocab = p.join("specs/vocabulary/0001-auth-words.md");
+    let vocab = p.join("oxispec/vocabulary/0001-auth-words.md");
     let text = fs::read_to_string(&vocab).unwrap();
     fs::write(
         &vocab,
@@ -3581,7 +3582,7 @@ fn claims_need_their_module() {
     }
     assert_eq!(run(p, &["modules", "add", "consistency"]).code, 0);
     assert_eq!(run(p, &["new", "vocabulary", "Words"]).code, 0);
-    assert!(p.join("specs/vocabulary").is_dir());
+    assert!(p.join("oxispec/vocabulary").is_dir());
 }
 
 // verifies: REQ-MODULES-0001.S2
@@ -3646,7 +3647,7 @@ fn machine_project(p: &Path, properties: &str) {
     let out = run(p, &["new", "machine", "Order"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("SM-0001"), "{}", out.stdout);
-    let file = p.join("specs/machines/0001-order.md");
+    let file = p.join("oxispec/machines/0001-order.md");
     fs::write(
         &file,
         format!(
@@ -3667,7 +3668,7 @@ fn a_new_machine_passes_check_and_a_broken_property_comes_with_its_path() {
     let out = run(p, &["check"]);
     assert!(!out.stdout.contains("SM-0001"), "{}", out.stdout);
 
-    let file = p.join("specs/machines/0001-order.md");
+    let file = p.join("oxispec/machines/0001-order.md");
     fs::write(
         &file,
         format!(
@@ -3777,7 +3778,7 @@ fn ci_reports_a_new_broken_property_once() {
     machine_project(p, "  - never cancel after shipped\n");
     commit_all(p, "an order machine");
     git(p, &["checkout", "-q", "-b", "feature"]);
-    let file = p.join("specs/machines/0001-order.md");
+    let file = p.join("oxispec/machines/0001-order.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(
         &file,
@@ -3815,7 +3816,7 @@ fn machines_need_their_module() {
     }
     assert_eq!(run(p, &["modules", "add", "statemachines"]).code, 0);
     assert_eq!(run(p, &["new", "machine", "Order"]).code, 0);
-    assert!(p.join("specs/machines").is_dir());
+    assert!(p.join("oxispec/machines").is_dir());
 }
 
 // verifies: REQ-MODULES-0001.S2
@@ -3860,7 +3861,7 @@ fn mcp_offers_the_machine_tool_with_its_module() {
 
 /// Writes an architecture element or environment as a node.
 fn arch_node(p: &Path, file: &str, id: &str, ty: &str, block: &str) {
-    let path = p.join("architecture/model").join(file);
+    let path = p.join("oxispec/architecture").join(file);
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(
         path,
@@ -3924,7 +3925,7 @@ fn new_architecture_writes_elements_and_a_container_needs_its_parent() {
     let out = run(p, &["new", "architecture", "system", "Shop"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("C4-0001"), "{}", out.stdout);
-    assert!(p.join("architecture/model/0001-shop.md").is_file());
+    assert!(p.join("oxispec/architecture/0001-shop.md").is_file());
     let out = run(p, &["new", "architecture", "environment", "Production"]);
     assert!(out.stdout.contains("DEP-0001"), "{}", out.stdout);
     assert_eq!(run(p, &["check"]).code, 0);
@@ -4059,7 +4060,7 @@ fn architecture_needs_its_module() {
     }
     assert_eq!(run(p, &["modules", "add", "architecture"]).code, 0);
     assert_eq!(run(p, &["new", "architecture", "system", "Shop"]).code, 0);
-    assert!(p.join("architecture/model").is_dir());
+    assert!(p.join("oxispec/architecture").is_dir());
 }
 
 // verifies: REQ-MODULES-0001.S2
@@ -4633,7 +4634,7 @@ fn mcp_resources_come_in_pages_that_cover_every_node_once() {
     let dir = tempfile::tempdir().unwrap();
     let p = dir.path();
     assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
-    let folder = p.join("specs/requirements/bulk");
+    let folder = p.join("oxispec/requirements/bulk");
     fs::create_dir_all(&folder).unwrap();
     for n in 1..=530 {
         let id = format!("REQ-BULK-{n:04}");
@@ -5136,7 +5137,7 @@ fn a_profile_shapes_new_and_check_enforces_it() {
 
     let out = run(p, &["new", "adr", "Use Postgres"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
-    let file = p.join("specs/adr/0001-use-postgres.md");
+    let file = p.join("oxispec/adr/0001-use-postgres.md");
     let text = fs::read_to_string(&file).unwrap();
     assert!(
         text.contains("owner: \n") && text.contains("## Consequences"),
@@ -5220,7 +5221,7 @@ fn new_adr_can_pick_a_profile_and_refuses_one_for_another_type() {
     // Without a profile in the config, `new adr` writes what it always has.
     let out = run(p, &["new", "adr", "Plain"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
-    let plain = fs::read_to_string(p.join("specs/adr/0001-plain.md")).unwrap();
+    let plain = fs::read_to_string(p.join("oxispec/adr/0001-plain.md")).unwrap();
     assert!(plain.contains("status: proposed\n---\n# ADR-0001: Plain\n\n## Context"));
 
     let out = run(p, &["new", "adr", "Named", "--format", "default"]);
@@ -5325,13 +5326,13 @@ fn the_adr_formats_write_their_templates_and_hold_new_records_to_them() {
     {
         let out = run(p, &["new", "adr", format, "--format", format]);
         assert_eq!(out.code, 0, "{}", out.stderr);
-        let file = p.join(format!("specs/adr/{:04}-{format}.md", n + 1));
+        let file = p.join(format!("oxispec/adr/{:04}-{format}.md", n + 1));
         assert!(
             fs::read_to_string(&file).unwrap().contains(heading),
             "{format}"
         );
     }
-    let madr = fs::read_to_string(p.join("specs/adr/0002-madr.md")).unwrap();
+    let madr = fs::read_to_string(p.join("oxispec/adr/0002-madr.md")).unwrap();
     assert!(madr.contains("### Confirmation") && madr.contains("## Considered Options"));
     // The date is today's, in the same shape `change status` writes.
     let date = madr.lines().find_map(|l| l.strip_prefix("date: ")).unwrap();
@@ -5340,7 +5341,7 @@ fn the_adr_formats_write_their_templates_and_hold_new_records_to_them() {
         "{date}"
     );
     assert!(
-        fs::read_to_string(p.join("specs/adr/0003-y-statement.md"))
+        fs::read_to_string(p.join("oxispec/adr/0003-y-statement.md"))
             .unwrap()
             .contains("we decided for {option}")
     );
@@ -5380,8 +5381,8 @@ fn a_superseded_decision_is_checked_against_its_successor() {
 
     assert_eq!(run(p, &["new", "adr", "Use MySQL"]).code, 0);
     assert_eq!(run(p, &["new", "adr", "Use Postgres"]).code, 0);
-    let first = p.join("specs/adr/0001-use-mysql.md");
-    let second = p.join("specs/adr/0002-use-postgres.md");
+    let first = p.join("oxispec/adr/0001-use-mysql.md");
+    let second = p.join("oxispec/adr/0002-use-postgres.md");
     for file in [&first, &second] {
         let t = fs::read_to_string(file).unwrap();
         fs::write(file, t.replace("status: proposed", "status: accepted")).unwrap();
@@ -5422,13 +5423,13 @@ fn adr_convert_rewrites_a_decision_and_a_second_run_changes_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let p = dir.path();
     assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
-    fs::write(p.join("specs/adr/0001-use-postgres.md"), OLD_NYGARD).unwrap();
+    fs::write(p.join("oxispec/adr/0001-use-postgres.md"), OLD_NYGARD).unwrap();
 
     let out = run(p, &["adr", "convert", "--to", "madr", "--dry-run"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("would convert"), "{}", out.stdout);
     assert_eq!(
-        fs::read_to_string(p.join("specs/adr/0001-use-postgres.md")).unwrap(),
+        fs::read_to_string(p.join("oxispec/adr/0001-use-postgres.md")).unwrap(),
         OLD_NYGARD,
         "a dry run writes nothing"
     );
@@ -5437,7 +5438,7 @@ fn adr_convert_rewrites_a_decision_and_a_second_run_changes_nothing() {
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("Considered Options"), "{}", out.stdout);
     assert!(out.stdout.contains("formats:"), "tells how to choose it");
-    let text = fs::read_to_string(p.join("specs/adr/0001-use-postgres.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/adr/0001-use-postgres.md")).unwrap();
     assert!(text.contains("## Context and Problem Statement\n\nWe need transactions."));
     assert!(text.contains("### Consequences\n\nOps must run it."));
     assert!(text.starts_with("---\nid: ADR-0001"));
@@ -5448,7 +5449,7 @@ fn adr_convert_rewrites_a_decision_and_a_second_run_changes_nothing() {
     // And back: the text of the shared sections returns as it was.
     assert_eq!(run(p, &["adr", "convert", "--to", "nygard"]).code, 0);
     assert_eq!(
-        fs::read_to_string(p.join("specs/adr/0001-use-postgres.md")).unwrap(),
+        fs::read_to_string(p.join("oxispec/adr/0001-use-postgres.md")).unwrap(),
         OLD_NYGARD
     );
 }
@@ -5459,7 +5460,7 @@ fn adr_convert_refuses_what_is_not_an_adr_or_a_format() {
     let dir = tempfile::tempdir().unwrap();
     let p = dir.path();
     assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
-    fs::write(p.join("specs/adr/0001-use-postgres.md"), OLD_NYGARD).unwrap();
+    fs::write(p.join("oxispec/adr/0001-use-postgres.md"), OLD_NYGARD).unwrap();
     assert_eq!(run(p, &["new", "requirement", "auth", "Login"]).code, 0);
 
     let out = run(p, &["adr", "convert", "--to", "nope"]);
@@ -5496,7 +5497,7 @@ fn import_adr_brings_in_adr_tools_records_that_then_pass_check() {
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("would import"), "{}", out.stdout);
     assert!(
-        !p.join("specs/adr/0001-record-architecture-decisions.md")
+        !p.join("oxispec/adr/0001-record-architecture-decisions.md")
             .exists()
     );
 
@@ -5506,9 +5507,9 @@ fn import_adr_brings_in_adr_tools_records_that_then_pass_check() {
     );
     assert_eq!(out.code, 0, "{}", out.stderr);
     let one =
-        fs::read_to_string(p.join("specs/adr/0001-record-architecture-decisions.md")).unwrap();
+        fs::read_to_string(p.join("oxispec/adr/0001-record-architecture-decisions.md")).unwrap();
     assert!(one.contains("status: superseded") && one.contains("date: 2016-02-12"));
-    let two = fs::read_to_string(p.join("specs/adr/0002-use-rust.md")).unwrap();
+    let two = fs::read_to_string(p.join("oxispec/adr/0002-use-rust.md")).unwrap();
     assert!(two.contains("supersedes: [ADR-0001]"), "{two}");
 
     // Chosen in the config, the imported records are held to the format and pass.
@@ -5530,7 +5531,7 @@ fn import_adr_brings_in_adr_tools_records_that_then_pass_check() {
     );
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(
-        p.join("specs/adr/0011-record-architecture-decisions.md")
+        p.join("oxispec/adr/0011-record-architecture-decisions.md")
             .exists()
     );
 }
@@ -5550,7 +5551,7 @@ fn import_adr_reads_madr_and_log4brains_and_new_link_kinds_are_known() {
     .unwrap();
     let out = run(p, &["import", "adr", "--from", "madr", "--format", "madr"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
-    let text = fs::read_to_string(p.join("specs/adr/0001-use-markdown.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/adr/0001-use-markdown.md")).unwrap();
     assert!(text.contains("decision-makers: [Ann, Bo]"), "{text}");
 
     let brains = p.join("docs/adr");
@@ -5574,7 +5575,7 @@ fn import_adr_reads_madr_and_log4brains_and_new_link_kinds_are_known() {
         ],
     );
     assert_eq!(out.code, 0, "{}", out.stderr);
-    let redis = fs::read_to_string(p.join("specs/adr/0002-use-redis.md")).unwrap();
+    let redis = fs::read_to_string(p.join("oxispec/adr/0002-use-redis.md")).unwrap();
     assert!(redis.contains("- Tags: cache"), "{redis}");
 
     // `amends` and `clarifies` are links like the others: no warning, and `link` takes them.
@@ -5620,7 +5621,7 @@ fn debt_is_created_listed_by_severity_and_moved_along() {
         run(p, &["new", "debt", "Old script", "--severity", "low"]).code,
         0
     );
-    let text = fs::read_to_string(p.join("specs/debt/0001-no-backoff.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/debt/0001-no-backoff.md")).unwrap();
     assert!(text.contains("severity: high") && text.contains("arises-from: REQ-API-0001"));
 
     // A new item has no owner, so check says so; the one without a source says that too.
@@ -5645,7 +5646,7 @@ fn debt_is_created_listed_by_severity_and_moved_along() {
 
     let out = run(p, &["debt", "status", "DEBT-0001", "resolved"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
-    let text = fs::read_to_string(p.join("specs/debt/0001-no-backoff.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/debt/0001-no-backoff.md")).unwrap();
     assert!(text.contains("status: resolved"));
     assert!(!text.contains("date: 20") || text.contains(&format!("date: {}", today_utc())));
     let out = run(p, &["debt"]);
@@ -5675,7 +5676,7 @@ fn debt_that_is_late_is_reported_and_bad_input_is_refused() {
     let p = dir.path();
     assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
     fs::write(
-        p.join("specs/debt/0001-late.md"),
+        p.join("oxispec/debt/0001-late.md"),
         "---\nid: DEBT-0001\ntype: debt\nstatus: open\nseverity: critical\nowner: ann\ndate: 2000-01-01\ndue: 2000-06-01\nlinks:\n  arises-from: ADR-0001\n---\n# DEBT-0001: Late\n",
     )
     .unwrap();
@@ -5848,7 +5849,7 @@ fn each_requirement_style_writes_a_template_that_passes_its_own_check() {
         assert_eq!(out.code, 0, "{style}: {}", out.stderr);
         let out = run(p, &["check"]);
         assert_eq!(out.code, 0, "{style}: {}{}", out.stdout, out.stderr);
-        let text = fs::read_to_string(p.join("specs/requirements/auth/login.md")).unwrap();
+        let text = fs::read_to_string(p.join("oxispec/requirements/auth/login.md")).unwrap();
         assert!(text.contains("### Requirement: Login"), "{style}");
         match style {
             "ears" => assert!(
@@ -5882,7 +5883,7 @@ fn format_on_new_requirement_overrides_the_config_and_refuses_other_types() {
         ],
     );
     assert_eq!(out.code, 0, "{}", out.stderr);
-    let text = fs::read_to_string(p.join("specs/requirements/auth/login.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/requirements/auth/login.md")).unwrap();
     assert!(text.contains("As a <role>"));
     for bad in ["nygard", "nope"] {
         let out = run(p, &["new", "requirement", "auth", "Other", "--format", bad]);
@@ -5891,7 +5892,7 @@ fn format_on_new_requirement_overrides_the_config_and_refuses_other_types() {
 }
 
 fn requirement_file(p: &Path, name: &str, body: &str) {
-    let dir = p.join("specs/requirements/auth");
+    let dir = p.join("oxispec/requirements/auth");
     fs::create_dir_all(&dir).unwrap();
     fs::write(
         dir.join(format!("{name}.md")),
@@ -6011,7 +6012,7 @@ fn a_custom_profile_can_have_a_style_and_a_bad_style_is_e031() {
         out.stdout
     );
     assert_eq!(run(p, &["new", "requirement", "auth", "Login"]).code, 0);
-    let text = fs::read_to_string(p.join("specs/requirements/auth/login.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/requirements/auth/login.md")).unwrap();
     assert!(
         text.contains("## Rationale") && text.contains("When <trigger>"),
         "{text}"
@@ -6040,14 +6041,14 @@ fn import_specs_brings_in_openspec_and_lists_what_it_leaves_out() {
     let out = run(p, &["import", "specs", "--from", "openspec", "--dry-run"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("would import"), "{}", out.stdout);
-    assert!(!p.join("specs/requirements/auth/login.md").exists());
+    assert!(!p.join("oxispec/requirements/auth/login.md").exists());
 
     let out = run(p, &["import", "specs", "--from", "openspec"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     assert!(out.stdout.contains("REQ-AUTH-0001"), "{}", out.stdout);
     assert!(out.stdout.contains("design.md"), "{}", out.stdout);
     assert!(out.stdout.contains("add-2fa"), "{}", out.stdout);
-    let text = fs::read_to_string(p.join("specs/requirements/auth/login.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/requirements/auth/login.md")).unwrap();
     assert!(text.contains("### Requirement: Login"), "{text}");
     assert!(
         text.contains("#### Scenario: Good password {#S1}"),
@@ -6086,10 +6087,10 @@ fn a_spec_with_many_requirements_becomes_a_node_for_each() {
         .collect();
     assert_eq!(ids, ["REQ-BIN-1", "REQ-BIN-2"]);
     let first =
-        fs::read_to_string(p.join("specs/requirements/bin/deleting-moves-a-post-to-the-bin.md"))
+        fs::read_to_string(p.join("oxispec/requirements/bin/deleting-moves-a-post-to-the-bin.md"))
             .unwrap();
     let second =
-        fs::read_to_string(p.join("specs/requirements/bin/the-bin-is-emptied.md")).unwrap();
+        fs::read_to_string(p.join("oxispec/requirements/bin/the-bin-is-emptied.md")).unwrap();
     assert!(first.contains("aliases: [BIN-1]"), "{first}");
     assert!(first.contains("### Requirement: BIN-1 Deleting"), "{first}");
     assert!(first.contains("## Purpose") && !second.contains("## Purpose"));
@@ -6142,7 +6143,7 @@ fn import_specs_reads_kiro_and_spec_kit_and_marks_what_needs_filling_in() {
         v["nodes"][0]["notes"].to_string().contains("placeholder"),
         "{v}"
     );
-    let text = fs::read_to_string(p.join("specs/requirements/search/fr-001.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/requirements/search/fr-001.md")).unwrap();
     assert!(text.contains("<outcome>"), "{text}");
 }
 
@@ -6165,7 +6166,7 @@ fn import_specs_takes_plain_markdown_and_refuses_unknown_sources() {
         &["import", "specs", "--from", "markdown", "--dir", "notes.md"],
     );
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
-    let text = fs::read_to_string(p.join("specs/requirements/notes/retry.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/requirements/notes/retry.md")).unwrap();
     assert!(
         text.contains("The system SHALL satisfy this requirement: Failed jobs are retried."),
         "{text}"
@@ -6190,7 +6191,7 @@ fn import_specs_reads_a_prd_and_an_openapi_description() {
     let out = run(p, &["import", "specs", "--from", "prd", "--dir", "prd.md"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     let text =
-        fs::read_to_string(p.join("specs/requirements/prd/fr-1-shoppers-can-pay-by-card.md"))
+        fs::read_to_string(p.join("oxispec/requirements/prd/fr-1-shoppers-can-pay-by-card.md"))
             .unwrap();
     assert!(
         text.contains("### Requirement: FR-1 Shoppers can pay by card"),
@@ -6208,7 +6209,7 @@ fn import_specs_reads_a_prd_and_an_openapi_description() {
         &["import", "specs", "--from", "openapi", "--dir", "api.json"],
     );
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
-    let text = fs::read_to_string(p.join("specs/requirements/orders/post-orders.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/requirements/orders/post-orders.md")).unwrap();
     assert!(text.contains("### Requirement: POST /orders"), "{text}");
     assert!(text.contains("responds with 201: Created"), "{text}");
     let out = run(
@@ -6337,8 +6338,8 @@ fn risks_are_registered_listed_and_accepted_by_a_person() {
     );
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     let text = fs::read_to_string(
-        p.join("specs/risks").join(
-            fs::read_dir(p.join("specs/risks"))
+        p.join("oxispec/risks").join(
+            fs::read_dir(p.join("oxispec/risks"))
                 .unwrap()
                 .next()
                 .unwrap()
@@ -6382,7 +6383,7 @@ fn a_test_plan_is_read_against_the_tests() {
     );
     // A draft plan has no gaps that fail a strict run; an approved one does.
     assert_eq!(run(p, &["test-plan", "--strict"]).code, 0);
-    let file = fs::read_dir(p.join("specs/test-plans"))
+    let file = fs::read_dir(p.join("oxispec/test-plans"))
         .unwrap()
         .next()
         .unwrap()
@@ -6746,7 +6747,7 @@ fn project_with_a_standard(p: &Path, standard: &str) {
         run(p, &["new", "requirement", "dose", "Limit the dose"]).code,
         0
     );
-    let file = p.join("specs/requirements/dose/limit-the-dose.md");
+    let file = p.join("oxispec/requirements/dose/limit-the-dose.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(&file, text.replace("status: draft", "status: accepted")).unwrap();
     let config = p.join(".oxispec/config.yaml");
@@ -6778,7 +6779,7 @@ fn a_standard_asks_for_tests_and_sign_offs_until_they_exist() {
         "---\nid: TC-DOSE-0001\ntype: test-case\nlinks:\n  verifies:\n    - REQ-DOSE-0001.S1\n---\n# Dose test\n",
     )
     .unwrap();
-    let file = p.join("specs/requirements/dose/limit-the-dose.md");
+    let file = p.join("oxispec/requirements/dose/limit-the-dose.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(
         &file,
@@ -6912,14 +6913,14 @@ fn an_import_plan_is_looked_at_changed_and_only_then_applied() {
     let out = run(p, &["import", "apply", "--dry-run"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     assert!(out.stdout.contains("would write"), "{}", out.stdout);
-    assert!(!p.join("specs/requirements/auth/login.md").exists());
+    assert!(!p.join("oxispec/requirements/auth/login.md").exists());
     assert!(p.join(".oxispec/import-plan.json").is_file());
 
     let out = run(p, &["import", "apply"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     assert!(!p.join(".oxispec/import-plan.json").exists());
-    assert!(p.join("specs/requirements/auth/login.md").is_file());
-    let change = fs::read_dir(p.join("specs/changes"))
+    assert!(p.join("oxispec/requirements/auth/login.md").is_file());
+    let change = fs::read_dir(p.join("oxispec/changes"))
         .unwrap()
         .next()
         .unwrap()
@@ -6928,7 +6929,7 @@ fn an_import_plan_is_looked_at_changed_and_only_then_applied() {
     let text = fs::read_to_string(change).unwrap();
     assert!(text.contains("status: draft"), "{text}");
     assert!(text.contains("## Why\n\nPasswords leak."), "{text}");
-    assert!(p.join("specs/adr").read_dir().unwrap().count() == 1);
+    assert!(p.join("oxispec/adr").read_dir().unwrap().count() == 1);
     let check = run(p, &["check"]);
     assert!(!check.stdout.contains("E002"), "{}", check.stdout);
 }
@@ -7046,7 +7047,7 @@ fn domains_in_the_config_choose_the_domain_of_an_import() {
     let out = run(p, &["import", "apply"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     assert!(
-        p.join("specs/requirements/reports/shows-a-chart.md")
+        p.join("oxispec/requirements/reports/shows-a-chart.md")
             .is_file(),
         "{}",
         out.stdout
@@ -7058,7 +7059,7 @@ fn domains_in_the_config_choose_the_domain_of_an_import() {
     let out = run(p, &["show", "CAR-1"]);
     assert!(out.stdout.contains("REQ-SLIDES-1"), "{}", out.stdout);
     // The delta found the requirement by its title, in the folder the domain gave.
-    let change = fs::read_dir(p.join("specs/changes"))
+    let change = fs::read_dir(p.join("oxispec/changes"))
         .unwrap()
         .flatten()
         .map(|e| fs::read_to_string(e.path()).unwrap())
@@ -7097,7 +7098,7 @@ fn a_change_set_links_the_requirement_a_delta_names_by_its_source_id() {
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     let out = run(p, &["import", "apply"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
-    let changes: Vec<_> = fs::read_dir(p.join("specs/changes")).unwrap().collect();
+    let changes: Vec<_> = fs::read_dir(p.join("oxispec/changes")).unwrap().collect();
     let text = fs::read_to_string(changes[0].as_ref().unwrap().path()).unwrap();
     assert!(text.contains("- REQ-BIN-1"), "{text}");
 }
@@ -7210,7 +7211,7 @@ fn archived_changes_become_merged_change_sets_when_asked() {
             .map(|n| n["id"].as_str().unwrap().to_string())
             .unwrap_or_else(|| panic!("no change set `{title}` in {}", out.stdout));
         fs::read_to_string(
-            fs::read_dir(p.join("specs/changes"))
+            fs::read_dir(p.join("oxispec/changes"))
                 .unwrap()
                 .flatten()
                 .map(|e| e.path())
@@ -7290,7 +7291,7 @@ fn specs_can_be_imported_with_a_status_of_choice() {
         ],
     );
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
-    let text = fs::read_to_string(p.join("specs/requirements/auth/login.md")).unwrap();
+    let text = fs::read_to_string(p.join("oxispec/requirements/auth/login.md")).unwrap();
     assert!(text.contains("status: accepted"), "{text}");
 }
 
@@ -7381,7 +7382,7 @@ fn a_skipped_item_is_not_written_and_an_empty_plan_is_refused() {
     let out = run(p, &["import", "apply"]);
     assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     assert!(out.stdout.contains("skipped item 2"), "{}", out.stdout);
-    assert!(!p.join("specs/changes").read_dir().unwrap().any(|_| true));
+    assert!(!p.join("oxispec/changes").read_dir().unwrap().any(|_| true));
 }
 
 // verifies: REQ-DOCS-0001.S2
@@ -7478,7 +7479,7 @@ fn entity_project(p: &Path) {
     let out = run(p, &["new", "entity", "Order"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("ENT-0001"), "{}", out.stdout);
-    let file = p.join("specs/entities/0001-order.md");
+    let file = p.join("oxispec/entities/0001-order.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(
         &file,
@@ -7492,7 +7493,7 @@ fn entity_project(p: &Path) {
     let out = run(p, &["link", "REQ-ORDERS-0001", "about", "ENT-0001"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     run(p, &["new", "requirement", "orders", "Limit an order"]);
-    let limit = p.join("specs/requirements/orders/limit-an-order.md");
+    let limit = p.join("oxispec/requirements/orders/limit-an-order.md");
     let text = fs::read_to_string(&limit).unwrap();
     fs::write(
         &limit,
@@ -7569,7 +7570,7 @@ fn ci_says_what_an_entity_change_touches_and_whether_it_can_break_it() {
     assert_eq!(json(&out)["entities"].as_array().unwrap().len(), 0);
 
     // A new value is compatible, and a removed attribute is not.
-    let file = p.join("specs/entities/0001-order.md");
+    let file = p.join("oxispec/entities/0001-order.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(
         &file,
@@ -7739,7 +7740,7 @@ fn the_code_that_represents_an_entity_is_shown_and_missing_fields_are_warned_abo
     );
 
     // When the entity changes, `ci` names the code that represents it.
-    let file = p.join("specs/entities/0001-order.md");
+    let file = p.join("oxispec/entities/0001-order.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(&file, text.replace("  total: {type: int}\n", "")).unwrap();
     let out = run(p, &["ci", "--base", "main"]);
@@ -7781,7 +7782,7 @@ fn code_that_represents_an_entity_is_suspect_when_either_side_changes() {
     assert!(run(p, &["suspect"]).stdout.contains("1 ok, 0 suspect"));
 
     // The entity changes.
-    let file = p.join("specs/entities/0001-order.md");
+    let file = p.join("oxispec/entities/0001-order.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(&file, text.replace("shipped]", "shipped, returned]")).unwrap();
     let out = run(p, &["suspect"]);
@@ -7807,7 +7808,7 @@ fn a_node_about_an_entity_is_reviewed_again_when_the_entity_changes() {
     commit_all(p, "reviewed");
 
     // Reworded prose is not a change.
-    let file = p.join("specs/entities/0001-order.md");
+    let file = p.join("oxispec/entities/0001-order.md");
     let text = fs::read_to_string(&file).unwrap();
     fs::write(&file, text.replace("What it is,", "A note on what it is,")).unwrap();
     assert_eq!(run(p, &["suspect"]).code, 0);
@@ -7939,14 +7940,14 @@ fn a_node_is_found_verified_and_linked_by_its_alias() {
     let dir = tempfile::tempdir().unwrap();
     let p = dir.path();
     assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
-    fs::create_dir_all(p.join("specs/requirements/car")).unwrap();
+    fs::create_dir_all(p.join("oxispec/requirements/car")).unwrap();
     fs::write(
-        p.join("specs/requirements/car/slides.md"),
+        p.join("oxispec/requirements/car/slides.md"),
         "---\nid: REQ-CAR-1\ntype: requirement\nstatus: accepted\naliases: [CAR-1]\n---\n### Requirement: CAR-1 Slides\nThe system SHALL build slides.\n\n#### Scenario: One by one {#S1}\n- **WHEN** a slide is asked for\n- **THEN** it is built\n",
     )
     .unwrap();
     fs::write(
-        p.join("specs/requirements/car/other.md"),
+        p.join("oxispec/requirements/car/other.md"),
         "---\nid: REQ-CAR-2\ntype: requirement\nstatus: accepted\nlinks:\n  refines: [CAR-1]\n---\n### Requirement: More\nThe system SHALL do more.\n\n#### Scenario: More {#S1}\n- **WHEN** a\n- **THEN** b\n",
     )
     .unwrap();
@@ -7974,4 +7975,127 @@ fn a_node_is_found_verified_and_linked_by_its_alias() {
     assert!(out.stdout.contains("src/slides.rs"), "{}", out.stdout);
     let out = run(p, &["coverage", "--json"]);
     assert!(out.stdout.contains("\"verified\": 1"), "{}", out.stdout);
+}
+
+// verifies: REQ-PROJECT-0004.S1
+#[test]
+fn a_new_project_keeps_its_documents_in_the_oxispec_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);
+    assert!(
+        fs::read_to_string(p.join(".oxispec/config.yaml"))
+            .unwrap()
+            .contains("docs_dir: oxispec\n")
+    );
+    let out = run(p, &["new", "requirement", "auth", "Timeout"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(p.join("oxispec/requirements/auth").is_dir());
+    for sub in ["changes", "adr", "releases", "architecture", "risks"] {
+        assert!(p.join("oxispec").join(sub).is_dir(), "{sub}");
+    }
+    assert!(!p.join("specs").exists() && !p.join("architecture").exists());
+}
+
+// verifies: REQ-PROJECT-0004.S2
+#[test]
+fn documents_are_written_in_the_folder_the_project_chose() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    let out = run(p, &["init", "--preset", "full", "--docs-dir", "docs/spec/"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("docs/spec/"), "{}", out.stdout);
+    assert_eq!(run(p, &["new", "requirement", "auth", "Timeout"]).code, 0);
+    assert_eq!(run(p, &["new", "adr", "Use a queue"]).code, 0);
+    assert_eq!(run(p, &["new", "change", "Tighten"]).code, 0);
+    assert!(p.join("docs/spec/requirements/auth").is_dir());
+    assert_eq!(fs::read_dir(p.join("docs/spec/adr")).unwrap().count(), 1);
+    assert_eq!(
+        fs::read_dir(p.join("docs/spec/changes")).unwrap().count(),
+        1
+    );
+    // An import writes there too, and finds what an earlier import wrote there.
+    let cap = p.join("openspec/specs/bin");
+    fs::create_dir_all(&cap).unwrap();
+    fs::write(
+        cap.join("spec.md"),
+        "### Requirement: BIN-1 Delete\nThe system SHALL delete.\n#### Scenario: a\n- **WHEN** a\n- **THEN** b\n",
+    )
+    .unwrap();
+    let out = run(p, &["import", "specs", "--from", "openspec"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(p.join("docs/spec/requirements/bin").is_dir());
+    let out = run(
+        p,
+        &["import", "plan", "start", "--from", "openspec", "--json"],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("\"skip\""), "{}", out.stdout);
+    assert!(!p.join("specs").exists());
+    assert_eq!(run(p, &["check"]).code, 0);
+}
+
+// verifies: REQ-PROJECT-0004.S3
+#[test]
+fn a_project_without_docs_dir_keeps_writing_in_specs() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);
+    // The config of a project from before has no `docs_dir`.
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, text.replace("docs_dir: oxispec\n", "")).unwrap();
+    fs::remove_dir_all(p.join("oxispec")).unwrap();
+    assert_eq!(run(p, &["new", "requirement", "auth", "Timeout"]).code, 0);
+    assert_eq!(run(p, &["new", "adr", "Use a queue"]).code, 0);
+    assert_eq!(run(p, &["modules", "remove", "risks"]).code, 0);
+    assert_eq!(run(p, &["modules", "add", "risks"]).code, 0);
+    assert!(p.join("specs/risks").is_dir());
+    assert!(p.join("specs/requirements/auth").is_dir());
+    assert!(p.join("specs/adr").is_dir());
+    assert!(!p.join("oxispec").exists());
+    let out = run(p, &["new", "architecture", "component", "Shop"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(p.join("architecture/model").is_dir(), "{}", out.stdout);
+    // Saving the config again does not add the key.
+    assert!(
+        !fs::read_to_string(&config).unwrap().contains("docs_dir"),
+        "{}",
+        fs::read_to_string(&config).unwrap()
+    );
+}
+
+// verifies: REQ-PROJECT-0004.S4
+#[test]
+fn a_folder_outside_the_project_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    for bad in [
+        "/tmp/docs",
+        "../docs",
+        "a/../../b",
+        ".git",
+        ".oxispec/x",
+        "",
+    ] {
+        let out = run(p, &["init", "--docs-dir", bad]);
+        assert_ne!(out.code, 0, "`{bad}` was accepted: {}", out.stdout);
+        assert!(!p.join(".oxispec").exists(), "`{bad}` left a project");
+    }
+    assert_eq!(run(p, &["init"]).code, 0);
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(
+        &config,
+        text.replace("docs_dir: oxispec", "docs_dir: ../out"),
+    )
+    .unwrap();
+    let out = run(p, &["list"]);
+    assert_ne!(out.code, 0);
+    assert!(
+        format!("{}{}", out.stdout, out.stderr).contains("docs_dir"),
+        "{}{}",
+        out.stdout,
+        out.stderr
+    );
 }

@@ -1,6 +1,6 @@
 # The project's own specs
 
-OxiSpec describes itself with OxiSpec. The `specs/` folder holds nodes for the parts of the product that are written down as specs, and `oxispec check` and `oxispec coverage` run on them in CI (the `specs` job in `.github/workflows/ci.yml`). It covers the rules of the node file format, change sets, the MCP server, PRDs, API operations, tech debt, releases, risks, test plans, compliance profiles, format profiles and styles, import, search, diffs, rollback, impact, context packs, the trace scan and suspect links. The rest of the documentation is still plain markdown in `docs/`.
+OxiSpec describes itself with OxiSpec. The `specs/` folder (the project predates `docs_dir`, so its config has none and means `specs`) holds nodes for the parts of the product that are written down as specs, and `oxispec check` and `oxispec coverage` run on them in CI (the `specs` job in `.github/workflows/ci.yml`). It covers the rules of the node file format, change sets, the MCP server, PRDs, API operations, tech debt, releases, risks, test plans, compliance profiles, format profiles and styles, import, search, diffs, rollback, impact, context packs, the trace scan and suspect links. The rest of the documentation is still plain markdown in `docs/`.
 
 ## What is there
 

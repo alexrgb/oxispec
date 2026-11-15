@@ -102,7 +102,7 @@ Reverse links are computed, never stored. `oxispec show ADR-0001` lists the node
 
 ## Change sets
 
-A change set is a node of type `change`: a proposal to change the specs, with a lifecycle. Create one with `oxispec new change "Tighten timeouts"`, which writes `specs/changes/0001-tighten-timeouts.md` with sections for why, what changes and impact. Link it to what it changes with `oxispec link CHG-0001 changes REQ-AUTH-0001`.
+A change set is a node of type `change`: a proposal to change the specs, with a lifecycle. Create one with `oxispec new change "Tighten timeouts"`, which writes `oxispec/changes/0001-tighten-timeouts.md` with sections for why, what changes and impact. Link it to what it changes with `oxispec link CHG-0001 changes REQ-AUTH-0001`.
 
 ```text
 draft -> in-review -> approved -> merged -> reverted
@@ -136,7 +136,7 @@ An `architecture` block in an element or environment node feeds the model checks
 
 ## Releases
 
-A release of the specs is a **manifest** node of type `release`, written by `oxispec release prepare` as `specs/releases/<version>.md`, and an annotated git tag `specs-v<version>` on the commit that holds it. Enable the `releases` module (`oxispec modules add releases`) to use it.
+A release of the specs is a **manifest** node of type `release`, written by `oxispec release prepare` as `oxispec/releases/<version>.md`, and an annotated git tag `specs-v<version>` on the commit that holds it. Enable the `releases` module (`oxispec modules add releases`) to use it.
 
 ```yaml
 ---
@@ -184,6 +184,12 @@ oxispec release list                 # candidates and published releases
 
 Not built yet, from the design: pinned code commits, test results and coverage thresholds as gates (they need the scanners), `deprecate`, `release diff`, supported-until dates, and release lines.
 
+## Where the documents are
+
+`oxispec init` creates the documents of a project in `oxispec/`: `oxispec/requirements/<domain>/`, `oxispec/adr/`, `oxispec/changes/`, `oxispec/releases/` and the folders of the other modules; the architecture model is in `oxispec/architecture/`. `oxispec init --docs-dir docs/spec` puts them in another folder, which is stored as `docs_dir` in the config. It is a relative path of plain folder names, with none that starts with a dot; `init` and every command that reads the config refuse anything else. Files that are already there are found wherever they are, because nodes are found by their front matter, so moving a project to another folder means moving the files and changing `docs_dir`.
+
+A config with no `docs_dir`, as projects had before the folder could be chosen, means `specs` (and `architecture/model` for the architecture model), so nothing has to move. This repository's own specs are one such project.
+
 ## Project config
 
 `.oxispec/config.yaml`:
@@ -195,6 +201,7 @@ modules:
 - specs
 topology: single
 id_scheme: sequential
+docs_dir: oxispec          # where documents are written; without it, `specs`
 agents: [claude, cursor]   # only with the agents module; see agents.md
 trace:
   exclude: ["vendor/**"]   # optional

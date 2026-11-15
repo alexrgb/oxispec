@@ -5,7 +5,7 @@ A PRD in OxiSpec is not a file you write and import. It is a `prd` node for the 
 ## Start one
 
 ```bash
-oxispec new prd "Checkout"                      # specs/prd/0001-checkout.md, id PRD-0001
+oxispec new prd "Checkout"                      # oxispec/prd/0001-checkout.md, id PRD-0001
 oxispec new requirement pay "Pay by card"
 oxispec link REQ-PAY-0001 refines PRD-0001
 ```

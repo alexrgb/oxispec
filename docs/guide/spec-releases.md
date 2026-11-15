@@ -11,7 +11,7 @@ oxispec release prepare
 ```text
 no earlier release
 suggested version: 0.1.0
-wrote REL-0001 (specs/releases/0.1.0.md)
+wrote REL-0001 (oxispec/releases/0.1.0.md)
 review the notes, commit the file, then run `oxispec release check 0.1.0` and `oxispec release publish 0.1.0`
 ```
 
@@ -42,7 +42,7 @@ A gate marked `fail` blocks the release; some are advisory and only warn. More g
 oxispec release publish 0.1.0
 ```
 
-runs the gates again and creates the tag. It refuses to run if the release file is not committed yet, so commit `specs/releases/0.1.0.md` first. Tags are never moved. Push it as any tag: `git push origin specs-v0.1.0`.
+runs the gates again and creates the tag. It refuses to run if the release file is not committed yet, so commit `oxispec/releases/0.1.0.md` first. Tags are never moved. Push it as any tag: `git push origin specs-v0.1.0`.
 
 ## Use the releases
 

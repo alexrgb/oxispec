@@ -91,6 +91,7 @@ pub fn import_specs(root: &Path, opts: &Options, cache: bool) -> Result<()> {
         load_graph(root, cache),
         opts.scheme.unwrap_or(cfg.id_scheme),
         cfg.domains.clone(),
+        cfg.dir("requirements"),
     );
     let keep_ids = keeps_ids(source);
     ids.reserve(&drafts.iter().collect::<Vec<_>>(), keep_ids);
@@ -252,7 +253,7 @@ fn nodes_of(
 ) -> Result<Vec<Node>> {
     let domain = import::domain_for(&ids.domains, &d.name);
     let folder = domain.to_ascii_lowercase();
-    let dir = PathBuf::from("specs/requirements").join(&folder);
+    let dir = ids.requirements.join(&folder);
     let mut out = Vec::new();
     let fallback = if keep_ids {
         d.blocks
@@ -338,11 +339,19 @@ struct Ids {
     aliases: HashSet<String>,
     /// The `domains` of the config.
     domains: BTreeMap<String, String>,
+    /// The folder the requirement nodes are written in, relative to the project.
+    requirements: PathBuf,
 }
 
 impl Ids {
-    fn new(graph: oxispec_core::Graph, scheme: IdScheme, domains: BTreeMap<String, String>) -> Ids {
+    fn new(
+        graph: oxispec_core::Graph,
+        scheme: IdScheme,
+        domains: BTreeMap<String, String>,
+        requirements: PathBuf,
+    ) -> Ids {
         Ids {
+            requirements,
             domains,
             graph,
             scheme,
@@ -437,7 +446,7 @@ fn print_plan(plan: &Plan) {
     }
 }
 
-/// The source files that nodes under `specs/` say they were imported from.
+/// The source files that nodes under the root say they were imported from.
 fn already_imported(dir: &Path) -> HashSet<String> {
     let mut found = HashSet::new();
     let mut stack = vec![dir.to_path_buf()];
@@ -517,7 +526,7 @@ pub fn plan_start(
         bail!("nothing to import was found in {}", dir.display());
     }
     let mut plan = plan;
-    let done = already_imported(&root.join("specs"));
+    let done = already_imported(&root.join(&cfg.docs_dir));
     for item in &mut plan.items {
         if item.kind != Kind::Skip
             && item.sources.iter().all(|s| done.contains(s))
@@ -677,7 +686,12 @@ fn build(root: &Path, plan: &Plan, status: Option<&str>, cache: bool) -> Result<
                 .unwrap_or_default(),
         })
         .collect();
-    let mut ids = Ids::new(graph, cfg.id_scheme, cfg.domains.clone());
+    let mut ids = Ids::new(
+        graph,
+        cfg.id_scheme,
+        cfg.domains.clone(),
+        cfg.dir("requirements"),
+    );
     let mut outs: Vec<Out> = Vec::new();
     let live = |k: Kind| plan.items.iter().filter(move |i| i.kind == k);
     let mut paths: HashSet<PathBuf> = HashSet::new();
@@ -727,7 +741,7 @@ fn build(root: &Path, plan: &Plan, status: Option<&str>, cache: bool) -> Result<
         let made = import_plan::render_change(root, item, &id, &known, &cfg.domains)?;
         let suffix = id.strip_prefix("CHG-").unwrap_or(&id);
         let rel =
-            PathBuf::from("specs/changes").join(format!("{suffix}-{}.md", slug(&item.title)?));
+            config::node_dir(root, "changes")?.join(format!("{suffix}-{}.md", slug(&item.title)?));
         outs.push(Out {
             n: item.n,
             kind: item.kind,
@@ -750,7 +764,7 @@ fn build(root: &Path, plan: &Plan, status: Option<&str>, cache: bool) -> Result<
             let made = import_plan::render_adr(root, item, &id, &target, adr_status, &today)?;
             let suffix = id.strip_prefix("ADR-").unwrap_or(&id);
             let rel =
-                PathBuf::from("specs/adr").join(format!("{suffix}-{}.md", slug(&item.title)?));
+                config::node_dir(root, "adr")?.join(format!("{suffix}-{}.md", slug(&item.title)?));
             outs.push(Out {
                 n: item.n,
                 kind: item.kind,

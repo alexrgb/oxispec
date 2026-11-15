@@ -1,6 +1,6 @@
 //! `oxispec release`: prepare, check, publish and list spec releases.
 //!
-//! A release is a manifest node (`specs/releases/<version>.md`, type
+//! A release is a manifest node (`<root>/releases/<version>.md`, type
 //! `release`) that is committed, and an annotated git tag `specs-v<version>`
 //! on the commit that holds it. The release exists once the tag does, so
 //! publishing never edits a file.
@@ -81,8 +81,8 @@ fn graph_of(root: &Path, release: Option<&Released>) -> Result<Graph> {
     }
 }
 
-fn manifest_path(version: &Version) -> PathBuf {
-    PathBuf::from("specs/releases").join(format!("{version}.md"))
+fn manifest_path(cfg: &config::Config, version: &Version) -> PathBuf {
+    cfg.dir("releases").join(format!("{version}.md"))
 }
 
 fn manifest_text(
@@ -159,7 +159,7 @@ pub fn prepare(
         Some(node) => (node.id.clone(), node.path.clone()),
         None => (
             crate::allocate_id(&current, "REL-", cfg.id_scheme)?,
-            manifest_path(&version),
+            manifest_path(&cfg, &version),
         ),
     };
     let text = manifest_text(&id, &version, base_version, &summary, &change_sets);

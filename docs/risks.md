@@ -1,6 +1,6 @@
 # Risks
 
-A register of the risks to the application, kept as nodes of type `risk` in `specs/risks/`. It needs the `risks` module (`oxispec modules add risks`, included in the `standard` preset). A risk is a node and not a line in a spreadsheet, so it has an owner, can be linked to what deals with it, and can hold a release back.
+A register of the risks to the application, kept as nodes of type `risk` in `oxispec/risks/`. It needs the `risks` module (`oxispec modules add risks`, included in the `standard` preset). A risk is a node and not a line in a spreadsheet, so it has an owner, can be linked to what deals with it, and can hold a release back.
 
 OxiSpec does not find risks and is not a security scanner. It keeps the register honest: who owns each risk, when it was last looked at, what mitigates it, and who accepted it.
 

@@ -105,6 +105,10 @@ enum Command {
         /// scan then reads only their files. Default: every text file
         #[arg(long, value_delimiter = ',')]
         languages: Vec<String>,
+        /// The folder for the documents (requirements, decisions, change sets and the rest),
+        /// relative to the project. Default: oxispec
+        #[arg(long, value_name = "DIR")]
+        docs_dir: Option<String>,
     },
     /// The languages the trace scan knows: which have a grammar, which are read by their
     /// comment leaders, and which the project chose in `trace.languages`
@@ -1072,16 +1076,20 @@ fn run(cli: Cli) -> Result<ExitCode> {
             id_scheme,
             agents,
             languages,
+            docs_dir,
         } => {
             let dir = cli.root.unwrap_or_else(|| PathBuf::from("."));
             init(
                 &dir,
-                &preset,
-                &with,
-                &without,
-                id_scheme.into(),
-                &agents,
-                &languages,
+                &InitOptions {
+                    preset: &preset,
+                    with: &with,
+                    without: &without,
+                    id_scheme: id_scheme.into(),
+                    agent_clients: &agents,
+                    languages: &languages,
+                    docs_dir: docs_dir.as_deref(),
+                },
             )?;
             Ok(ExitCode::SUCCESS)
         }
@@ -1865,46 +1873,58 @@ fn require_module(cfg: &Config, module: &str) -> Result<()> {
 /// Folders created for modules that keep files on disk.
 fn ensure_module_dirs(root: &Path, cfg: &Config) -> Result<()> {
     if cfg.has("specs") {
-        fs::create_dir_all(root.join("specs/requirements"))?;
-        fs::create_dir_all(root.join("specs/changes"))?;
+        fs::create_dir_all(root.join(cfg.dir("requirements")))?;
+        fs::create_dir_all(root.join(cfg.dir("changes")))?;
     }
     if cfg.has("adrs") {
-        fs::create_dir_all(root.join("specs/adr"))?;
+        fs::create_dir_all(root.join(cfg.dir("adr")))?;
     }
     if cfg.has("releases") {
-        fs::create_dir_all(root.join("specs/releases"))?;
+        fs::create_dir_all(root.join(cfg.dir("releases")))?;
     }
     if cfg.has("consistency") {
-        fs::create_dir_all(root.join("specs/vocabulary"))?;
+        fs::create_dir_all(root.join(cfg.dir("vocabulary")))?;
     }
     if cfg.has("architecture") {
-        fs::create_dir_all(root.join("architecture/model"))?;
+        fs::create_dir_all(root.join(cfg.dir("architecture")))?;
     }
     if cfg.has("statemachines") {
-        fs::create_dir_all(root.join("specs/machines"))?;
+        fs::create_dir_all(root.join(cfg.dir("machines")))?;
     }
     if cfg.has("debt") {
-        fs::create_dir_all(root.join("specs/debt"))?;
+        fs::create_dir_all(root.join(cfg.dir("debt")))?;
     }
     if cfg.has("tests") {
-        fs::create_dir_all(root.join("specs/test-plans"))?;
+        fs::create_dir_all(root.join(cfg.dir("test-plans")))?;
     }
     if cfg.has("risks") {
-        fs::create_dir_all(root.join("specs/risks"))?;
+        fs::create_dir_all(root.join(cfg.dir("risks")))?;
     }
     Ok(())
 }
 
-// spec: REQ-PROJECT-0001
-fn init(
-    dir: &Path,
-    preset: &str,
-    with: &[String],
-    without: &[String],
+/// What `oxispec init` was asked for.
+struct InitOptions<'a> {
+    preset: &'a str,
+    with: &'a [String],
+    without: &'a [String],
     id_scheme: IdScheme,
-    agent_clients: &[String],
-    languages: &[String],
-) -> Result<()> {
+    agent_clients: &'a [String],
+    languages: &'a [String],
+    docs_dir: Option<&'a str>,
+}
+
+// spec: REQ-PROJECT-0001
+fn init(dir: &Path, opts: &InitOptions) -> Result<()> {
+    let InitOptions {
+        preset,
+        with,
+        without,
+        id_scheme,
+        agent_clients,
+        languages,
+        docs_dir,
+    } = *opts;
     if dir.join(config::CONFIG_PATH).exists() {
         bail!("{} is already initialized", dir.display());
     }
@@ -1932,6 +1952,10 @@ fn init(
         }
     }
     let mut cfg = Config::new(resolved, id_scheme);
+    if let Some(docs) = docs_dir {
+        config::check_docs_dir(docs).map_err(anyhow::Error::msg)?;
+        cfg.docs_dir = docs.trim_end_matches('/').to_string();
+    }
     cfg.trace = oxispec_core::languages::config_for(languages).map_err(anyhow::Error::msg)?;
     if cfg.has("agents") {
         cfg.agents = if agent_clients.is_empty() {
@@ -1954,9 +1978,10 @@ fn init(
         IdScheme::Random => "random",
     };
     outln!(
-        "initialized {} with modules: {} (ids: {scheme})",
+        "initialized {} with modules: {} (ids: {scheme}, documents in {}/)",
         dir.display(),
-        cfg.modules.join(", ")
+        cfg.modules.join(", "),
+        cfg.docs_dir
     );
     warn_planned(&cfg.modules);
     agents::write_after_init(dir, &cfg)?;
@@ -2544,7 +2569,7 @@ status: draft
 fn new_prd(root: &Path, title: &str, scheme: IdScheme, cache: bool) -> Result<(String, PathBuf)> {
     let id = allocate_id(&load_graph(root, cache), "PRD-", scheme)?;
     let suffix = id.strip_prefix("PRD-").unwrap_or(&id);
-    let rel = PathBuf::from("specs/prd").join(format!("{suffix}-{}.md", slug(title)?));
+    let rel = config::node_dir(root, "prd")?.join(format!("{suffix}-{}.md", slug(title)?));
     let body = PRD_TEMPLATE.replace("@ID@", &id).replace("@TITLE@", title);
     write_new(root, &rel, &body)?;
     Ok((id, rel))
@@ -2628,7 +2653,7 @@ fn new_requirement(
         bail!("the domain must be letters and digits, for example AUTH");
     }
     let id = allocate_id(&load_graph(root, cache), &format!("REQ-{domain}-"), scheme)?;
-    let rel = PathBuf::from("specs/requirements")
+    let rel = config::node_dir(root, "requirements")?
         .join(domain.to_ascii_lowercase())
         .join(format!("{}.md", slug(title)?));
     let today = oxispec_core::debt::today();
@@ -2660,7 +2685,7 @@ fn new_adr(
     };
     let id = allocate_id(&load_graph(root, cache), "ADR-", scheme)?;
     let suffix = id.strip_prefix("ADR-").unwrap_or(&id);
-    let rel = PathBuf::from("specs/adr").join(format!("{suffix}-{}.md", slug(title)?));
+    let rel = config::node_dir(root, "adr")?.join(format!("{suffix}-{}.md", slug(title)?));
     let today = oxispec_core::change::utc_date(
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -2696,7 +2721,7 @@ fn new_debt(
     }
     let id = allocate_id(&graph, "DEBT-", scheme)?;
     let suffix = id.strip_prefix("DEBT-").unwrap_or(&id);
-    let rel = PathBuf::from("specs/debt").join(format!("{suffix}-{}.md", slug(title)?));
+    let rel = config::node_dir(root, "debt")?.join(format!("{suffix}-{}.md", slug(title)?));
     let today = oxispec_core::debt::today();
     let links = from.map_or(String::new(), |f| format!("links:\n  arises-from: {f}\n"));
     let body = debt::TEMPLATE
@@ -2745,7 +2770,7 @@ fn new_test_plan(
 ) -> Result<(String, PathBuf)> {
     let id = allocate_id(&load_graph(root, cache), "TP-", scheme)?;
     let suffix = id.strip_prefix("TP-").unwrap_or(&id);
-    let rel = PathBuf::from("specs/test-plans").join(format!("{suffix}-{}.md", slug(title)?));
+    let rel = config::node_dir(root, "test-plans")?.join(format!("{suffix}-{}.md", slug(title)?));
     let body = TEST_PLAN_TEMPLATE
         .replace("@ID@", &id)
         .replace("@TITLE@", title)
@@ -2783,7 +2808,7 @@ fn new_risk(
     }
     let id = allocate_id(&graph, "RISK-", scheme)?;
     let suffix = id.strip_prefix("RISK-").unwrap_or(&id);
-    let rel = PathBuf::from("specs/risks").join(format!("{suffix}-{}.md", slug(title)?));
+    let rel = config::node_dir(root, "risks")?.join(format!("{suffix}-{}.md", slug(title)?));
     let links = from.map_or(String::new(), |f| format!("links:\n  arises-from: {f}\n"));
     let body = risks::TEMPLATE
         .replace("@ID@", &id)
@@ -2804,7 +2829,7 @@ fn new_vocabulary(
 ) -> Result<(String, PathBuf)> {
     let id = allocate_id(&load_graph(root, cache), "VOC-", scheme)?;
     let suffix = id.strip_prefix("VOC-").unwrap_or(&id);
-    let rel = PathBuf::from("specs/vocabulary").join(format!("{suffix}-{}.md", slug(title)?));
+    let rel = config::node_dir(root, "vocabulary")?.join(format!("{suffix}-{}.md", slug(title)?));
     let body = VOCABULARY_TEMPLATE
         .replace("@ID@", &id)
         .replace("@TITLE@", title);
@@ -2843,7 +2868,7 @@ fn new_entity(
     let id = allocate_id(&load_graph(root, cache), "ENT-", scheme)?;
     let suffix = id.strip_prefix("ENT-").unwrap_or(&id);
     let name = slug(title)?.replace('-', "_");
-    let rel = PathBuf::from("specs/entities").join(format!("{suffix}-{}.md", slug(title)?));
+    let rel = config::node_dir(root, "entities")?.join(format!("{suffix}-{}.md", slug(title)?));
     let body = ENTITY_TEMPLATE
         .replace("@ID@", &id)
         .replace("@TITLE@", title)
@@ -2900,7 +2925,7 @@ fn new_element(
     };
     let id = allocate_id(&load_graph(root, cache), prefix, scheme)?;
     let suffix = id.strip_prefix(prefix).unwrap_or(&id);
-    let rel = PathBuf::from("architecture/model").join(format!("{suffix}-{}.md", slug(title)?));
+    let rel = config::node_dir(root, "architecture")?.join(format!("{suffix}-{}.md", slug(title)?));
     let body = ELEMENT_TEMPLATE
         .replace("@ID@", &id)
         .replace("@TYPE@", ty)
@@ -2946,7 +2971,7 @@ fn new_machine(
 ) -> Result<(String, PathBuf)> {
     let id = allocate_id(&load_graph(root, cache), "SM-", scheme)?;
     let suffix = id.strip_prefix("SM-").unwrap_or(&id);
-    let rel = PathBuf::from("specs/machines").join(format!("{suffix}-{}.md", slug(title)?));
+    let rel = config::node_dir(root, "machines")?.join(format!("{suffix}-{}.md", slug(title)?));
     let body = MACHINE_TEMPLATE
         .replace("@ID@", &id)
         .replace("@TITLE@", title);
@@ -2962,7 +2987,7 @@ fn new_change(
 ) -> Result<(String, PathBuf)> {
     let id = allocate_id(&load_graph(root, cache), "CHG-", scheme)?;
     let suffix = id.strip_prefix("CHG-").unwrap_or(&id);
-    let rel = PathBuf::from("specs/changes").join(format!("{suffix}-{}.md", slug(title)?));
+    let rel = config::node_dir(root, "changes")?.join(format!("{suffix}-{}.md", slug(title)?));
     let body = CHANGE_TEMPLATE
         .replace("@ID@", &id)
         .replace("@TITLE@", title);

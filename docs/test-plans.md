@@ -1,6 +1,6 @@
 # Test plans
 
-A test plan says what is tested, how and where, and when testing is done. It is a node of type `test-plan` in `specs/test-plans/`, written with `oxispec new test-plan "Checkout release 1.2"`. It needs the `tests` module.
+A test plan says what is tested, how and where, and when testing is done. It is a node of type `test-plan` in `oxispec/test-plans/`, written with `oxispec new test-plan "Checkout release 1.2"`. It needs the `tests` module.
 
 The plan is text for people (scope, approach, levels, environments, exit criteria) plus links that a program can read:
 

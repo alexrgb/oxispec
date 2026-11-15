@@ -208,7 +208,15 @@ pub fn generate(bin: &Path, root: &Path, shape: &Shape) -> Result<()> {
     fs::create_dir_all(root)?;
     git(root, &["init", "-q", "-b", "main"])?;
     let out = Command::new(bin)
-        .args(["init", "--preset", "standard", "--agents", "none"])
+        .args([
+            "init",
+            "--preset",
+            "standard",
+            "--agents",
+            "none",
+            "--docs-dir",
+            "specs",
+        ])
         .current_dir(root)
         .output()
         .context("cannot run oxispec")?;

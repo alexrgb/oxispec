@@ -20,6 +20,7 @@ Usage: oxispec init [OPTIONS]
 - `--id-scheme <ID_SCHEME>`: How new IDs are numbered. Use random when several branches add specs at once. One of `sequential`, `random`. Default: `sequential`.
 - `--agents <AGENTS>`: AI clients that get skills when the agents module is on, comma separated: claude, cursor, copilot, gemini, agents, or none (default: claude,cursor,copilot,gemini).
 - `--languages <LANGUAGES>`: The languages of the project, comma separated (see `oxispec languages`). The trace scan then reads only their files. Default: every text file.
+- `--docs-dir <DIR>`: The folder for the documents (requirements, decisions, change sets and the rest), relative to the project. Default: oxispec.
 
 ## `oxispec languages`
 

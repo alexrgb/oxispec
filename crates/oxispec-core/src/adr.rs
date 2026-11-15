@@ -474,7 +474,7 @@ fn read_foreign(text: &str) -> Result<Foreign, Error> {
 #[derive(Debug, Clone)]
 pub struct Imported {
     pub id: String,
-    /// The path to write, relative to the project: `specs/adr/0001-title.md`.
+    /// The file to write, in the folder of the decisions: `0001-title.md`.
     pub path: String,
     /// The file it was read from.
     pub source: String,
@@ -656,7 +656,7 @@ pub fn import(
         }
         done.notes.extend(unresolved.remove(n).unwrap_or_default());
         let own = links.remove(n).unwrap_or_default();
-        let path = format!("specs/adr/{n:04}-{}.md", slug_of(rest, &rec.title));
+        let path = format!("{n:04}-{}.md", slug_of(rest, &rec.title));
         out.push(Imported {
             id: id.clone(),
             path,
@@ -795,10 +795,7 @@ mod tests_of_adr {
         .unwrap();
         assert_eq!(got.len(), 3);
         assert_eq!(got[0].id, "ADR-0001");
-        assert_eq!(
-            got[0].path,
-            "specs/adr/0001-record-architecture-decisions.md"
-        );
+        assert_eq!(got[0].path, "0001-record-architecture-decisions.md");
         assert!(got[0].text.contains("status: superseded"));
         assert!(got[0].text.contains("date: 2016-02-12"));
         assert!(
