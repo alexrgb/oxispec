@@ -12,6 +12,7 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder (the project predates
 | `REQ-FORMAT-0004` | A requirement has a SHALL and a scenario |
 | `REQ-FORMAT-0005` | Scenario anchors are unique and valid |
 | `REQ-FORMAT-0006` | Reverse links are computed |
+| `REQ-FORMAT-0008` | The requirements of a domain share one folder (W029) |
 | `REQ-CHANGE-0001`, `0002` | A change set follows a lifecycle; approval is recorded and can be withdrawn |
 | `REQ-MCP-0001` to `0005` | The read tools answer as the commands do; tools are offered by module and mode; arguments cannot be read as options; an agent can propose a change set but never approve it; an agent can search the operations |
 | `REQ-PRD-0001` | A PRD is made from the nodes |
@@ -53,7 +54,7 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder (the project predates
 | `REQ-STYLE-0001`, `0002` | A requirement is worded as its style asks; a node meets its format profile |
 | `REQ-IMPORT-0001`, `0002` | An import reads the specs of other tools; a plan proposes what each file becomes |
 | `REQ-TESTPLAN-0001`, `0002` | A test plan is checked; a plan is read against the tests |
-| `REQ-RISK-0001` to `0005` | A risk has valid fields; the level is worked out; a risk is accepted by a person; the register is ordered; a critical risk holds a release back |
+| `REQ-RISK-0001` to `0006` | A risk has valid fields; the level is worked out; a risk is accepted by a person; the register is ordered; a critical risk holds a release back; the register is an MCP tool when the module is on |
 | `REQ-DEBT-0001` to `0004` | A debt item has valid fields; a live item is held to account; the backlog is ordered; limits count live items |
 | `REQ-RELEASE-0001` to `0006` | The suggested version follows SemVer; gates hold a release back; release notes list what changed; releases need their module and a repository; the library has the version of the release; each published crate carries the license texts |
 | `ADR-0001` to `ADR-0004` | Why files are the source of truth, why IDs do not depend on paths, why reverse links are not stored, why the MCP server has no tool that approves |

@@ -248,6 +248,10 @@ pub const CODES: &[(&str, &str)] = &[
         "W028",
         "A change set is merged but some of its tasks are still open",
     ),
+    (
+        "W029",
+        "The requirements of one domain are in more than one folder",
+    ),
     ("I001", "A link to another project is not checked"),
     (
         "I002",
