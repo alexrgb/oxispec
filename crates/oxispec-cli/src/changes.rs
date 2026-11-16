@@ -94,6 +94,128 @@ pub fn change_status(
     Ok(())
 }
 
+/// Ticks (`done`) or unticks the tasks of a change set: the checkbox on the line of each task.
+// spec: REQ-CHANGE-0006
+pub fn change_task(
+    root: &Path,
+    id: &str,
+    done: bool,
+    wanted: &[String],
+    all: bool,
+    cache: bool,
+) -> Result<()> {
+    config::load(root)?;
+    let graph = index::load(root, cache).0;
+    let node = graph
+        .get(id)
+        .with_context(|| format!("no node with id {id}"))?;
+    if node.ty != "change" {
+        bail!("{} is a {}, not a change set", node.id, node.ty);
+    }
+    if node.tasks.is_empty() {
+        bail!("{} has no tasks under `## Tasks`", node.id);
+    }
+    if wanted.is_empty() && !all {
+        bail!("say which tasks: their numbers (`1.2`) or places (`#3`), or --all");
+    }
+    // The tasks to change, by position in the list.
+    let mut picked: Vec<usize> = Vec::new();
+    if all {
+        picked.extend(0..node.tasks.len());
+    }
+    for w in wanted {
+        let found: Vec<usize> = if let Some(n) = w.strip_prefix('#') {
+            n.parse::<usize>()
+                .ok()
+                .filter(|n| (1..=node.tasks.len()).contains(n))
+                .map(|n| vec![n - 1])
+                .unwrap_or_default()
+        } else {
+            node.tasks
+                .iter()
+                .enumerate()
+                .filter(|(_, t)| t.number.as_deref() == Some(w.trim_end_matches('.')))
+                .map(|(i, _)| i)
+                .collect()
+        };
+        match found.len() {
+            0 => bail!(
+                "{} has no task `{w}`; its tasks are {}",
+                node.id,
+                node.tasks
+                    .iter()
+                    .enumerate()
+                    .map(|(i, t)| t.number.clone().unwrap_or_else(|| format!("#{}", i + 1)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            1 => picked.push(found[0]),
+            _ => bail!(
+                "{} has more than one task `{w}`; use its place in the list (`#N`) instead",
+                node.id
+            ),
+        }
+    }
+    picked.sort_unstable();
+    picked.dedup();
+    let path = root.join(&node.path);
+    let text =
+        fs::read_to_string(&path).with_context(|| format!("cannot read {}", path.display()))?;
+    let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+    let mut changed = Vec::new();
+    for &i in &picked {
+        let task = &node.tasks[i];
+        if task.done == done {
+            continue;
+        }
+        let line = lines.get_mut(task.line - 1).with_context(|| {
+            format!(
+                "line {} of {} is not a task any more; run the command again",
+                task.line,
+                node.path.display()
+            )
+        })?;
+        let boxes: &[&str] = if done { &["[ ]"] } else { &["[x]", "[X]"] };
+        let Some(found) = boxes.iter().find(|b| line.contains(**b)) else {
+            bail!(
+                "line {} of {} is not a task any more; run the command again",
+                task.line,
+                node.path.display()
+            );
+        };
+        *line = line.replacen(found, if done { "[x]" } else { "[ ]" }, 1);
+        changed.push(i);
+    }
+    if !changed.is_empty() {
+        fs::write(&path, lines.join("\n"))
+            .with_context(|| format!("cannot write {}", path.display()))?;
+    }
+    let (was_done, total) = node.progress();
+    let now = if done {
+        was_done + changed.len()
+    } else {
+        was_done - changed.len()
+    };
+    for &i in &changed {
+        let t = &node.tasks[i];
+        outln!(
+            "{}: {} {}",
+            node.id,
+            t.number.clone().unwrap_or_else(|| format!("#{}", i + 1)),
+            if done { "done" } else { "not done" }
+        );
+    }
+    if changed.is_empty() {
+        outln!(
+            "{}: nothing to change, the tasks are already {}",
+            node.id,
+            if done { "done" } else { "not done" }
+        );
+    }
+    outln!("{}: {now}/{total} tasks done", node.id);
+    Ok(())
+}
+
 // spec: REQ-CHANGE-0004
 pub fn change_list(
     root: &Path,

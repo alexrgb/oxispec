@@ -3,7 +3,7 @@ name: oxispec-apply
 description: "Implement an approved change set in code and tests, and tie them to the specs with spec: and verifies: comments. Use when asked to build what a change set or requirement describes."
 metadata:
   generated-by: oxispec
-  content-hash: "762f23c7ac8eb5ea"
+  content-hash: "3945b093771585ad"
 ---
 
 # Apply a change set to the code
@@ -13,7 +13,7 @@ Implement an approved change set, and leave the code tied to the specs.
 ## Steps
 
 1. Read the change set and every node it changes: `oxispec show CHG-0001`, then `oxispec show` on each linked node. Check that the change set is `approved`. If it is not, stop and say so.
-2. Write the code. Put a comment on the function that implements a requirement:
+2. Write the code, and tick each task of the change set when it is done: `oxispec change task done CHG-0001 1.1` (a number, or `#3` for the third task). Put a comment on the function that implements a requirement:
    ```text
    // spec: REQ-AUTH-0001
    ```

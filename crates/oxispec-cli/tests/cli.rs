@@ -8628,3 +8628,67 @@ fn the_status_of_requirements_is_set_in_bulk() {
     assert!(refused(&["set-status", "accepted", "CHG-0001"]).contains("not a requirement"));
     assert_eq!(run(p, &["check"]).code, 0);
 }
+
+// verifies: REQ-CHANGE-0006.S1
+// verifies: REQ-CHANGE-0006.S2
+// verifies: REQ-CHANGE-0006.S3
+#[test]
+fn tasks_are_ticked_with_a_command() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    assert_eq!(run(p, &["new", "change", "Tighten"]).code, 0);
+    let change = fs::read_dir(p.join("oxispec/changes"))
+        .unwrap()
+        .flatten()
+        .next()
+        .unwrap()
+        .path();
+    let before = fs::read_to_string(&change).unwrap();
+    let text = format!(
+        "{}\n- [ ] 1.1 First\n- [ ] 1.2 Second\n- [X] Third has no number\n\n#### 2. More\n\n- [ ] 2.1 Fourth\n- [ ] 2.1 Fourth again\n",
+        before.trim_end()
+    );
+    fs::write(&change, &text).unwrap();
+    let progress = |p: &Path| run(p, &["show", "CHG-0001"]).stdout;
+    assert!(progress(p).contains("tasks: 1/5 done"), "{}", progress(p));
+    // By number and by place.
+    let out = run(p, &["change", "task", "done", "CHG-0001", "1.1", "#4"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("1.1 done"), "{}", out.stdout);
+    assert!(out.stdout.contains("3/5 tasks done"), "{}", out.stdout);
+    let after = fs::read_to_string(&change).unwrap();
+    assert_eq!(
+        after,
+        text.replacen("- [ ] 1.1 First", "- [x] 1.1 First", 1)
+            .replacen("- [ ] 2.1 Fourth\n", "- [x] 2.1 Fourth\n", 1)
+    );
+    // A task that is as asked is left; undo unticks both kinds of box.
+    let out = run(p, &["change", "task", "done", "CHG-0001", "1.1"]);
+    assert!(out.stdout.contains("nothing to change"), "{}", out.stdout);
+    let out = run(p, &["change", "task", "undo", "CHG-0001", "--all"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("0/5 tasks done"), "{}", out.stdout);
+    assert_eq!(
+        fs::read_to_string(&change).unwrap(),
+        text.replace("[X]", "[ ]")
+    );
+    // Refusals leave the file alone.
+    let kept = fs::read_to_string(&change).unwrap();
+    let refused = |args: &[&str]| {
+        let out = run(p, args);
+        assert_ne!(out.code, 0, "{args:?}");
+        format!("{}{}", out.stdout, out.stderr)
+    };
+    assert!(refused(&["change", "task", "done", "CHG-0001", "9.9"]).contains("1.1, 1.2"));
+    assert!(refused(&["change", "task", "done", "CHG-0001", "#9"]).contains("no task"));
+    assert!(refused(&["change", "task", "done", "CHG-0001", "2.1"]).contains("more than one"));
+    assert!(refused(&["change", "task", "done", "CHG-0001"]).contains("which tasks"));
+    assert_eq!(fs::read_to_string(&change).unwrap(), kept);
+    assert_eq!(run(p, &["new", "requirement", "auth", "Sign in"]).code, 0);
+    assert!(
+        refused(&["change", "task", "done", "REQ-AUTH-0001", "1.1"]).contains("not a change set")
+    );
+    fs::write(&change, before).unwrap();
+    assert!(refused(&["change", "task", "done", "CHG-0001", "--all"]).contains("no tasks"));
+}

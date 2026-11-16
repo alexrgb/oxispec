@@ -99,6 +99,7 @@ OxiSpec is built in small iterations. Each iteration is one branch, one pull req
 | 77 | `feat/change-tasks` | The checkboxes under `## Tasks` of a change set are tasks: `show` and `change list` print `7/9`, a task that writes an ID (`REQ-X-0001.S2`) is listed by `show` of that requirement, `check` warns about a task that names what does not exist (W027) and about a merged change set with open tasks (W028). `new change` writes the `## Tasks` heading. |
 | 78 | `feat/read-domain` | `oxispec read <name>` prints every requirement of one functionality with its scenarios, in order of number, then the change sets still open for it (with their tasks). The name is the folder of the requirements or the domain of their IDs, in any case and with or without hyphens. `--status`, `--json`; with no name it lists the functionalities. |
 | 79 | `feat/import-status` | `oxispec set-status <status> [IDs] [--domain NAME] [--from STATUS] [--dry-run] [--json]` sets the status of requirements, so imported drafts can be accepted a functionality at a time. Only requirements, only a status the profile allows; `change status`, `debt status` and `risk status` stay as they are. |
+| 80 | `feat/task-done` | `oxispec change task done|undo CHG-… 1.1 #3 [--all]` ticks or unticks tasks by number or place in the list, changing only the checkbox on their lines, and reports `7/9 tasks done`. Refuses a task that is not there, a number used twice, a node that is not a change set and a change set with no tasks. |
 | 23+ | later | OIDC and richer policies for server mode, natural language layer, workspaces and federation | See design sections 10, 14 and 19 |
 
 The plan changes as we learn. Change it in a pull request, like anything else.
@@ -191,4 +192,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 77**: a change set keeps its tasks: progress, the tasks that name a requirement, and two warnings.
 - **Iteration 78**: `oxispec read` prints the whole specification of one functionality on one page.
 - **Iteration 79**: `oxispec set-status` sets the status of requirements by ID or for a whole functionality.
+- **Iteration 80**: `change task done|undo` ticks the tasks of a change set.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).
