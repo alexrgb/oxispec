@@ -155,7 +155,53 @@ pub fn builtin() -> Vec<Profile> {
         style,
         statuses: Vec::new(),
     };
+    // An element of the architecture model: the prose around its `architecture` block.
+    let element = |ty: &str, required: &[&str], optional: &[&str], description: &str| Profile {
+        name: if ty == "deployment-environment" {
+            "c4-environment".into()
+        } else {
+            format!("c4-{ty}")
+        },
+        ty: ty.into(),
+        description: description.into(),
+        builtin: true,
+        sections: sections(required, optional),
+        fields: Vec::new(),
+        optional_fields: Vec::new(),
+        style: None,
+        statuses: Vec::new(),
+    };
     vec![
+        element(
+            "person",
+            &["Role"],
+            &["Goals"],
+            "A C4 person: the role, and what the person wants from the system",
+        ),
+        element(
+            "system",
+            &["Purpose"],
+            &["Users", "External dependencies"],
+            "A C4 software system: why it exists, who uses it and what it depends on",
+        ),
+        element(
+            "container",
+            &["Purpose", "Responsibilities"],
+            &["Technology choices", "Interfaces"],
+            "A C4 container: why it exists, what it is responsible for, its technology and interfaces",
+        ),
+        element(
+            "component",
+            &["Purpose", "Responsibilities"],
+            &["Interfaces"],
+            "A C4 component: why it exists, what it is responsible for and the interfaces it offers",
+        ),
+        element(
+            "deployment-environment",
+            &["Purpose"],
+            &["Topology", "Operations"],
+            "A C4 deployment environment: what it is for, how it is laid out and how it is run",
+        ),
         Profile {
             sections: sections(&[], &["Context", "Decision", "Consequences"]),
             ..adr(

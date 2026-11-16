@@ -37,6 +37,7 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder (the project predates
 | `REQ-STATUS-0001` | `status` summarizes the project |
 | `REQ-ADR-0001` to `0003` | A decision can be converted; decisions are imported from other tools; a superseded decision is checked against its successor |
 | `REQ-FORMATS-0001` | A format profile shapes a node |
+| `REQ-FORMATS-0003` | An architecture element is written in a profile |
 | `REQ-TAGS-0001` | A tag names a revision of the specs |
 | `REQ-ROBUSTNESS-0001`, `0002` | No input makes a command panic; commands that write at the same time do not collide |
 | `REQ-ROLLBACK-0003`, `0004` | A rollback is refused when it would do harm; it puts nodes back without committing |

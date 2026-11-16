@@ -21,6 +21,10 @@ formats:
 
 `oxispec new adr` then writes that profile's template. `--format NAME` picks another one for a single ADR. The profile has to be for the type, so `--format shall` on an ADR is refused.
 
+## Architecture elements
+
+The elements of the architecture model have a profile each, so a project can ask for the prose around the `architecture` block the same way it does for ADRs: `c4-person` (Role), `c4-system` (Purpose), `c4-container` and `c4-component` (Purpose and Responsibilities), and `c4-environment` (Purpose), each with a few optional sections. Choose one for a kind of element in the config, `formats: container: c4-container` (the key is the node type; for an environment it is `deployment-environment`), or for a single element with `oxispec new architecture container Api --format c4-container`. The new file has the sections of the profile and then the `architecture` block with the fields of its kind. A profile made for another kind is refused, and once the config chooses a profile, `check` reports E028 for an element that lacks a required section.
+
 ## Your own profile
 
 Define it under `profiles`:

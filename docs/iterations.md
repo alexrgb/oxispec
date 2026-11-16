@@ -194,4 +194,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 79**: `oxispec set-status` sets the status of requirements by ID or for a whole functionality.
 - **Iteration 80**: `change task done|undo` ticks the tasks of a change set.
 - **Iteration 81**: the requirements of the `risk` folder move into `risks`, and `check` warns (W029) when one domain is in two folders.
+- **Iteration 82**: format profiles for the architecture elements (`c4-person`, `c4-system`, `c4-container`, `c4-component`, `c4-environment`) and `new architecture --format`.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).
