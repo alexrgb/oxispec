@@ -5309,6 +5309,63 @@ fn a_running_mcp_server_sees_a_change_to_the_format_profiles() {
     assert!(applied, "the server never applied the new profile");
 }
 
+// verifies: REQ-FORMATS-0003.S1
+// verifies: REQ-FORMATS-0003.S2
+#[test]
+fn an_architecture_element_is_written_in_a_profile_and_held_to_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);
+
+    let out = run(
+        p,
+        &[
+            "new",
+            "architecture",
+            "container",
+            "Api",
+            "--format",
+            "c4-container",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let file = p.join("oxispec/architecture/0001-api.md");
+    let text = fs::read_to_string(&file).unwrap();
+    assert!(text.contains("## Responsibilities") && text.contains("```architecture\nname: Api"));
+    let out = run(
+        p,
+        &[
+            "new",
+            "architecture",
+            "system",
+            "Shop",
+            "--format",
+            "c4-container",
+        ],
+    );
+    assert_eq!(out.code, 2, "{}", out.stdout);
+    assert!(
+        out.stderr.contains("is for container nodes"),
+        "{}",
+        out.stderr
+    );
+
+    let list = run(p, &["formats", "list"]).stdout;
+    assert!(list.contains("c4-environment"), "{list}");
+
+    let config = p.join(".oxispec/config.yaml");
+    let cfg = fs::read_to_string(&config).unwrap();
+    fs::write(
+        &config,
+        format!("{cfg}formats:\n  container: c4-container\n"),
+    )
+    .unwrap();
+    assert!(!run(p, &["check", "--json"]).stdout.contains("E028"));
+    fs::write(&file, text.replace("## Responsibilities", "## Duties")).unwrap();
+    let out = run(p, &["check", "--json"]);
+    assert!(out.stdout.contains("E028"), "{}", out.stdout);
+}
+
 // verifies: REQ-ADR-0004.S1
 #[test]
 fn the_adr_formats_write_their_templates_and_hold_new_records_to_them() {

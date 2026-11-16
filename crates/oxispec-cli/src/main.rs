@@ -903,7 +903,14 @@ enum NewKind {
     /// A state machine: states, events and transitions, with properties that are checked
     Machine { title: String },
     /// An element of the architecture model, or a deployment environment
-    Architecture { kind: ElementKind, title: String },
+    Architecture {
+        kind: ElementKind,
+        title: String,
+        /// The format profile to write it in, such as c4-container. Default: the one the config
+        /// chooses for this kind of element
+        #[arg(long)]
+        format: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1635,9 +1642,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     require_module(&cfg, "consistency")?;
                     new_vocabulary(&root, &title, scheme, cache)?
                 }
-                NewKind::Architecture { kind, title } => {
+                NewKind::Architecture {
+                    kind,
+                    title,
+                    format,
+                } => {
                     require_module(&cfg, "architecture")?;
-                    new_element(&root, kind, &title, scheme, cache)?
+                    new_element(&root, &cfg, kind, &title, format.as_deref(), scheme, cache)?
                 }
                 NewKind::Machine { title } => {
                     require_module(&cfg, "statemachines")?;
@@ -3042,10 +3053,13 @@ fn element_fields(kind: ElementKind) -> &'static str {
     }
 }
 
+// spec: REQ-FORMATS-0003
 fn new_element(
     root: &Path,
+    cfg: &Config,
     kind: ElementKind,
     title: &str,
+    format: Option<&str>,
     scheme: IdScheme,
     cache: bool,
 ) -> Result<(String, PathBuf)> {
@@ -3056,10 +3070,25 @@ fn new_element(
         ElementKind::Component => ("C4-", "component"),
         ElementKind::Environment => ("DEP-", "deployment-environment"),
     };
+    let (profiles, _) = oxispec_core::formats::available(cfg);
+    let asked = format.or_else(|| cfg.formats.get(ty).map(String::as_str));
+    let template = match asked {
+        None => ELEMENT_TEMPLATE.to_string(),
+        Some(name) => match profiles.iter().find(|p| p.name == name) {
+            Some(p) if p.ty == ty => {
+                format!(
+                    "{}\n```architecture\nname: @TITLE@\n@FIELDS@```\n",
+                    p.template()
+                )
+            }
+            Some(p) => bail!("the profile `{name}` is for {} nodes, not {ty}", p.ty),
+            None => bail!("no profile named `{name}`; see `oxispec formats list`"),
+        },
+    };
     let id = allocate_id(&load_graph(root, cache), prefix, scheme)?;
     let suffix = id.strip_prefix(prefix).unwrap_or(&id);
     let rel = config::node_dir(root, "architecture")?.join(format!("{suffix}-{}.md", slug(title)?));
-    let body = ELEMENT_TEMPLATE
+    let body = template
         .replace("@ID@", &id)
         .replace("@TYPE@", ty)
         .replace("@TITLE@", title)

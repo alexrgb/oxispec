@@ -222,6 +222,7 @@ Usage: oxispec new architecture [OPTIONS] <KIND> <TITLE>
 
 - `<KIND>`
 - `<TITLE>`
+- `--format <FORMAT>`: The format profile to write it in, such as c4-container. Default: the one the config chooses for this kind of element.
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
 ## `oxispec change`
