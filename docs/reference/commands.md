@@ -4,7 +4,7 @@ Written by `oxispec docs reference` from the program itself. Do not edit it by h
 
 Every command also accepts `--root <ROOT>` (the project folder; default: the nearest parent with `.oxispec/config.yaml`), `--no-cache` (do not read or write the local index) and `--help`.
 
-Commands: [`init`](#oxispec-init), [`move-docs`](#oxispec-move-docs), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`entities`](#oxispec-entities), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`list`](#oxispec-list), [`read`](#oxispec-read), [`show`](#oxispec-show)
+Commands: [`init`](#oxispec-init), [`move-docs`](#oxispec-move-docs), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`entities`](#oxispec-entities), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`list`](#oxispec-list), [`set-status`](#oxispec-set-status), [`read`](#oxispec-read), [`show`](#oxispec-show)
 
 ## `oxispec init`
 
@@ -1111,6 +1111,21 @@ Usage: oxispec list [OPTIONS]
 - `--type <TYPE>`: Only nodes of this type. Repeat for several types.
 - `--status <STATUS>`: Only nodes with this status.
 - `--domain <DOMAIN>`: Only nodes whose ID is of this domain, such as `carousels` for REQ-CAROUSELS-0001.
+- `--json`
+
+## `oxispec set-status`
+
+Set the status of requirements: some by ID, or a whole functionality with --domain. Example: set-status accepted --domain authentication --from draft
+
+```text
+Usage: oxispec set-status [OPTIONS] <STATUS> [IDS]...
+```
+
+- `<STATUS>`: The status to give, one the requirement profile allows.
+- `<IDS>`: Requirements by ID.
+- `--domain <DOMAIN>`: Every requirement of a functionality: the folder of the requirements or the domain of their IDs (see `oxispec read`).
+- `--from <FROM>`: Only change those that have this status now.
+- `--dry-run`: Show what would change and write nothing.
 - `--json`
 
 ## `oxispec read`

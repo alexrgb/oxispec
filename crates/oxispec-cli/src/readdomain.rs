@@ -59,6 +59,38 @@ fn id_order(node_id: &str) -> (String, u64, String) {
     }
 }
 
+/// The requirements of the functionality with this name: those in the folder of that name, and
+/// those whose IDs use that domain.
+pub fn functionality<'a>(graph: &'a Graph, asked: &str) -> Vec<&'a Node> {
+    let key = squashed(asked);
+    graph
+        .nodes
+        .iter()
+        .filter(|n| n.ty == "requirement")
+        .filter(|n| {
+            group_of(n).is_some_and(|g| squashed(&g) == key)
+                || domain_of(&n.id).is_some_and(|d| squashed(&d) == key)
+        })
+        .collect()
+}
+
+/// The message for a name no requirement has, with the names there are.
+pub fn none_found(asked: &str, known: &[&str]) -> String {
+    if known.is_empty() {
+        format!("no requirements for `{asked}`")
+    } else {
+        format!(
+            "no requirements for `{asked}`; the functionalities are {}",
+            known.join(", ")
+        )
+    }
+}
+
+/// The names of the functionalities there are.
+pub fn names(graph: &Graph) -> Vec<String> {
+    groups(graph).into_keys().collect()
+}
+
 /// The text of a node without its front matter.
 fn body_of(root: &Path, node: &Node) -> Result<String> {
     let raw = std::fs::read_to_string(root.join(&node.path))
@@ -83,26 +115,10 @@ pub fn read(
     let Some(asked) = domain else {
         return list_domains(&all, json_output);
     };
-    let key = squashed(asked);
-    let mut nodes: Vec<&Node> = graph
-        .nodes
-        .iter()
-        .filter(|n| n.ty == "requirement")
-        .filter(|n| {
-            group_of(n).is_some_and(|g| squashed(&g) == key)
-                || domain_of(&n.id).is_some_and(|d| squashed(&d) == key)
-        })
-        .collect();
+    let mut nodes = functionality(&graph, asked);
     if nodes.is_empty() {
         let known: Vec<&str> = all.keys().map(String::as_str).collect();
-        bail!(
-            "no requirements for `{asked}`{}",
-            if known.is_empty() {
-                String::new()
-            } else {
-                format!("; the functionalities are {}", known.join(", "))
-            }
-        );
+        bail!("{}", none_found(asked, &known));
     }
     let name = asked.to_string();
     nodes.retain(|n| status.is_none_or(|s| n.status.as_deref() == Some(s)));

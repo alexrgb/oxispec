@@ -36,6 +36,8 @@ An AI agent can do this with you: the `oxispec-import-specs` skill makes it prop
 
 After an import, `oxispec list --type requirement --domain carousels` lists the requirements of one domain (the part of the ID between `REQ-` and the number), and `oxispec show ID --text` prints a node's text. To read everything about one functionality, use `oxispec read authentication` (the folder of the requirements, or the domain of their IDs such as `AUTH`; `oxispec read` alone lists them): every requirement with its scenarios on one page, then the change sets still open for it. `--status accepted` keeps one status and `--json` gives the same as data.
 
+Imported requirements are drafts unless the import was given `--status accepted`. To change the status afterwards, `oxispec set-status accepted --domain authentication` sets it for a whole functionality (the same name `read` takes), `oxispec set-status accepted REQ-AUTH-1 REQ-AUTH-2` for some, `--from draft` changes only those that are drafts, and `--dry-run` shows what would change and writes nothing. It is for requirements and for a status the requirement profile allows; change sets, debt and risks have their own `status` commands.
+
 ## Decision records
 
 `oxispec import adr --from adr-tools|madr|log4brains` reads the records of those tools, with their statuses and "superseded by" lines, as ADRs. A status may have words after it (`Accepted (built)`, `Accepted, amended by ADR-0003`): the status is taken from the first word, the rest is kept as a note, and an "amended by" becomes a link. The `adrs` module is switched on if it is off. `oxispec adr convert` changes an ADR from one format to another. See [profiles](../profiles.md#importing-decisions-from-other-tools).
