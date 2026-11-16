@@ -193,4 +193,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 78**: `oxispec read` prints the whole specification of one functionality on one page.
 - **Iteration 79**: `oxispec set-status` sets the status of requirements by ID or for a whole functionality.
 - **Iteration 80**: `change task done|undo` ticks the tasks of a change set.
+- **Iteration 81**: the requirements of the `risk` folder move into `risks`, and `check` warns (W029) when one domain is in two folders.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

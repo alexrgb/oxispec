@@ -6,6 +6,7 @@
 //! E009 link to a scenario that does not exist       E010 duplicate scenario anchor
 //! E011 invalid scenario anchor
 //! W027 task names an ID that does not exist  W028 merged change set with open tasks
+//! W029 requirements of one domain are in more than one folder
 //! E012 change set with a missing or unknown status
 //! E013 approved or merged change set without `approved_by`
 //! E042 alias that is invalid, is another node's ID, or belongs to two nodes
@@ -49,6 +50,7 @@ fn run_checks(graph: &Graph) -> Vec<Finding> {
         }
     }
     supersede_cycles(graph, &mut findings);
+    domain_folders(graph, &mut findings);
     findings.extend(crate::formats::check(graph));
     findings.extend(crate::debt::check(graph));
     findings.extend(crate::risks::check(graph));
@@ -333,6 +335,50 @@ fn tasks(graph: &Graph, node: &Node, out: &mut Vec<Finding>) {
             .at(&node.path, first)
             .node(&node.id),
         );
+    }
+}
+
+/// Requirements whose IDs use one domain (`REQ-RISK-0001`) but sit in more than one folder under
+/// `requirements/`: the folders are one functionality split in two, and `read` shows only one.
+/// One finding for each folder after the first, at its first file.
+// spec: REQ-FORMAT-0008
+fn domain_folders(graph: &Graph, out: &mut Vec<Finding>) {
+    use std::collections::BTreeMap;
+    let mut by_domain: BTreeMap<String, BTreeMap<String, &Node>> = BTreeMap::new();
+    for node in graph.nodes.iter().filter(|n| n.ty == "requirement") {
+        let parts: Vec<&str> = node.id.split('-').collect();
+        let Some(folder) = node
+            .path
+            .parent()
+            .and_then(|d| d.file_name())
+            .and_then(|n| n.to_str())
+            .filter(|n| *n != "requirements")
+        else {
+            continue;
+        };
+        if parts.len() >= 3 {
+            by_domain
+                .entry(parts[1..parts.len() - 1].join("-"))
+                .or_default()
+                .entry(folder.to_string())
+                .or_insert(node);
+        }
+    }
+    for (domain, folders) in by_domain.iter().filter(|(_, f)| f.len() > 1) {
+        let names: Vec<&str> = folders.keys().map(String::as_str).collect();
+        for (folder, node) in folders.iter().skip(1) {
+            out.push(
+                Finding::warning(
+                    "W029",
+                    format!(
+                        "the requirements of domain {domain} are in more than one folder ({}); {folder} is one of them",
+                        names.join(", ")
+                    ),
+                )
+                .at(&node.path, None)
+                .node(&node.id),
+            );
+        }
     }
 }
 
@@ -685,5 +731,27 @@ mod tests {
         assert!(run("merged", "- [x] a\n- [x] b\n").is_empty());
         assert!(run("merged", "").is_empty());
         assert!(run("draft", "- [ ] b\n").is_empty());
+    }
+
+    // verifies: REQ-FORMAT-0008.S1
+    #[test]
+    fn requirements_of_one_domain_in_two_folders_are_warned_about() {
+        let req = |n: u32| {
+            format!(
+                "---\nid: REQ-RISK-000{n}\ntype: requirement\n---\n### Requirement: X\nIt SHALL.\n\n#### Scenario: S {{#S1}}\n- **WHEN** a\n- **THEN** b\n"
+            )
+        };
+        let (a, b, c) = (req(1), req(2), req(3));
+        let split = codes(&graph(&[
+            ("requirements/risk/a.md", &a),
+            ("requirements/risks/b.md", &b),
+            ("requirements/risks/c.md", &c),
+        ]));
+        assert_eq!(split, vec!["W029"]);
+        let one = codes(&graph(&[
+            ("requirements/risks/a.md", &a),
+            ("requirements/risks/b.md", &b),
+        ]));
+        assert!(one.is_empty());
     }
 }
