@@ -3,7 +3,7 @@ name: oxispec-explore
 description: "Read the project's specs before writing or changing anything. Use to find requirements, decisions and their links, see how a node changed, or answer what the project has decided about a topic."
 metadata:
   generated-by: oxispec
-  content-hash: "170bb16fc52f8426"
+  content-hash: "10a30fb5fffa8427"
 ---
 
 # Explore the specs
@@ -13,7 +13,7 @@ Read what the project has already decided before you write or change anything. E
 ## Steps
 
 1. Find the nodes by their words: `oxispec search "session timeout"`. Narrow with `--type requirement` or `--status accepted`.
-2. Read a node, its links and the nodes that link to it: `oxispec show REQ-AUTH-0001`. A node that links to many others is a good place to look for side effects.
+2. To read everything the specs say about one functionality, use `oxispec read authentication` (a folder of requirements or the domain of their IDs; `oxispec read` alone lists them). It prints every requirement with its scenarios and the open change sets. To read one node, its links and the nodes that link to it: `oxispec show REQ-AUTH-0001`. A node that links to many others is a good place to look for side effects.
 3. If the node has links such as `decided-by`, `refines` or `governed-by`, show those too. The reason for a requirement is usually in its ADR.
 4. See how a node got here: `oxispec history REQ-AUTH-0001`. To read an older version, use `oxispec show REQ-AUTH-0001 --at <git rev>`.
 5. See what changed between two points: `oxispec diff <from> [<to>]`. Revisions can be a branch, a tag, a hash, or `date:YYYY-MM-DD`.

@@ -34,7 +34,7 @@ By default a spec becomes a requirement, an open change (proposal, design, tasks
 
 An AI agent can do this with you: the `oxispec-import-specs` skill makes it propose, ask about each item and show the drafts, and apply only after your yes.
 
-After an import, `oxispec list --type requirement --domain carousels` lists the requirements of one domain (the part of the ID between `REQ-` and the number), and `oxispec show ID --text` prints a node's text.
+After an import, `oxispec list --type requirement --domain carousels` lists the requirements of one domain (the part of the ID between `REQ-` and the number), and `oxispec show ID --text` prints a node's text. To read everything about one functionality, use `oxispec read authentication` (the folder of the requirements, or the domain of their IDs such as `AUTH`; `oxispec read` alone lists them): every requirement with its scenarios on one page, then the change sets still open for it. `--status accepted` keeps one status and `--json` gives the same as data.
 
 ## Decision records
 

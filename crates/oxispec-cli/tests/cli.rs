@@ -8439,3 +8439,102 @@ fn a_change_set_shows_its_progress_and_the_tasks_that_name_a_requirement() {
     assert!(!out.stdout.contains("Test it"), "{}", out.stdout);
     assert_eq!(run(p, &["check"]).code, 0);
 }
+
+// verifies: REQ-SEARCH-0004.S1
+// verifies: REQ-SEARCH-0004.S2
+// verifies: REQ-SEARCH-0004.S3
+#[test]
+fn a_whole_functionality_is_read_on_one_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    let cap = p.join("openspec/specs/account-and-profile");
+    fs::create_dir_all(&cap).unwrap();
+    let mut spec = String::from("# Account\n\n## Requirements\n\n");
+    for i in 1..=11 {
+        spec.push_str(&format!(
+            "### Requirement: ACCT-{i} Thing number {i}\nThe system SHALL do {i}.\n\n#### Scenario: Works\n- **WHEN** a\n- **THEN** b\n\n"
+        ));
+    }
+    fs::write(cap.join("spec.md"), spec).unwrap();
+    let other = p.join("openspec/specs/billing");
+    fs::create_dir_all(&other).unwrap();
+    fs::write(other.join("spec.md"), OPENSPEC_AUTH).unwrap();
+    assert_eq!(run(p, &["import", "specs", "--from", "openspec"]).code, 0);
+    // A change set that changes one of them, and a finished one that does too.
+    assert_eq!(run(p, &["new", "change", "Tighten"]).code, 0);
+    assert_eq!(run(p, &["new", "change", "Old"]).code, 0);
+    assert_eq!(
+        run(p, &["link", "CHG-0001", "changes", "REQ-ACCT-3"]).code,
+        0
+    );
+    assert_eq!(
+        run(p, &["link", "CHG-0002", "changes", "REQ-ACCT-3"]).code,
+        0
+    );
+    assert_eq!(
+        run(p, &["change", "status", "CHG-0002", "in-review", "--force"]).code,
+        0
+    );
+    for status in ["in-review", "approved", "merged"] {
+        let args: &[&str] = if status == "approved" {
+            &["change", "status", "CHG-0002", status, "--by", "Ann"]
+        } else {
+            &["change", "status", "CHG-0002", status]
+        };
+        assert_eq!(run(p, args).code, 0);
+    }
+    for name in ["account-and-profile", "ACCT", "AccountAndProfile"] {
+        let out = run(p, &["read", name]);
+        assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+        assert!(
+            out.stdout.contains("11 requirement(s), 11 scenario(s)"),
+            "{}",
+            out.stdout
+        );
+        assert!(!out.stdout.contains("billing"), "{}", out.stdout);
+        // REQ-ACCT-2 comes before REQ-ACCT-10, whatever the letters say.
+        let two = out.stdout.find("## REQ-ACCT-2 ").unwrap();
+        let ten = out.stdout.find("## REQ-ACCT-10 ").unwrap();
+        assert!(two < ten, "{}", out.stdout);
+        assert!(
+            out.stdout.contains("The system SHALL do 7."),
+            "{}",
+            out.stdout
+        );
+        assert!(
+            out.stdout.contains("#### Scenario: Works {#S1}"),
+            "{}",
+            out.stdout
+        );
+        assert!(out.stdout.contains("## Open change sets"), "{}", out.stdout);
+        assert!(out.stdout.contains("CHG-0001 [draft]"), "{}", out.stdout);
+        assert!(!out.stdout.contains("CHG-0002"), "{}", out.stdout);
+    }
+    let out = run(p, &["read", "ACCT", "--status", "accepted"]);
+    assert!(out.stdout.contains("0 requirement(s)"), "{}", out.stdout);
+    let out = run(p, &["read", "ACCT", "--json"]);
+    let json: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+    assert_eq!(json["requirements"].as_array().unwrap().len(), 11);
+    assert_eq!(json["requirements"][0]["id"], "REQ-ACCT-1");
+    assert!(
+        json["requirements"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("SHALL do 1")
+    );
+    assert_eq!(json["open_changes"][0]["id"], "CHG-0001");
+    // With no name the functionalities are listed, and an unknown name fails.
+    let out = run(p, &["read"]);
+    assert!(out.stdout.contains("account-and-profile"), "{}", out.stdout);
+    assert!(out.stdout.contains("REQ-ACCT"), "{}", out.stdout);
+    assert!(out.stdout.contains("billing"), "{}", out.stdout);
+    let out = run(p, &["read", "nothing"]);
+    assert_ne!(out.code, 0);
+    assert!(
+        format!("{}{}", out.stdout, out.stderr).contains("account-and-profile, billing"),
+        "{}{}",
+        out.stdout,
+        out.stderr
+    );
+}

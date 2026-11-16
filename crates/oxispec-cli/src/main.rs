@@ -36,6 +36,7 @@ mod importer;
 mod machines;
 mod mcp;
 mod movedocs;
+mod readdomain;
 mod reference;
 mod releases;
 mod risks;
@@ -553,6 +554,18 @@ enum Command {
         /// Only nodes whose ID is of this domain, such as `carousels` for REQ-CAROUSELS-0001
         #[arg(long)]
         domain: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Read the whole specification of one functionality (a domain): every requirement with its
+    /// scenarios, and the change sets still open. Without a domain: the domains there are
+    Read {
+        /// The domain, such as `account-and-profile` (the part of REQ-ACCOUNT-AND-PROFILE-0001
+        /// between `REQ-` and the number), or the folder of the requirements
+        domain: Option<String>,
+        /// Only requirements with this status
+        #[arg(long)]
+        status: Option<String>,
         #[arg(long)]
         json: bool,
     },
@@ -1781,6 +1794,20 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 bail!("`index` builds the local index, so it cannot be used with --no-cache");
             }
             index_command(&project_root(cli.root.as_deref())?, rebuild, json)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Read {
+            domain,
+            status,
+            json,
+        } => {
+            readdomain::read(
+                &project_root(cli.root.as_deref())?,
+                domain.as_deref(),
+                status.as_deref(),
+                json,
+                cache,
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Show { id, text, json, at } => {
