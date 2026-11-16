@@ -43,6 +43,7 @@ mod risks;
 mod rollback;
 mod search;
 mod server;
+mod setstatus;
 mod site;
 mod status;
 mod testplan;
@@ -554,6 +555,26 @@ enum Command {
         /// Only nodes whose ID is of this domain, such as `carousels` for REQ-CAROUSELS-0001
         #[arg(long)]
         domain: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Set the status of requirements: some by ID, or a whole functionality with --domain.
+    /// Example: set-status accepted --domain authentication --from draft
+    SetStatus {
+        /// The status to give, one the requirement profile allows
+        status: String,
+        /// Requirements by ID
+        ids: Vec<String>,
+        /// Every requirement of a functionality: the folder of the requirements or the domain of
+        /// their IDs (see `oxispec read`)
+        #[arg(long)]
+        domain: Option<String>,
+        /// Only change those that have this status now
+        #[arg(long)]
+        from: Option<String>,
+        /// Show what would change and write nothing
+        #[arg(long)]
+        dry_run: bool,
         #[arg(long)]
         json: bool,
     },
@@ -1794,6 +1815,26 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 bail!("`index` builds the local index, so it cannot be used with --no-cache");
             }
             index_command(&project_root(cli.root.as_deref())?, rebuild, json)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::SetStatus {
+            status,
+            ids,
+            domain,
+            from,
+            dry_run,
+            json,
+        } => {
+            let root = project_root(cli.root.as_deref())?;
+            let _lock = lock_project(&root)?;
+            let request = setstatus::Request {
+                status: &status,
+                ids: &ids,
+                domain: domain.as_deref(),
+                from: from.as_deref(),
+                dry_run,
+            };
+            setstatus::set_status(&root, &request, json, cache)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Read {

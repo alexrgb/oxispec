@@ -8538,3 +8538,93 @@ fn a_whole_functionality_is_read_on_one_page() {
         out.stderr
     );
 }
+
+// verifies: REQ-IMPORT-0005.S1
+// verifies: REQ-IMPORT-0005.S2
+// verifies: REQ-IMPORT-0005.S3
+// verifies: REQ-IMPORT-0005.S4
+#[test]
+fn the_status_of_requirements_is_set_in_bulk() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    for cap in ["authentication", "billing"] {
+        let d = p.join("openspec/specs").join(cap);
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join("spec.md"), OPENSPEC_AUTH).unwrap();
+    }
+    assert_eq!(run(p, &["import", "specs", "--from", "openspec"]).code, 0);
+    let list = |p: &Path| {
+        run(
+            p,
+            &["list", "--type", "requirement", "--status", "accepted"],
+        )
+        .stdout
+    };
+    assert!(list(p).contains("0 node(s)"), "{}", list(p));
+    // A dry run says what would change and writes nothing.
+    let out = run(
+        p,
+        &[
+            "set-status",
+            "accepted",
+            "--domain",
+            "authentication",
+            "--dry-run",
+        ],
+    );
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("would change"), "{}", out.stdout);
+    assert!(out.stdout.contains("nothing was written"), "{}", out.stdout);
+    assert!(list(p).contains("0 node(s)"), "{}", list(p));
+    // One functionality, the other stays a draft.
+    let out = run(p, &["set-status", "accepted", "--domain", "authentication"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("-> accepted"), "{}", out.stdout);
+    let accepted = list(p);
+    assert!(accepted.contains("REQ-AUTHENTICATION-"), "{accepted}");
+    assert!(!accepted.contains("REQ-BILLING-"), "{accepted}");
+    // Running it again changes nothing; --from leaves others alone.
+    let out = run(p, &["set-status", "accepted", "--domain", "authentication"]);
+    assert!(out.stdout.contains("changed 0"), "{}", out.stdout);
+    assert!(out.stdout.contains("already accepted"), "{}", out.stdout);
+    let out = run(
+        p,
+        &[
+            "set-status",
+            "proposed",
+            "--domain",
+            "billing",
+            "--from",
+            "accepted",
+        ],
+    );
+    assert!(out.stdout.contains("left as they are"), "{}", out.stdout);
+    // By ID.
+    let out = run(p, &["set-status", "accepted", "REQ-BILLING-0001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(list(p).contains("REQ-BILLING-0001"), "{}", list(p));
+    // Refusals.
+    let refused = |args: &[&str]| {
+        let out = run(p, args);
+        assert_ne!(out.code, 0, "{args:?}");
+        format!("{}{}", out.stdout, out.stderr)
+    };
+    // A profile that lists statuses decides which are allowed.
+    let config = p.join(".oxispec/config.yaml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(
+        &config,
+        format!(
+            "{text}formats:\n  requirement: gated\nprofiles:\n  gated:\n    type: requirement\n    description: Two statuses\n    statuses: [draft, accepted]\n"
+        ),
+    )
+    .unwrap();
+    assert!(refused(&["set-status", "finished", "REQ-BILLING-0001"]).contains("allows"));
+    assert_eq!(run(p, &["set-status", "draft", "REQ-BILLING-0001"]).code, 0);
+    assert!(refused(&["set-status", "accepted"]).contains("which requirements"));
+    assert!(refused(&["set-status", "accepted", "--domain", "nothing"]).contains("billing"));
+    assert_eq!(run(p, &["new", "change", "A change"]).code, 0);
+    assert!(refused(&["set-status", "accepted", "CHG-0001"]).contains("not a requirement"));
+    assert_eq!(run(p, &["check"]).code, 0);
+}
