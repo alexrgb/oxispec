@@ -972,6 +972,18 @@ enum ChangeAction {
         #[arg(long)]
         force: bool,
     },
+    /// Tick or untick tasks of a change set. Example: change task done CHG-0001 1.1 1.2
+    Task {
+        /// done or undo
+        #[arg(value_parser = ["done", "undo"])]
+        action: String,
+        id: String,
+        /// The tasks: their number (`1.2`) or their place in the list (`#3`)
+        tasks: Vec<String>,
+        /// Every task of the change set
+        #[arg(long)]
+        all: bool,
+    },
     /// List change sets
     List {
         /// Only change sets with this status
@@ -1645,6 +1657,12 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     by,
                     force,
                 } => changes::change_status(&root, &id, &status, by.as_deref(), force, cache)?,
+                ChangeAction::Task {
+                    action,
+                    id,
+                    tasks,
+                    all,
+                } => changes::change_task(&root, &id, action == "done", &tasks, all, cache)?,
                 ChangeAction::List { status, json } => {
                     changes::change_list(&root, status.as_deref(), json, cache)?
                 }

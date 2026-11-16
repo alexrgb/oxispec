@@ -232,7 +232,7 @@ Work with change sets
 Usage: oxispec change [OPTIONS] <COMMAND>
 ```
 
-Subcommands: `status`, `list`
+Subcommands: `status`, `task`, `list`
 
 ### `oxispec change status`
 
@@ -246,6 +246,19 @@ Usage: oxispec change status [OPTIONS] <ID> <STATUS>
 - `<STATUS>`
 - `--by <BY>`: Who approves, when moving to approved (default: git user.name).
 - `--force`: Skip a step, or set a status that is not the next one.
+
+### `oxispec change task`
+
+Tick or untick tasks of a change set. Example: change task done CHG-0001 1.1 1.2
+
+```text
+Usage: oxispec change task [OPTIONS] <ACTION> <ID> [TASKS]...
+```
+
+- `<ACTION>`: done or undo.
+- `<ID>`
+- `<TASKS>`: The tasks: their number (`1.2`) or their place in the list (`#3`).
+- `--all`: Every task of the change set.
 
 ### `oxispec change list`
 
