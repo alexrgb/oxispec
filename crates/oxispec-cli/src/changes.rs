@@ -126,6 +126,7 @@ pub fn change_list(
                     "approved_by": n.approved_by,
                     "approved_on": n.approved_on,
                     "changes": n.links.get("changes").cloned().unwrap_or_default(),
+                    "tasks": {"done": n.progress().0, "total": n.progress().1},
                 })
             })
             .collect();
@@ -145,8 +146,14 @@ pub fn change_list(
             (Some(by), None) => format!("  approved by {by}"),
             _ => String::new(),
         };
+        let (done, total) = n.progress();
+        let tasks = if total == 0 {
+            String::new()
+        } else {
+            format!("  [{done}/{total} tasks]")
+        };
         outln!(
-            "{:<12} {:<10} {}{approval}",
+            "{:<12} {:<10} {}{tasks}{approval}",
             n.id,
             n.status.as_deref().unwrap_or("no status"),
             n.title.as_deref().unwrap_or("")

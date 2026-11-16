@@ -8386,3 +8386,56 @@ fn the_move_reports_the_new_folder_and_what_clashes() {
         "readme\n"
     );
 }
+
+// verifies: REQ-CHANGE-0005.S1
+// verifies: REQ-CHANGE-0005.S2
+#[test]
+fn a_change_set_shows_its_progress_and_the_tasks_that_name_a_requirement() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    import_project(p);
+    let out = run(p, &["new", "requirement", "auth", "Sign in"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let out = run(p, &["new", "change", "Tighten sign in"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let change = fs::read_dir(p.join("oxispec/changes"))
+        .unwrap()
+        .flatten()
+        .next()
+        .unwrap()
+        .path();
+    let text = fs::read_to_string(&change).unwrap();
+    assert!(text.contains("## Tasks"), "{text}");
+    fs::write(
+        &change,
+        format!(
+            "{}\n- [x] 1.1 Guard the form (REQ-AUTH-0001.S1)\n- [ ] 1.2 Test it\n",
+            text.trim_end()
+        ),
+    )
+    .unwrap();
+    let out = run(p, &["show", "CHG-0001"]);
+    assert!(out.stdout.contains("tasks: 1/2 done"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("[x] 1.1 Guard the form"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("[ ] 1.2 Test it"), "{}", out.stdout);
+    let out = run(p, &["change", "list"]);
+    assert!(out.stdout.contains("[1/2 tasks]"), "{}", out.stdout);
+    let out = run(p, &["change", "list", "--json"]);
+    let json: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+    assert_eq!(json["change_sets"][0]["tasks"]["done"], 1);
+    assert_eq!(json["change_sets"][0]["tasks"]["total"], 2);
+    // The requirement lists the task that names it, and only that one.
+    let out = run(p, &["show", "REQ-AUTH-0001"]);
+    assert!(out.stdout.contains("tasks that name it:"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("[x] CHG-0001 1.1 Guard the form"),
+        "{}",
+        out.stdout
+    );
+    assert!(!out.stdout.contains("Test it"), "{}", out.stdout);
+    assert_eq!(run(p, &["check"]).code, 0);
+}

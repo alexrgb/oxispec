@@ -120,6 +120,7 @@ oxispec change list --status approved                    # also --json
 - Steps cannot be skipped, and `--force` allows it.
 - Approving records `approved_by` and `approved_on` in the file, so the approval is in git history with the commit that made it. Merging keeps them. Moving back to draft or review withdraws them.
 - `oxispec check` reports a change set with a missing or unknown status (E012) and an approved or merged one with no approver (E013).
+- **Tasks.** The checkboxes under the `## Tasks` heading of a change set are its tasks (`oxispec new change` writes the heading): `- [ ] 1.2 Guard the update (REQ-POST-0003.S2)`. A leading number such as `1.2` is kept apart from the text, and an ID written in the text (a requirement, or a scenario with `.S2`) links the task to it. `show CHG-0001` prints `tasks: 7/9 done` with each task, `change list` adds `[7/9 tasks]` (and `--json` has `tasks.done` and `tasks.total`), and `show REQ-POST-0003` lists the tasks that name it. `check` warns about a task that names an ID that does not exist (W027; a word such as `TC-POST-040` is left alone unless nodes of that kind exist) and about a merged change set with tasks still open (W028). Tasks come from OpenSpec's `tasks.md` when a change is imported.
 - **The approval is recorded, not enforced.** Anyone who can edit the file can write a name into it. Until access control exists, what stops someone approving their own change is your repository's review rules. An agent should propose a change set and leave approval to a person.
 
 ## Claims and the vocabulary
@@ -322,6 +323,8 @@ Codes are stable. A code is never reused.
 | W024 | warning | A node is `about` something that is not an entity |
 | W025 | warning | An attribute of an entity has no field in the code that represents it (see [entities.md](entities.md#say-which-code-represents-it)) |
 | W026 | warning | A node is about an entity that changed since the node was confirmed (see [entities.md](entities.md#look-again-when-it-changes)) |
+| W027 | warning | A task of a change set names a node or scenario that does not exist (see [change sets](#change-sets)) |
+| W028 | warning | A change set is merged but some of its tasks are still open |
 | I001 | info | A link to another project is not checked. Shown with `--verbose`. |
 | I002 | info | A claim says nothing that another claim does not already say. Shown with `--verbose`. |
 
