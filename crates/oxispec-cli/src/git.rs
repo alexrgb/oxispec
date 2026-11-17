@@ -235,11 +235,33 @@ fn is_hidden(path: &str) -> bool {
     path.split('/').any(|part| part.starts_with('.'))
 }
 
-/// The specs as they were at a revision.
+/// The specs as they were at a revision, with the projects its links name as they were then.
+// spec: REQ-PROJECT-0008
 pub fn graph_at(root: &Path, revision: &Revision) -> Result<Graph> {
+    let (graph, _) = plain_graph_at(root, revision)?;
+    let mut found = std::collections::BTreeMap::new();
+    for namespace in oxispec_core::products::namespaces(&graph) {
+        let Some(dir) = oxispec_core::products::target_dir(root, &namespace) else {
+            continue;
+        };
+        // A project of another repository, or one that was not there yet, stays unresolved.
+        if let Ok((other, true)) = plain_graph_at(&dir, revision) {
+            found.insert(namespace, other);
+        }
+    }
+    Ok(if found.is_empty() {
+        graph
+    } else {
+        graph.with_externals(found)
+    })
+}
+
+/// The graph of one project at a revision, and whether the project had a config then.
+fn plain_graph_at(root: &Path, revision: &Revision) -> Result<(Graph, bool)> {
     let prefix = prefix(root)?;
     let listing = git_stdout(root, &["ls-tree", "-r", "-z", "--name-only", &revision.oid])?;
     let all: Vec<String> = names(&listing).collect();
+    let configured = all.iter().any(|n| n == ".oxispec/config.yaml");
     // The folders of products, which have a project of their own.
     let products: Vec<&str> = all
         .iter()
@@ -260,12 +282,13 @@ pub fn graph_at(root: &Path, revision: &Revision) -> Result<Graph> {
         .map(|n| format!("{}:{prefix}{n}", revision.oid))
         .collect();
     let contents = read_objects(root, &specs)?;
-    Ok(Graph::from_sources(
+    let graph = Graph::from_sources(
         files
             .into_iter()
             .zip(contents)
             .filter_map(|(name, content)| content.map(|bytes| (PathBuf::from(name), bytes))),
-    ))
+    );
+    Ok((graph, configured))
 }
 
 /// The newest `limit` commits that changed a file, following it across renames.
