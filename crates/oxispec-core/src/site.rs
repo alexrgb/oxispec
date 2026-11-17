@@ -41,6 +41,7 @@ pub struct Previous<'a> {
     pub graph: &'a Graph,
 }
 
+#[derive(Default)]
 pub struct SiteOptions<'a> {
     pub title: String,
     /// What this build shows, for example `working tree` or `v0.2.0 (3f2a1c9)`.
@@ -50,6 +51,9 @@ pub struct SiteOptions<'a> {
     /// Other versions to switch to, newest first. Includes this one.
     pub versions: Vec<VersionLink>,
     pub previous: Option<Previous<'a>>,
+    /// The products of a monorepo to switch to, with this one's folder in `product`.
+    pub products: Vec<VersionLink>,
+    pub product: Option<String>,
 }
 
 /// A file name for an ID: letters, digits, `-`, `_` and `.`, nothing else.
@@ -254,24 +258,42 @@ fn status_class(status: &str) -> String {
     format!("status-{safe}")
 }
 
-fn picker(options: &SiteOptions, target: &str) -> String {
-    if options.versions.len() < 2 {
+fn select(label: &str, items: &[VersionLink], current: Option<&str>, target: &str) -> String {
+    if items.len() < 2 {
         return String::new();
     }
-    let mut out = String::from("<label class=\"picker\">Version <select data-page=\"");
+    let mut out = format!("<label class=\"picker\">{label} <select data-page=\"");
     out.push_str(&escape(target));
     out.push_str("\">");
-    for version in &options.versions {
-        let selected = options.current.as_deref() == Some(version.dir.as_str());
+    for item in items {
+        let selected = current == Some(item.dir.as_str());
         out.push_str(&format!(
             "<option value=\"{}\"{}>{}</option>",
-            escape(&version.dir),
+            escape(&item.dir),
             if selected { " selected" } else { "" },
-            escape(&version.label)
+            escape(&item.label)
         ));
     }
     out.push_str("</select></label>");
     out
+}
+
+fn picker(options: &SiteOptions, target: &str) -> String {
+    format!(
+        "{}{}",
+        select(
+            "Product",
+            &options.products,
+            options.product.as_deref(),
+            target
+        ),
+        select(
+            "Version",
+            &options.versions,
+            options.current.as_deref(),
+            target
+        )
+    )
 }
 
 const PICKER_SCRIPT: &str = "<script>document.querySelectorAll('.picker select').forEach(function(s){s.addEventListener('change',function(){var d=s.value,p=s.dataset.page,t='../'+d+'/'+p,f='../'+d+'/index.html';fetch(t,{method:'HEAD'}).then(function(r){location.href=r.ok?t:f}).catch(function(){location.href=t})})});</script>";
@@ -496,6 +518,7 @@ mod tests {
             current: None,
             versions: Vec::new(),
             previous: None,
+            ..SiteOptions::default()
         }
     }
 

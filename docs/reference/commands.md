@@ -4,7 +4,7 @@ Written by `oxispec docs reference` from the program itself. Do not edit it by h
 
 Every command also accepts `--root <ROOT>` (the project folder; default: the nearest parent with `.oxispec/config.yaml`), `--no-cache` (do not read or write the local index) and `--help`.
 
-Commands: [`init`](#oxispec-init), [`onboard`](#oxispec-onboard), [`move-docs`](#oxispec-move-docs), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`entities`](#oxispec-entities), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`list`](#oxispec-list), [`set-status`](#oxispec-set-status), [`read`](#oxispec-read), [`show`](#oxispec-show)
+Commands: [`init`](#oxispec-init), [`onboard`](#oxispec-onboard), [`products`](#oxispec-products), [`move-docs`](#oxispec-move-docs), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`entities`](#oxispec-entities), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`list`](#oxispec-list), [`set-status`](#oxispec-set-status), [`read`](#oxispec-read), [`show`](#oxispec-show)
 
 ## `oxispec init`
 
@@ -33,6 +33,16 @@ Usage: oxispec onboard [OPTIONS]
 - `--docs <DOCS>`: The documents, comma separated, each as `type` or `type:format`, such as `requirement:ears,adr:madr,container:c4-container,risk`.
 - `--yes`: Ask nothing: keep what the project has, or requirements, ADRs and change sets.
 - `--show`: Show the documents the project keeps and write nothing.
+
+## `oxispec products`
+
+The products of a monorepo: projects of their own in folders below this one. `check` and `site` go through each of them with its own config
+
+```text
+Usage: oxispec products [OPTIONS]
+```
+
+- `--json`
 
 ## `oxispec move-docs`
 

@@ -5334,6 +5334,91 @@ fn a_running_mcp_server_sees_a_change_to_the_format_profiles() {
     assert!(applied, "the server never applied the new profile");
 }
 
+/// A monorepo: a project at the top with a document, and two products with formats of their own
+/// that use the same ID.
+fn monorepo(p: &Path) {
+    for (product, requirement, adr) in [("apps/a", "ears", "madr"), ("apps/b", "gherkin", "nygard")]
+    {
+        let dir = p.join(product);
+        fs::create_dir_all(&dir).unwrap();
+        let docs = format!("requirement:{requirement},adr:{adr}");
+        assert_eq!(run(&dir, &["onboard", "--docs", &docs]).code, 0);
+        assert_eq!(run(&dir, &["new", "requirement", "auth", "Login"]).code, 0);
+    }
+    assert_eq!(run(p, &["onboard", "--docs", "adr"]).code, 0);
+    assert_eq!(run(p, &["new", "adr", "Use a monorepo"]).code, 0);
+}
+
+// verifies: REQ-PROJECT-0007.S1
+// verifies: REQ-PROJECT-0007.S2
+#[test]
+fn products_are_left_out_listed_and_checked_with_their_own_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    monorepo(p);
+
+    let list = run(p, &["list"]).stdout;
+    assert!(
+        list.contains("ADR-0001") && !list.contains("REQ-AUTH-0001"),
+        "{list}"
+    );
+    let out = run(p, &["products"]).stdout;
+    assert!(out.contains("apps/a") && out.contains("apps/b"), "{out}");
+    assert!(
+        run(p, &["products", "--json"])
+            .stdout
+            .contains("\"products\"")
+    );
+
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(out.stdout.contains("3 nodes checked"), "{}", out.stdout);
+
+    // A requirement of the first product that its EARS profile does not allow.
+    let file = p.join("apps/a/oxispec/requirements/auth/login.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, text.replace("shall", "might")).unwrap();
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(
+        out.stdout
+            .contains("apps/a/oxispec/requirements/auth/login.md"),
+        "{}",
+        out.stdout
+    );
+}
+
+// verifies: REQ-SITE-0004.S1
+// verifies: REQ-SITE-0004.S2
+#[test]
+fn one_site_shows_all_the_products() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    monorepo(p);
+    let out = run(p, &["site", "--out", "out"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    for product in ["apps_a", "apps_b", "_project"] {
+        assert!(
+            p.join("out").join(product).join("index.html").is_file(),
+            "{product}"
+        );
+    }
+    let page = fs::read_to_string(p.join("out/apps_a/REQ-AUTH-0001.html")).unwrap();
+    assert!(
+        page.contains("Product <select") && page.contains("value=\"apps_b\""),
+        "{page}"
+    );
+    let top = fs::read_to_string(p.join("out/index.html")).unwrap();
+    assert!(
+        top.contains("apps_a/index.html") && top.contains("apps_b/index.html"),
+        "{top}"
+    );
+
+    let out = run(p, &["site", "--out", "out2", "--releases"]);
+    assert_eq!(out.code, 2, "{}", out.stdout);
+    assert!(out.stderr.contains("--releases"), "{}", out.stderr);
+}
+
 // verifies: REQ-PROJECT-0006.S1
 // verifies: REQ-PROJECT-0006.S2
 #[test]

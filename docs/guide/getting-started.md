@@ -37,6 +37,12 @@ oxispec onboard --show                # what the project keeps, with the command
 
 Commit `.oxispec/config.yaml` and your specs. `.oxispec/cache` is a local index that you can ignore.
 
+## A monorepo with several products
+
+Give each product its own project and its own formats: `cd apps/a && oxispec onboard --docs requirement:ears,adr:madr`, then `cd ../b && oxispec onboard --docs requirement:gherkin,adr:nygard`. A command run inside a product folder uses that product's config, IDs and formats, so two products can both have `REQ-AUTH-0001`.
+
+At the top, a project of its own is optional. If there is one, it leaves the files of the products out of its graph, `oxispec products` lists them, `oxispec check` goes through every product with its own config (a finding names the product in its path), and `oxispec site` builds one site: a folder for each product, a switcher between products on every page, and a page at the top that lists them. A site of products is built from the working tree; `--at` and `--releases` are for a project without products. Links between products are not supported.
+
 ## Your first requirement
 
 ```bash

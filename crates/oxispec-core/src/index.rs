@@ -342,7 +342,16 @@ fn fingerprint(root: &Path, found: &[(PathBuf, String)]) -> Option<u64> {
 }
 
 fn walk(root: &Path) -> Vec<(PathBuf, String)> {
-    let walker = ignore::WalkBuilder::new(root).require_git(false).build();
+    // A folder with a project of its own (a product) is not walked: its documents are its own.
+    let top = root.to_path_buf();
+    let walker = ignore::WalkBuilder::new(root)
+        .require_git(false)
+        .filter_entry(move |e| {
+            e.path() == top
+                || !e.file_type().is_some_and(|t| t.is_dir())
+                || !crate::products::is_project(e.path())
+        })
+        .build();
     let mut found: Vec<(PathBuf, String)> = Vec::new();
     for dirent in walker.flatten() {
         let path = dirent.path();

@@ -21,7 +21,7 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder (the project predates
 | `REQ-LINK-0001`, `0002` | A link is added to the node and nothing else changes; links added at the same time are all kept |
 | `REQ-HISTORY-0001`, `0002` | History follows a node through git; history needs a git repository |
 | `REQ-SERVE-0001` to `0004` | A token keeps only a hash; the server refuses an unsafe start; every request needs a token and is audited; a limited token sees only its types |
-| `REQ-SITE-0001` to `0003` | A site has a page for each node; it can show the specs at a revision; it can hold every release |
+| `REQ-SITE-0001` to `0004` | A site has a page for each node; it can show the specs at a revision; it can hold every release; one site shows all the products |
 | `REQ-RESULTS-0001` | Test results say which scenarios pass |
 | `REQ-CLAIMS-0001`, `0002` | Conflicting claims are an error unless one overrides; claims are listed with the vocabulary |
 | `REQ-MACHINE-0001`, `0002` | A state machine is checked with its properties; it is shown, drawn and turned into tests |
@@ -30,6 +30,7 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder (the project predates
 | `REQ-LIBRARY-0001` | The examples of the library run |
 | `REQ-PROJECT-0001` to `0003` | A project starts and its first nodes pass the checks; modules follow their dependencies; a command says what to do outside a project |
 | `REQ-PROJECT-0006` | The documents of a project are fixed once |
+| `REQ-PROJECT-0007` | A project below a project is a product |
 | `REQ-INDEX-0001` | The local index is reused and never changes an answer |
 | `REQ-CHECKING-0001`, `0002` | Check can look only at what a change touches; JSON output says which schema it has |
 | `REQ-CI-0001` to `0003` | `ci` reports only what the change introduced; it writes reports for the tools around it; it compares with where the branch started |
