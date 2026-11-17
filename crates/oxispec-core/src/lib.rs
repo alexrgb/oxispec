@@ -61,6 +61,7 @@ pub mod connect;
 pub mod context;
 pub mod debt;
 pub mod diff;
+pub mod documents;
 pub mod edit;
 pub mod entities;
 pub mod finding;

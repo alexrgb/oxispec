@@ -29,6 +29,7 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder (the project predates
 | `REQ-MODULES-0001` | A command needs its module, and so does its MCP tool |
 | `REQ-LIBRARY-0001` | The examples of the library run |
 | `REQ-PROJECT-0001` to `0003` | A project starts and its first nodes pass the checks; modules follow their dependencies; a command says what to do outside a project |
+| `REQ-PROJECT-0006` | The documents of a project are fixed once |
 | `REQ-INDEX-0001` | The local index is reused and never changes an answer |
 | `REQ-CHECKING-0001`, `0002` | Check can look only at what a change touches; JSON output says which schema it has |
 | `REQ-CI-0001` to `0003` | `ci` reports only what the change introduced; it writes reports for the tools around it; it compares with where the branch started |
