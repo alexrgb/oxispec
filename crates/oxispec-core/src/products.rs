@@ -32,6 +32,16 @@ pub fn find(root: &Path) -> Vec<PathBuf> {
     found
 }
 
+/// A path with `/` separators on every platform, as paths are kept elsewhere.
+pub fn slash(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+/// `inner`, a path inside a product, as seen from the project above.
+pub fn under(product: &Path, inner: &Path) -> PathBuf {
+    PathBuf::from(format!("{}/{}", slash(product), slash(inner)))
+}
+
 /// The folder name of a product in a built site: its path with `/` turned into `_`.
 pub fn site_dir(product: &Path) -> String {
     product

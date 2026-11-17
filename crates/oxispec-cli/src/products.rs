@@ -14,7 +14,7 @@ pub fn list(root: &Path, json: bool, cache: bool) -> Result<()> {
         let dir = root.join(&rel);
         let cfg = config::load(&dir)?;
         let nodes = oxispec_core::index::load(&dir, cache).0.nodes.len();
-        rows.push((rel, nodes, cfg.modules));
+        rows.push((products::slash(&rel), nodes, cfg.modules));
     }
     if json {
         let items: Vec<_> = rows
@@ -34,11 +34,7 @@ pub fn list(root: &Path, json: bool, cache: bool) -> Result<()> {
         return Ok(());
     }
     for (path, nodes, modules) in &rows {
-        outln!(
-            "{:<32} {nodes} node(s)  {}",
-            path.display(),
-            modules.join(", ")
-        );
+        outln!("{path:<32} {nodes} node(s)  {}", modules.join(", "));
     }
     Ok(())
 }

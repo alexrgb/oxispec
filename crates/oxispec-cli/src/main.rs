@@ -2463,7 +2463,7 @@ fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<Exi
             total += inner.nodes.len();
             checked = total;
             for mut f in check(&inner) {
-                f.path = f.path.map(|p| rel.join(p));
+                f.path = f.path.map(|p| oxispec_core::products::under(rel, &p));
                 findings.push(f);
             }
         }
@@ -2482,7 +2482,7 @@ fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<Exi
             "schema_version": OUTPUT_SCHEMA_VERSION,
             "at": revision.as_ref().map(revision_json),
             "nodes": total,
-            "products": nested,
+            "products": nested.iter().map(|p| oxispec_core::products::slash(p)).collect::<Vec<_>>(),
             "checked_nodes": checked,
             "scope": scope.map(|(base, files)| serde_json::json!({"base": base, "changed_files": files})),
             "errors": errors,

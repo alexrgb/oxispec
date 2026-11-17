@@ -280,7 +280,11 @@ fn products_site(root: &Path, args: &SiteArgs, title: &str, nested: &[PathBuf]) 
         entries.push(("_project".into(), title.to_string(), root.to_path_buf()));
     }
     for rel in nested {
-        entries.push((site_dir(rel), rel.display().to_string(), root.join(rel)));
+        entries.push((
+            site_dir(rel),
+            oxispec_core::products::slash(rel),
+            root.join(rel),
+        ));
     }
     let links: Vec<VersionLink> = entries
         .iter()
