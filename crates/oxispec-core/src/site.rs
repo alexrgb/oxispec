@@ -54,6 +54,22 @@ pub struct SiteOptions<'a> {
     /// The products of a monorepo to switch to, with this one's folder in `product`.
     pub products: Vec<VersionLink>,
     pub product: Option<String>,
+    /// The folder of each product's pages by the namespace that links use for it, so that a link
+    /// to a node of another product can be followed.
+    pub product_dirs: Vec<(String, String)>,
+    /// Nodes of other products that link to a node of this one, by the ID of the node.
+    pub foreign: HashMap<String, Vec<ForeignRef>>,
+}
+
+/// A node of another product that links to a node of this one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForeignRef {
+    /// The folder of the pages of its product, and the name shown for the product.
+    pub dir: String,
+    pub project: String,
+    pub id: String,
+    pub kind: String,
+    pub title: String,
 }
 
 /// A file name for an ID: letters, digits, `-`, `_` and `.`, nothing else.
@@ -227,17 +243,35 @@ pub fn markdown(graph: &Graph, source: &str) -> String {
 }
 
 /// Link to a target of a node's `links`, resolved against the graph.
-fn link_html(graph: &Graph, target: &str) -> String {
+// spec: REQ-SITE-0005
+fn link_html(graph: &Graph, options: &SiteOptions, target: &str) -> String {
     let shown = escape(target);
     match resolve_link(graph, target) {
         LinkResolution::Ok => {
             let parsed = id::parse(target);
             let base = parsed.as_ref().map_or(target, |p| p.base);
             let anchor = parsed
+                .as_ref()
                 .and_then(|p| p.child)
                 .map_or(String::new(), |c| format!("#{c}"));
+            // A node of another product is in the folder of that product.
+            let folder = match parsed.as_ref().and_then(|p| p.namespace) {
+                None => String::new(),
+                Some(ns) => {
+                    let ns = ns.trim_end_matches('/');
+                    match options.product_dirs.iter().find(|(n, _)| n == ns) {
+                        Some((_, dir)) => format!("../{dir}/"),
+                        None => {
+                            return format!(
+                                "<span class=\"external\" title=\"in another project\">{shown}</span>"
+                            );
+                        }
+                    }
+                }
+            };
             format!(
-                "<a href=\"{}{anchor}\">{shown}</a>",
+                "<a href=\"{}{}{anchor}\">{shown}</a>",
+                escape(&folder),
                 escape(&page_name(base))
             )
         }
@@ -399,7 +433,7 @@ fn node_page(
                 body.push_str(&format!(
                     "<li><span class=\"kind\">{}</span> {}</li>",
                     escape(kind),
-                    link_html(graph, target)
+                    link_html(graph, options, target)
                 ));
             }
         }
@@ -415,6 +449,22 @@ fn node_page(
                 escape(&other.id),
                 escape(kind),
                 escape(&title_of(other))
+            ));
+        }
+        body.push_str("</ul></section>");
+    }
+
+    if let Some(from) = options.foreign.get(&node.id) {
+        body.push_str("<section class=\"links\"><h2>Used by other products</h2><ul>");
+        for r in from {
+            body.push_str(&format!(
+                "<li><a href=\"../{}/{}\">{}</a> <span class=\"kind\">{}</span> {} <span class=\"fact\">{}</span></li>",
+                escape(&r.dir),
+                escape(&page_name(&r.id)),
+                escape(&r.id),
+                escape(&r.kind),
+                escape(&r.title),
+                escape(&r.project)
             ));
         }
         body.push_str("</ul></section>");

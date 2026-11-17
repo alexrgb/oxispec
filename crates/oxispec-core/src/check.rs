@@ -85,8 +85,12 @@ pub fn resolve_link(graph: &Graph, target: &str) -> LinkResolution {
     let Some(parsed) = id::parse(target) else {
         return LinkResolution::Invalid;
     };
-    if parsed.namespace.is_some() {
-        return LinkResolution::External;
+    if let Some(namespace) = parsed.namespace {
+        // A project of the same workspace was loaded: the link is checked there.
+        return match (graph.external(namespace), target.split_once(':')) {
+            (Some(other), Some((_, rest))) => resolve_link(other, rest),
+            _ => LinkResolution::External,
+        };
     }
     let Some(node) = graph.get(parsed.base) else {
         return LinkResolution::MissingNode;

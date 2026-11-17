@@ -100,6 +100,9 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
             impact.code = oxispec_core::entities::code(&impact.id, &scan.annotations);
         }
     }
+    // Nodes of other products that link to what this change touches.
+    let dependents =
+        oxispec_core::products::dependents(root, &|id| reach.ids.contains(id), options.cache);
     let reportable = check(&new)
         .iter()
         .filter(|f| f.severity != Severity::Info)
@@ -113,6 +116,7 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
         diff: &diff,
         strict: options.strict,
         entities: entity_impacts,
+        dependents,
     };
 
     if let Some(path) = &options.markdown {
@@ -137,6 +141,7 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
             "removed": diff.removed,
             "changed": diff.changed,
             "entities": report.entities,
+            "dependents": report.dependents,
             "bump": report.bump,
             "new_findings": diff.new_findings,
             "fixed_findings": diff.fixed_findings,
@@ -176,6 +181,15 @@ pub fn ci_command(root: &Path, options: &CiOptions) -> Result<ExitCode> {
                     c.symbol.as_deref().unwrap_or("")
                 );
             }
+        }
+        for d in &report.dependents {
+            outln!(
+                "product {}: {} ({} {}) depends on this change",
+                d.project,
+                d.id,
+                d.kind,
+                d.target
+            );
         }
         outln!(
             "{} nodes changed, {} touched: {errors} new errors, {warnings} new warnings, {} fixed, {} existing not shown",

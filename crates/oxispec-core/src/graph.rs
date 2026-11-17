@@ -28,6 +28,9 @@ pub struct Graph {
     pub(crate) debt: Arc<crate::config::DebtConfig>,
     /// The traceability and sign-offs the project asks for.
     pub(crate) compliance: Arc<crate::config::ComplianceConfig>,
+    /// The graphs of other projects this one links to, by the namespace the links use. See
+    /// `products`.
+    pub(crate) externals: Arc<std::collections::BTreeMap<String, Graph>>,
 }
 
 #[derive(Debug, Default)]
@@ -129,7 +132,23 @@ impl Graph {
             formats: Arc::default(),
             debt: Arc::default(),
             compliance: Arc::default(),
+            externals: Arc::default(),
         }
+    }
+
+    /// The graphs of the projects that links name with a namespace.
+    pub fn with_externals(mut self, externals: std::collections::BTreeMap<String, Graph>) -> Graph {
+        self.externals = Arc::new(externals);
+        self
+    }
+
+    /// The graph of the project a namespace names, when it was found and loaded.
+    pub fn external(&self, namespace: &str) -> Option<&Graph> {
+        self.externals.get(namespace.trim_end_matches('/'))
+    }
+
+    pub fn has_externals(&self) -> bool {
+        !self.externals.is_empty()
     }
 
     /// The project's rules for tech debt.
