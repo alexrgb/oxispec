@@ -136,6 +136,10 @@ pub struct Config {
     /// The format profile for each node type, by profile name. See `formats`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub formats: BTreeMap<String, String>,
+    /// The kinds of documents the project keeps, by node type (see `documents`). Empty: any kind
+    /// the enabled modules allow. Set by `oxispec onboard`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub documents: Vec<String>,
     /// Profiles this project defines, by name.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub profiles: BTreeMap<String, CustomProfile>,
@@ -242,6 +246,7 @@ impl Config {
             api_index: ApiIndexConfig::default(),
             agents: Vec::new(),
             formats: BTreeMap::new(),
+            documents: Vec::new(),
             profiles: BTreeMap::new(),
             debt: DebtConfig::default(),
             compliance: ComplianceConfig::default(),

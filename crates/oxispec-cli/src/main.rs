@@ -36,6 +36,7 @@ mod importer;
 mod machines;
 mod mcp;
 mod movedocs;
+mod onboard;
 mod readdomain;
 mod reference;
 mod releases;
@@ -112,6 +113,21 @@ enum Command {
         /// relative to the project. Default: oxispec
         #[arg(long, value_name = "DIR")]
         docs_dir: Option<String>,
+    },
+    /// Fix the kinds of documents the project keeps and the format of each, so that `new` needs no
+    /// question. Asks about each kind; `--docs` and `--yes` ask nothing. Starts the project when
+    /// there is none
+    Onboard {
+        /// The documents, comma separated, each as `type` or `type:format`, such as
+        /// `requirement:ears,adr:madr,container:c4-container,risk`
+        #[arg(long, value_delimiter = ',')]
+        docs: Vec<String>,
+        /// Ask nothing: keep what the project has, or requirements, ADRs and change sets
+        #[arg(long)]
+        yes: bool,
+        /// Show the documents the project keeps and write nothing
+        #[arg(long)]
+        show: bool,
     },
     /// Move the documents to another folder and set `docs_dir` in the config. IDs and links do
     /// not change. Files that mention the old folder are listed and left alone
@@ -1158,6 +1174,39 @@ fn run(cli: Cli) -> Result<ExitCode> {
             )?;
             Ok(ExitCode::SUCCESS)
         }
+        Command::Onboard { docs, yes, show } => {
+            let dir = cli.root.unwrap_or_else(|| PathBuf::from("."));
+            let root = config::find_root(&dir).unwrap_or_else(|| dir.clone());
+            let _lock = if root.join(config::CONFIG_PATH).exists() && !show {
+                Some(lock_project(&root)?)
+            } else {
+                None
+            };
+            onboard::onboard(
+                &root,
+                &onboard::Options {
+                    docs: &docs,
+                    yes,
+                    show,
+                },
+                |at, modules| {
+                    init(
+                        at,
+                        &InitOptions {
+                            preset: "minimal",
+                            with: modules,
+                            without: &[],
+                            id_scheme: IdScheme::default(),
+                            agent_clients: &[],
+                            languages: &[],
+                            docs_dir: None,
+                        },
+                    )
+                },
+                &mut std::io::stdin().lock(),
+            )?;
+            Ok(ExitCode::SUCCESS)
+        }
         Command::MoveDocs { dir, dry_run, json } => {
             let root = project_root(cli.root.as_deref())?;
             let _lock = lock_project(&root)?;
@@ -1583,6 +1632,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     format,
                 } => {
                     require_module(&cfg, "specs")?;
+                    onboard::require_document(&cfg, "requirement")?;
                     new_requirement(
                         &root,
                         &cfg,
@@ -1595,6 +1645,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 }
                 NewKind::Adr { title, format } => {
                     require_module(&cfg, "adrs")?;
+                    onboard::require_document(&cfg, "adr")?;
                     new_adr(&root, &cfg, &title, format.as_deref(), scheme, cache)?
                 }
                 NewKind::Debt {
@@ -1603,14 +1654,17 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     from,
                 } => {
                     require_module(&cfg, "debt")?;
+                    onboard::require_document(&cfg, "debt")?;
                     new_debt(&root, &title, &severity, from.as_deref(), scheme, cache)?
                 }
                 NewKind::Prd { title } => {
                     require_module(&cfg, "specs")?;
+                    onboard::require_document(&cfg, "prd")?;
                     new_prd(&root, &title, scheme, cache)?
                 }
                 NewKind::TestPlan { title } => {
                     require_module(&cfg, "tests")?;
+                    onboard::require_document(&cfg, "test-plan")?;
                     new_test_plan(&root, &title, scheme, cache)?
                 }
                 NewKind::Risk {
@@ -1620,6 +1674,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     from,
                 } => {
                     require_module(&cfg, "risks")?;
+                    onboard::require_document(&cfg, "risk")?;
                     new_risk(
                         &root,
                         &title,
@@ -1632,14 +1687,17 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 }
                 NewKind::Change { title } => {
                     require_module(&cfg, "specs")?;
+                    onboard::require_document(&cfg, "change")?;
                     new_change(&root, &title, scheme, cache)?
                 }
                 NewKind::Entity { title } => {
                     require_module(&cfg, "consistency")?;
+                    onboard::require_document(&cfg, "entity")?;
                     new_entity(&root, &title, scheme, cache)?
                 }
                 NewKind::Vocabulary { title } => {
                     require_module(&cfg, "consistency")?;
+                    onboard::require_document(&cfg, "vocabulary")?;
                     new_vocabulary(&root, &title, scheme, cache)?
                 }
                 NewKind::Architecture {
@@ -1652,6 +1710,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 }
                 NewKind::Machine { title } => {
                     require_module(&cfg, "statemachines")?;
+                    onboard::require_document(&cfg, "state-machine")?;
                     new_machine(&root, &title, scheme, cache)?
                 }
             };
@@ -3070,6 +3129,7 @@ fn new_element(
         ElementKind::Component => ("C4-", "component"),
         ElementKind::Environment => ("DEP-", "deployment-environment"),
     };
+    onboard::require_document(cfg, ty)?;
     let (profiles, _) = oxispec_core::formats::available(cfg);
     let asked = format.or_else(|| cfg.formats.get(ty).map(String::as_str));
     let template = match asked {

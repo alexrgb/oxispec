@@ -11,6 +11,10 @@ Read what the project has already decided before you write or change anything. E
 5. See what changed between two points: `oxispec diff <from> [<to>]`. Revisions can be a branch, a tag, a hash, or `date:YYYY-MM-DD`.
 6. If the project traces code to specs, `oxispec trace REQ-AUTH-0001` lists the code and tests for a node.
 
+## Which document and which format
+
+Before you create a document, run `oxispec onboard --show`. It lists the kinds of documents this project keeps, the format of each and the command that writes it. Use that command as it is: `oxispec new` takes the format from the config, so do not add `--format` and do not ask the person which document or format they want when the list answers it. A kind that is not on the list is refused by `new`; say so and suggest `oxispec onboard --docs <the kinds>`. When nothing is fixed yet, suggest `oxispec onboard` to the person instead of choosing for them.
+
 ## Rules
 
 - Quote IDs exactly as printed, for example `REQ-AUTH-0001` or the scenario `REQ-AUTH-0001.S1`. Do not guess an ID. If `show` says it does not exist, search again.

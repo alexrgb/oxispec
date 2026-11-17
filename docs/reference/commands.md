@@ -4,7 +4,7 @@ Written by `oxispec docs reference` from the program itself. Do not edit it by h
 
 Every command also accepts `--root <ROOT>` (the project folder; default: the nearest parent with `.oxispec/config.yaml`), `--no-cache` (do not read or write the local index) and `--help`.
 
-Commands: [`init`](#oxispec-init), [`move-docs`](#oxispec-move-docs), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`entities`](#oxispec-entities), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`list`](#oxispec-list), [`set-status`](#oxispec-set-status), [`read`](#oxispec-read), [`show`](#oxispec-show)
+Commands: [`init`](#oxispec-init), [`onboard`](#oxispec-onboard), [`move-docs`](#oxispec-move-docs), [`languages`](#oxispec-languages), [`modules`](#oxispec-modules), [`new`](#oxispec-new), [`change`](#oxispec-change), [`release`](#oxispec-release), [`agents`](#oxispec-agents), [`status`](#oxispec-status), [`connect`](#oxispec-connect), [`context`](#oxispec-context), [`claims`](#oxispec-claims), [`architecture`](#oxispec-architecture), [`machine`](#oxispec-machine), [`mcp`](#oxispec-mcp), [`serve`](#oxispec-serve), [`api`](#oxispec-api), [`test-plan`](#oxispec-test-plan), [`risks`](#oxispec-risks), [`entities`](#oxispec-entities), [`debt`](#oxispec-debt), [`compliance`](#oxispec-compliance), [`docs`](#oxispec-docs), [`adr`](#oxispec-adr), [`import`](#oxispec-import), [`formats`](#oxispec-formats), [`token`](#oxispec-token), [`link`](#oxispec-link), [`check`](#oxispec-check), [`ci`](#oxispec-ci), [`site`](#oxispec-site), [`trace`](#oxispec-trace), [`suspect`](#oxispec-suspect), [`confirm`](#oxispec-confirm), [`results`](#oxispec-results), [`coverage`](#oxispec-coverage), [`search`](#oxispec-search), [`history`](#oxispec-history), [`rollback`](#oxispec-rollback), [`tag`](#oxispec-tag), [`diff`](#oxispec-diff), [`index`](#oxispec-index), [`list`](#oxispec-list), [`set-status`](#oxispec-set-status), [`read`](#oxispec-read), [`show`](#oxispec-show)
 
 ## `oxispec init`
 
@@ -21,6 +21,18 @@ Usage: oxispec init [OPTIONS]
 - `--agents <AGENTS>`: AI clients that get skills when the agents module is on, comma separated: claude, cursor, copilot, gemini, agents, or none (default: claude,cursor,copilot,gemini).
 - `--languages <LANGUAGES>`: The languages of the project, comma separated (see `oxispec languages`). The trace scan then reads only their files. Default: every text file.
 - `--docs-dir <DIR>`: The folder for the documents (requirements, decisions, change sets and the rest), relative to the project. Default: oxispec.
+
+## `oxispec onboard`
+
+Fix the kinds of documents the project keeps and the format of each, so that `new` needs no question. Asks about each kind; `--docs` and `--yes` ask nothing. Starts the project when there is none
+
+```text
+Usage: oxispec onboard [OPTIONS]
+```
+
+- `--docs <DOCS>`: The documents, comma separated, each as `type` or `type:format`, such as `requirement:ears,adr:madr,container:c4-container,risk`.
+- `--yes`: Ask nothing: keep what the project has, or requirements, ADRs and change sets.
+- `--show`: Show the documents the project keeps and write nothing.
 
 ## `oxispec move-docs`
 

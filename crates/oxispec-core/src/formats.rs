@@ -409,6 +409,17 @@ impl Formats {
     pub fn from_config(config: &Config) -> Formats {
         let (profiles, mut problems) = available(config);
         let mut chosen = BTreeMap::new();
+        for ty in &config.documents {
+            if crate::documents::kind(ty).is_none() {
+                problems.push(
+                    Finding::error(
+                        "E031",
+                        format!("`documents` lists `{ty}`, which is not a kind of document"),
+                    )
+                    .at(Path::new(CONFIG_PATH), None),
+                );
+            }
+        }
         for (ty, name) in &config.formats {
             match profiles.iter().find(|p| &p.name == name) {
                 None => problems.push(

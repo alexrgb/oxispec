@@ -25,6 +25,16 @@ This creates `.oxispec/config.yaml` and the folders for the modules in the prese
 
 `init` also writes skill files for AI clients (`.claude/skills`, `.cursor/skills`, and others). They teach an agent the commands. If you do not want them, run `oxispec init --preset standard --agents none`, or delete the folders.
 
+Then fix which documents the project keeps and in what format, so that nobody has to be asked later:
+
+```bash
+oxispec onboard                       # asks about each kind of document
+oxispec onboard --docs requirement:ears,adr:madr,container:c4-container,risk
+oxispec onboard --show                # what the project keeps, with the command for each
+```
+
+`onboard` writes the kinds to `documents` in the config and their formats to `formats`, turns on the modules they need, and starts the project when there is none. After that `oxispec new adr "Title"` writes a MADR record without `--format`, and `new` refuses a kind that is not on the list. `--yes` asks nothing and keeps what the project has (requirements, ADRs and change sets for a new project). Changing a format later holds the records that exist to the new one, so `check` may report the ones that lack its sections.
+
 Commit `.oxispec/config.yaml` and your specs. `.oxispec/cache` is a local index that you can ignore.
 
 ## Your first requirement

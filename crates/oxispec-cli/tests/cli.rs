@@ -26,6 +26,31 @@ fn run(dir: &Path, args: &[&str]) -> Out {
     }
 }
 
+/// Runs a command with text on its standard input.
+fn run_with_input(dir: &Path, args: &[&str], input: &str) -> Out {
+    use std::io::Write;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_oxispec"))
+        .args(args)
+        .current_dir(dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("binary runs");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .unwrap();
+    let o = child.wait_with_output().unwrap();
+    Out {
+        code: o.status.code().expect("exit code"),
+        stdout: String::from_utf8_lossy(&o.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&o.stderr).into_owned(),
+    }
+}
+
 // verifies: REQ-PROJECT-0001.S1
 #[test]
 fn init_new_check_show_roundtrip() {
@@ -5307,6 +5332,66 @@ fn a_running_mcp_server_sees_a_change_to_the_format_profiles() {
     drop(stdin);
     assert!(child.wait().unwrap().success());
     assert!(applied, "the server never applied the new profile");
+}
+
+// verifies: REQ-PROJECT-0006.S1
+// verifies: REQ-PROJECT-0006.S2
+#[test]
+fn onboarding_fixes_the_documents_and_their_formats() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    let out = run(p, &["onboard", "--docs", "requirement:ears,adr:madr,risk"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let cfg = fs::read_to_string(p.join(".oxispec/config.yaml")).unwrap();
+    for want in ["adrs", "risks", "adr: madr", "requirement: ears", "- risk"] {
+        assert!(cfg.contains(want), "{want}: {cfg}");
+    }
+    assert_eq!(run(p, &["new", "adr", "Use Postgres"]).code, 0);
+    let adr = fs::read_to_string(p.join("oxispec/adr/0001-use-postgres.md")).unwrap();
+    assert!(adr.contains("## Considered Options"));
+    assert_eq!(run(p, &["new", "risk", "Tokens never expire"]).code, 0);
+    assert_eq!(run(p, &["modules", "add", "debt"]).code, 0);
+    let out = run(p, &["new", "debt", "Retry loop"]);
+    assert_eq!(out.code, 2, "{}", out.stdout);
+    assert!(
+        out.stderr.contains("not among the documents"),
+        "{}",
+        out.stderr
+    );
+    assert!(run(p, &["onboard", "--show"]).stdout.contains("madr"));
+
+    // Questions: keep the requirement, drop the ADR, keep the risk, add a change set.
+    let before = fs::read_to_string(p.join(".oxispec/config.yaml")).unwrap();
+    for bad in [["--docs", "poem"], ["--docs", "adr:ears"]] {
+        let out = run(p, &["onboard", bad[0], bad[1]]);
+        assert_eq!(out.code, 2, "{}", out.stdout);
+    }
+    assert_eq!(
+        fs::read_to_string(p.join(".oxispec/config.yaml")).unwrap(),
+        before
+    );
+    let out = run_with_input(p, &["onboard"], &answers());
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let cfg = fs::read_to_string(p.join(".oxispec/config.yaml")).unwrap();
+    assert!(
+        cfg.contains("- change") && !cfg.contains("- adr\n") && !cfg.contains("adr: madr"),
+        "{cfg}"
+    );
+}
+
+/// Answers for `onboard`: requirement kept with its format, the ADR dropped, change set added,
+/// everything else left as it is.
+fn answers() -> String {
+    let mut out = String::new();
+    for ty in oxispec_core::documents::KINDS.iter().map(|k| k.ty) {
+        match ty {
+            "requirement" => out.push_str("\n\n"),
+            "adr" => out.push_str("n\n"),
+            "change" => out.push_str("y\n"),
+            _ => out.push('\n'),
+        }
+    }
+    out
 }
 
 // verifies: REQ-FORMATS-0003.S1
