@@ -5498,6 +5498,30 @@ fn links_between_products_are_checked_and_traced() {
     assert!(out.stdout.contains("I001"), "{}", out.stdout);
 }
 
+// verifies: REQ-PROJECT-0008.S3
+#[test]
+fn a_link_between_products_is_checked_at_a_revision() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    platform_workspace(p);
+    git(p, &["init", "-q"]);
+    commit_all(p, "base");
+    let ui = p.join("apps/a/oxispec/requirements/ui/screen.md");
+    let text = fs::read_to_string(&ui).unwrap();
+    fs::write(
+        &ui,
+        text.replace("platform:REQ-AUTH-0001", "platform:REQ-AUTH-0009"),
+    )
+    .unwrap();
+    commit_all(p, "break the link");
+    let app = p.join("apps/a");
+    let old = run(&app, &["check", "--at", "HEAD~1"]);
+    assert_eq!(old.code, 0, "{}", old.stdout);
+    let new = run(&app, &["check", "--at", "HEAD"]);
+    assert_eq!(new.code, 1, "{}", new.stdout);
+    assert!(new.stdout.contains("E002"), "{}", new.stdout);
+}
+
 // verifies: REQ-SITE-0005.S1
 #[test]
 fn links_between_products_can_be_followed_on_the_site() {
