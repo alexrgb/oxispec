@@ -115,6 +115,15 @@ pub fn site_command(root: &Path, args: &SiteArgs) -> Result<()> {
     config::load(root)?;
     guard_out(root, &args.out)?;
     let title = title_of(root, args.title.as_deref());
+    let nested = oxispec_core::products::find(root);
+    if !nested.is_empty() {
+        if args.releases || args.at.is_some() {
+            bail!(
+                "this project has products, which are built from the working tree; leave out --at and --releases"
+            );
+        }
+        return products_site(root, args, &title, &nested);
+    }
     if args.releases {
         if args.at.is_some() {
             bail!("--at builds one revision, and --releases builds all of them; use one");
@@ -150,6 +159,7 @@ pub fn site_command(root: &Path, args: &SiteArgs) -> Result<()> {
         current: None,
         versions: Vec::new(),
         previous: None,
+        ..SiteOptions::default()
     };
     let pages = render(&graph, &options, &*text);
     write_pages(&args.out, &pages)?;
@@ -206,6 +216,7 @@ fn releases(root: &Path, args: &SiteArgs, title: &str) -> Result<()> {
             current: Some(dir_name(&tag.name)),
             versions: versions.clone(),
             previous,
+            ..SiteOptions::default()
         };
         let pages = render(graph, &options, &|n: &Node| texts.get(&n.path).cloned());
         total += pages.len();
@@ -223,6 +234,7 @@ fn releases(root: &Path, args: &SiteArgs, title: &str) -> Result<()> {
         current: Some("latest".into()),
         versions: versions.clone(),
         previous,
+        ..SiteOptions::default()
     };
     let base = root.to_path_buf();
     let pages = render(&latest, &options, &|n: &Node| {
@@ -254,6 +266,74 @@ fn root_page(title: &str, versions: &[VersionLink]) -> String {
     }
     format!(
         "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{t}</title><meta http-equiv=\"refresh\" content=\"0; url=latest/index.html\"></head><body><h1>{t}</h1><p>Versions:</p><ul>{list}</ul></body></html>\n",
+        t = escape(title)
+    )
+}
+
+/// One site for a monorepo: a folder for each product, built from its own project, with a
+/// switcher between them on every page, and a page at the top that lists them.
+// spec: REQ-SITE-0004
+fn products_site(root: &Path, args: &SiteArgs, title: &str, nested: &[PathBuf]) -> Result<()> {
+    use oxispec_core::products::site_dir;
+    let mut entries: Vec<(String, String, PathBuf)> = Vec::new();
+    if !index::load(root, args.cache).0.nodes.is_empty() {
+        entries.push(("_project".into(), title.to_string(), root.to_path_buf()));
+    }
+    for rel in nested {
+        entries.push((
+            site_dir(rel),
+            oxispec_core::products::slash(rel),
+            root.join(rel),
+        ));
+    }
+    let links: Vec<VersionLink> = entries
+        .iter()
+        .map(|(dir, label, _)| VersionLink {
+            dir: dir.clone(),
+            label: label.clone(),
+        })
+        .collect();
+    let mut total = 0;
+    for (dir, label, path) in &entries {
+        config::load(path)?;
+        let graph = index::load(path, args.cache).0;
+        let options = SiteOptions {
+            title: format!("{title} / {label}"),
+            revision: "working tree".into(),
+            products: links.clone(),
+            product: Some(dir.clone()),
+            ..SiteOptions::default()
+        };
+        let base = path.clone();
+        let pages = render(&graph, &options, &|n: &Node| {
+            fs::read_to_string(base.join(&n.path)).ok()
+        });
+        total += pages.len();
+        write_pages(&args.out.join(dir), &pages)?;
+    }
+    fs::create_dir_all(&args.out)?;
+    fs::write(args.out.join("index.html"), products_page(title, &links))?;
+    outln!(
+        "wrote {total} pages for {} products to {}",
+        entries.len(),
+        args.out.display()
+    );
+    Ok(())
+}
+
+/// The page at the top of a site of products.
+fn products_page(title: &str, products: &[VersionLink]) -> String {
+    use oxispec_core::site::escape;
+    let mut list = String::new();
+    for p in products {
+        list.push_str(&format!(
+            "<li><a href=\"{}/index.html\">{}</a></li>",
+            escape(&p.dir),
+            escape(&p.label)
+        ));
+    }
+    format!(
+        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{t}</title></head><body><h1>{t}</h1><p>Products:</p><ul>{list}</ul></body></html>\n",
         t = escape(title)
     )
 }

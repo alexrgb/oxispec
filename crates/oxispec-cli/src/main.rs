@@ -37,6 +37,7 @@ mod machines;
 mod mcp;
 mod movedocs;
 mod onboard;
+mod products;
 mod readdomain;
 mod reference;
 mod releases;
@@ -128,6 +129,12 @@ enum Command {
         /// Show the documents the project keeps and write nothing
         #[arg(long)]
         show: bool,
+    },
+    /// The products of a monorepo: projects of their own in folders below this one. `check` and
+    /// `site` go through each of them with its own config
+    Products {
+        #[arg(long)]
+        json: bool,
     },
     /// Move the documents to another folder and set `docs_dir` in the config. IDs and links do
     /// not change. Files that mention the old folder are listed and left alone
@@ -1205,6 +1212,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
                 },
                 &mut std::io::stdin().lock(),
             )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Products { json } => {
+            products::list(&project_root(cli.root.as_deref())?, json, cache)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::MoveDocs { dir, dry_run, json } => {
@@ -2436,9 +2447,27 @@ fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<Exi
         None => load_graph(root, cache),
     };
     let mut findings = check(&graph);
-    let total = graph.nodes.len();
+    let mut total = graph.nodes.len();
     let mut checked = total;
     let mut scope = None;
+    // The products below this project are checked with their own configs.
+    let nested = oxispec_core::products::find(root);
+    if options.changed_since.is_none() {
+        for rel in &nested {
+            let dir = root.join(rel);
+            config::load(&dir)?;
+            let inner = match &revision {
+                Some(rev) => git::graph_at(&dir, rev)?,
+                None => load_graph(&dir, cache),
+            };
+            total += inner.nodes.len();
+            checked = total;
+            for mut f in check(&inner) {
+                f.path = f.path.map(|p| oxispec_core::products::under(rel, &p));
+                findings.push(f);
+            }
+        }
+    }
     if let Some(base) = &options.changed_since {
         let changes = git::changes(root, base)?;
         let touched = impact(&graph, &changes.paths, &changes.old_ids);
@@ -2453,6 +2482,7 @@ fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<Exi
             "schema_version": OUTPUT_SCHEMA_VERSION,
             "at": revision.as_ref().map(revision_json),
             "nodes": total,
+            "products": nested.iter().map(|p| oxispec_core::products::slash(p)).collect::<Vec<_>>(),
             "checked_nodes": checked,
             "scope": scope.map(|(base, files)| serde_json::json!({"base": base, "changed_files": files})),
             "errors": errors,

@@ -196,4 +196,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 81**: the requirements of the `risk` folder move into `risks`, and `check` warns (W029) when one domain is in two folders.
 - **Iteration 82**: format profiles for the architecture elements (`c4-person`, `c4-system`, `c4-container`, `c4-component`, `c4-environment`) and `new architecture --format`.
 - **Iteration 83**: `oxispec onboard` fixes the kinds of documents a project keeps and their formats (`documents` in the config); `new` refuses a kind that is not on the list.
+- **Iteration 84**: a monorepo with products: a project below a project is a product, the project above leaves it out, `oxispec products` lists them, `check` goes through each and `site` builds one site with a product switcher.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

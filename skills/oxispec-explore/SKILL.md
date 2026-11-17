@@ -3,7 +3,7 @@ name: oxispec-explore
 description: "Read the project's specs before writing or changing anything. Use to find requirements, decisions and their links, see how a node changed, or answer what the project has decided about a topic."
 metadata:
   generated-by: oxispec
-  content-hash: "5b74fb3d4dec812f"
+  content-hash: "0c13ac4ea4d460ce"
 ---
 
 # Explore the specs
@@ -22,6 +22,8 @@ Read what the project has already decided before you write or change anything. E
 ## Which document and which format
 
 Before you create a document, run `oxispec onboard --show`. It lists the kinds of documents this project keeps, the format of each and the command that writes it. Use that command as it is: `oxispec new` takes the format from the config, so do not add `--format` and do not ask the person which document or format they want when the list answers it. A kind that is not on the list is refused by `new`; say so and suggest `oxispec onboard --docs <the kinds>`. When nothing is fixed yet, suggest `oxispec onboard` to the person instead of choosing for them.
+
+In a monorepo, each product folder has a project of its own: run the commands inside the folder of the product you work on (`oxispec products` lists them). From the top, `list`, `read` and `search` see only the top project; `check` and `site` go through every product.
 
 ## Rules
 

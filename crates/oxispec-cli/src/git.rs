@@ -239,8 +239,21 @@ fn is_hidden(path: &str) -> bool {
 pub fn graph_at(root: &Path, revision: &Revision) -> Result<Graph> {
     let prefix = prefix(root)?;
     let listing = git_stdout(root, &["ls-tree", "-r", "-z", "--name-only", &revision.oid])?;
-    let files: Vec<String> = names(&listing)
+    let all: Vec<String> = names(&listing).collect();
+    // The folders of products, which have a project of their own.
+    let products: Vec<&str> = all
+        .iter()
+        .filter_map(|n| n.strip_suffix("/.oxispec/config.yaml"))
+        .collect();
+    let files: Vec<String> = all
+        .iter()
         .filter(|n| n.ends_with(".md") && !is_hidden(n) && !n.contains('\n'))
+        .filter(|n| {
+            !products
+                .iter()
+                .any(|p| n.strip_prefix(p).is_some_and(|rest| rest.starts_with('/')))
+        })
+        .cloned()
         .collect();
     let specs: Vec<String> = files
         .iter()
