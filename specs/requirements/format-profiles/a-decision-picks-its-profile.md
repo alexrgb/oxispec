@@ -1,5 +1,6 @@
 ---
-id: REQ-FORMATS-0002
+id: REQ-FORMAT-PROFILES-0002
+aliases: [REQ-FORMATS-0002]
 type: requirement
 status: accepted
 date: 2026-11-08

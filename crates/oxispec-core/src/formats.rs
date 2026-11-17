@@ -317,7 +317,7 @@ pub fn builtin() -> Vec<Profile> {
 
 /// The profiles a project can use: the built-in ones and its own valid ones.
 /// A custom profile that is not valid is left out and reported as E031.
-// spec: REQ-FORMATS-0002
+// spec: REQ-FORMAT-PROFILES-0002
 pub fn available(config: &Config) -> (Vec<Profile>, Vec<Finding>) {
     let mut profiles = builtin();
     let mut problems = Vec::new();
@@ -593,7 +593,7 @@ fn field<'a>(node: &'a Node, name: &str) -> Option<&'a str> {
 }
 
 // spec: REQ-STYLE-0002
-// spec: REQ-FORMATS-0001
+// spec: REQ-FORMAT-PROFILES-0001
 pub fn check(graph: &Graph) -> Vec<Finding> {
     let formats = &graph.formats;
     let mut out = formats.problems.clone();

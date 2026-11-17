@@ -38,8 +38,8 @@ OxiSpec describes itself with OxiSpec. The `specs/` folder (the project predates
 | `REQ-CONNECT-0001`, `0002` | `connect` adds the server to the clients' config; it can point at a running server |
 | `REQ-STATUS-0001` | `status` summarizes the project |
 | `REQ-ADR-0001` to `0003` | A decision can be converted; decisions are imported from other tools; a superseded decision is checked against its successor |
-| `REQ-FORMATS-0001` | A format profile shapes a node |
-| `REQ-FORMATS-0003` | An architecture element is written in a profile |
+| `REQ-FORMAT-PROFILES-0001` | A format profile shapes a node |
+| `REQ-FORMAT-PROFILES-0003` | An architecture element is written in a profile |
 | `REQ-TAGS-0001` | A tag names a revision of the specs |
 | `REQ-ROBUSTNESS-0001`, `0002` | No input makes a command panic; commands that write at the same time do not collide |
 | `REQ-ROLLBACK-0003`, `0004` | A rollback is refused when it would do harm; it puts nodes back without committing |
@@ -85,7 +85,7 @@ The project uses its own claims too. The vocabulary `VOC-0001` ([specs/vocabular
 | Variable | Says | Where |
 |---|---|---|
 | `exit.refusal` | A command that refuses bad input exits with 2 | `REQ-PROJECT-0003`, `REQ-CHECKING-0001`, `REQ-HISTORY-0002`, `REQ-ROLLBACK-0004`, `REQ-CONNECT-0001` |
-| `exit.findings` | A check that finds errors exits with 1 | `REQ-LINK-0003`, `REQ-CLAIMS-0003`, `REQ-FORMATS-0002`, `REQ-SUSPECT-0002` |
+| `exit.findings` | A check that finds errors exits with 1 | `REQ-LINK-0003`, `REQ-CLAIMS-0003`, `REQ-FORMAT-PROFILES-0002`, `REQ-SUSPECT-0002` |
 | `mcp.resources_page_size` | A page of MCP resources has 500 nodes | `REQ-MCP-0007` |
 | `warnings.fail` | A warning fails `check` and `ci` only with `--strict` | `REQ-ADR-0003`, `REQ-CI-0001` |
 | `serve.starts` | The server does not start without a token, or on an open address without a TLS proxy | `REQ-SERVE-0002` |
