@@ -38,6 +38,8 @@ pub struct Report<'a> {
     pub strict: bool,
     /// The entities that changed, and what depends on each.
     pub entities: Vec<crate::entities::Impact>,
+    /// Nodes of other products that link to a node this change touches.
+    pub dependents: Vec<crate::products::Dependent>,
 }
 
 impl Report<'_> {
@@ -151,6 +153,27 @@ pub fn markdown(report: &Report) -> String {
                 cell(&Report::location(f).unwrap_or_else(|| f.id.clone().unwrap_or_default())),
                 cell(&f.message)
             );
+        }
+    }
+
+    if !report.dependents.is_empty() {
+        let _ = writeln!(
+            out,
+            "\n**Other products depend on this change.** Nodes of other products that link to what it touches ({}):\n",
+            report.dependents.len()
+        );
+        for d in report.dependents.iter().take(20) {
+            let _ = writeln!(
+                out,
+                "- `{}` in `{}` ({} {})",
+                d.id,
+                d.project,
+                d.kind,
+                cell(&d.target)
+            );
+        }
+        if report.dependents.len() > 20 {
+            let _ = writeln!(out, "- and {} more", report.dependents.len() - 20);
         }
     }
 
@@ -442,6 +465,7 @@ mod tests {
             bump: Bump::Minor,
             strict,
             entities: Vec::new(),
+            dependents: Vec::new(),
         }
     }
 

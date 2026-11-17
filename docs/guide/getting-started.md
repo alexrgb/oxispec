@@ -41,7 +41,13 @@ Commit `.oxispec/config.yaml` and your specs. `.oxispec/cache` is a local index 
 
 Give each product its own project and its own formats: `cd apps/a && oxispec onboard --docs requirement:ears,adr:madr`, then `cd ../b && oxispec onboard --docs requirement:gherkin,adr:nygard`. A command run inside a product folder uses that product's config, IDs and formats, so two products can both have `REQ-AUTH-0001`.
 
-At the top, a project of its own is optional. If there is one, it leaves the files of the products out of its graph, `oxispec products` lists them, `oxispec check` goes through every product with its own config (a finding names the product in its path), and `oxispec site` builds one site: a folder for each product, a switcher between products on every page, and a page at the top that lists them. A site of products is built from the working tree; `--at` and `--releases` are for a project without products. Links between products are not supported.
+At the top, a project of its own is optional. If there is one, it leaves the files of the products out of its graph, `oxispec products` lists them, `oxispec check` goes through every product with its own config (a finding names the product in its path), and `oxispec site` builds one site: a folder for each product, a switcher between products on every page, and a page at the top that lists them. A site of products is built from the working tree; `--at` and `--releases` are for a project without products. Links between products are described below.
+
+### A platform and the products that depend on it
+
+A product can link to a node of another product with `product:ID`, where `product` is the folder of that project below the top project: `oxispec link REQ-UI-0001 satisfies platform:REQ-AUTH-0001` (run in `apps/a`, with `platform/` a project of its own). The top project is needed, because the namespace is a path from it. `check` reads the link in the other project: a node that does not exist is E002, a scenario that does not is E009, so a change in the platform that breaks a product shows up as an error in the product. A namespace that is no project stays an unchecked reference (I001). Reading the link needs the working tree, so `--at` still shows such a link as I001.
+
+To see who depends on a node, run `oxispec show REQ-AUTH-0001` in the platform: it ends with `linked from other products`. In a pull request, `oxispec ci` in the platform lists the nodes of other products that link to the nodes the change touches (`dependents` in `--json`, and a section in the Markdown report), so the review sees which products to check. On the site, a link to another product leads to its page and the page of a node lists the nodes of other products that use it.
 
 ## Your first requirement
 

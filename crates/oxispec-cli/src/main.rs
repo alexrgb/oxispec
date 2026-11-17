@@ -2604,6 +2604,12 @@ fn show(
         .get(id)
         .with_context(|| format!("no node with id {id}"))?;
     let incoming = graph.incoming(&node.id);
+    // Nodes of the other products of the workspace that link to this one.
+    let dependents = if revision.is_none() {
+        oxispec_core::products::dependents(root, &|i| i == node.id, cache)
+    } else {
+        Vec::new()
+    };
     if json {
         let incoming: Vec<_> = incoming
             .iter()
@@ -2614,6 +2620,7 @@ fn show(
             "at": revision.as_ref().map(revision_json),
             "node": node,
             "incoming": incoming,
+            "dependents": dependents,
         });
         outln!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
@@ -2694,6 +2701,19 @@ fn show(
         outln!("linked from:");
         for (n, kind) in incoming {
             outln!("  {} ({kind})  {}", n.id, n.path.display());
+        }
+    }
+    if !dependents.is_empty() {
+        outln!("linked from other products:");
+        for d in &dependents {
+            outln!(
+                "  {} in {} ({} {})  {}",
+                d.id,
+                d.project,
+                d.kind,
+                d.target,
+                d.path
+            );
         }
     }
     Ok(())

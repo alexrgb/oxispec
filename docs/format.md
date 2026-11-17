@@ -326,7 +326,7 @@ Codes are stable. A code is never reused.
 | W027 | warning | A task of a change set names a node or scenario that does not exist (see [change sets](#change-sets)) |
 | W028 | warning | A change set is merged but some of its tasks are still open |
 | W029 | warning | The requirements of one domain are in more than one folder |
-| I001 | info | A link to another project is not checked. Shown with `--verbose`. |
+| I001 | info | A link to another project is not checked. Shown with `--verbose`. A link `product:ID` to a project of the same workspace is checked, see [getting started](guide/getting-started.md#a-platform-and-the-products-that-depend-on-it). |
 | I002 | info | A claim says nothing that another claim does not already say. Shown with `--verbose`. |
 
 `oxispec check` exits with 1 when there are errors, and also on warnings with `--strict`. Other failures, such as a missing project, exit with 2.

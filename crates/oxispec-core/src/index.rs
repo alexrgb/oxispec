@@ -367,6 +367,33 @@ fn walk(root: &Path) -> Vec<(PathBuf, String)> {
     found
 }
 
+/// The graph of a project as its files say, without the other projects its links name.
+pub fn load_plain(root: &Path, use_cache: bool) -> Graph {
+    let (graph, _) = load_files(root, use_cache, walk(root));
+    let config = crate::config::load(root).ok();
+    graph
+        .with_formats(crate::formats::Formats::load(root))
+        .with_debt(config.clone().map(|c| c.debt).unwrap_or_default())
+        .with_compliance(config.map(|c| c.compliance).unwrap_or_default())
+}
+
+/// Loads the projects that the links of `graph` name with a namespace, so that the links can be
+/// checked. A namespace that is no project of the workspace is left alone.
+// spec: REQ-PROJECT-0008
+fn with_linked_projects(root: &Path, use_cache: bool, graph: Graph) -> Graph {
+    let mut found = std::collections::BTreeMap::new();
+    for namespace in crate::products::namespaces(&graph) {
+        if let Some(dir) = crate::products::target_dir(root, &namespace) {
+            found.insert(namespace, load_plain(&dir, use_cache));
+        }
+    }
+    if found.is_empty() {
+        graph
+    } else {
+        graph.with_externals(found)
+    }
+}
+
 pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
     let memo_on = use_cache && MEMO_ON.load(Ordering::Relaxed);
     if memo_on
@@ -416,6 +443,9 @@ pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
         .with_formats(crate::formats::Formats::load(root))
         .with_debt(config.clone().map(|c| c.debt).unwrap_or_default())
         .with_compliance(config.map(|c| c.compliance).unwrap_or_default());
+    let graph = with_linked_projects(root, use_cache, graph);
+    // The files of another project are not in the fingerprint, so such a graph is not kept.
+    let print = print.filter(|_| !graph.has_externals());
     if let Some(print) = print
         && let Ok(mut guard) = MEMO.lock()
     {

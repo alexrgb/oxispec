@@ -105,8 +105,10 @@ pub fn is_valid(s: &str) -> bool {
 }
 
 /// The ID without a child suffix, for example `REQ-AUTH-0012.S1` gives `REQ-AUTH-0012`.
+/// The ID of the node a link target names, without a scenario. A target in another project
+/// (`platform:REQ-AUTH-0001`) is returned as it is, so it never matches a node of this project.
 pub fn base_of(s: &str) -> &str {
-    parse(s).map_or(s, |p| p.base)
+    parse(s).map_or(s, |p| if p.namespace.is_some() { s } else { p.base })
 }
 
 /// Crockford base32 without I, L, O and U, so IDs are easy to read aloud.

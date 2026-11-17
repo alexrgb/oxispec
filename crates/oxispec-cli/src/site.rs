@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use oxispec_core::release::Version;
-use oxispec_core::site::{Page, Previous, STYLE, SiteOptions, VersionLink, render};
+use oxispec_core::site::{ForeignRef, Page, Previous, STYLE, SiteOptions, VersionLink, render};
 use oxispec_core::{Graph, Node, config, index};
 
 use crate::git::{self, Revision};
@@ -293,19 +293,67 @@ fn products_site(root: &Path, args: &SiteArgs, title: &str, nested: &[PathBuf]) 
             label: label.clone(),
         })
         .collect();
-    let mut total = 0;
-    for (dir, label, path) in &entries {
+    let mut graphs = Vec::new();
+    for (_, _, path) in &entries {
         config::load(path)?;
-        let graph = index::load(path, args.cache).0;
+        graphs.push(index::load(path, args.cache).0);
+    }
+    // The folder of each product by the namespace that links use for it.
+    let product_dirs: Vec<(String, String)> = nested
+        .iter()
+        .map(|rel| (oxispec_core::products::slash(rel), site_dir(rel)))
+        .collect();
+    let mut total = 0;
+    for (i, (dir, label, path)) in entries.iter().enumerate() {
+        // The nodes of the other products that link to a node of this one.
+        let mut foreign: std::collections::HashMap<String, Vec<ForeignRef>> =
+            std::collections::HashMap::new();
+        for (j, (other_dir, other_label, _)) in entries.iter().enumerate() {
+            if j == i {
+                continue;
+            }
+            for node in &graphs[j].nodes {
+                for (kind, targets) in &node.links {
+                    for target in targets {
+                        let Some(parsed) = oxispec_core::id::parse(target) else {
+                            continue;
+                        };
+                        let this = product_dirs.iter().find(|(_, d)| d == dir);
+                        if parsed.namespace.map(|n| n.trim_end_matches('/'))
+                            == this.map(|(n, _)| n.as_str())
+                        {
+                            foreign
+                                .entry(parsed.base.to_string())
+                                .or_default()
+                                .push(ForeignRef {
+                                    dir: other_dir.clone(),
+                                    project: other_label.clone(),
+                                    id: node.id.clone(),
+                                    kind: kind.clone(),
+                                    title: node
+                                        .title
+                                        .clone()
+                                        .or_else(|| {
+                                            node.requirements.first().map(|r| r.name.clone())
+                                        })
+                                        .unwrap_or_default(),
+                                });
+                        }
+                    }
+                }
+            }
+        }
         let options = SiteOptions {
             title: format!("{title} / {label}"),
             revision: "working tree".into(),
             products: links.clone(),
             product: Some(dir.clone()),
+            product_dirs: product_dirs.clone(),
+            foreign,
             ..SiteOptions::default()
         };
         let base = path.clone();
-        let pages = render(&graph, &options, &|n: &Node| {
+        let pages = render(&graphs[i], &options, &|n: &Node| {
             fs::read_to_string(base.join(&n.path)).ok()
         });
         total += pages.len();

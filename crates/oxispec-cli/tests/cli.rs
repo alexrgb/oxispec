@@ -5388,6 +5388,136 @@ fn products_are_left_out_listed_and_checked_with_their_own_config() {
     );
 }
 
+/// A workspace with a platform and a product that depends on it: `apps/a` satisfies a requirement
+/// of `platform`.
+fn platform_workspace(p: &Path) {
+    assert_eq!(run(p, &["init"]).code, 0);
+    for dir in ["platform", "apps/a"] {
+        let d = p.join(dir);
+        fs::create_dir_all(&d).unwrap();
+        assert_eq!(run(&d, &["onboard", "--docs", "requirement"]).code, 0);
+    }
+    assert_eq!(
+        run(
+            &p.join("platform"),
+            &["new", "requirement", "auth", "Login"]
+        )
+        .code,
+        0
+    );
+    let app = p.join("apps/a");
+    assert_eq!(run(&app, &["new", "requirement", "ui", "Screen"]).code, 0);
+    let out = run(
+        &app,
+        &["link", "REQ-UI-0001", "satisfies", "platform:REQ-AUTH-0001"],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+}
+
+// verifies: REQ-PROJECT-0008.S1
+// verifies: REQ-PROJECT-0008.S2
+#[test]
+fn links_between_products_are_checked_and_traced() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    platform_workspace(p);
+    let (platform, app) = (p.join("platform"), p.join("apps/a"));
+    assert_eq!(run(&app, &["check"]).code, 0);
+    assert_eq!(run(p, &["check"]).code, 0);
+
+    let out = run(&platform, &["show", "REQ-AUTH-0001"]);
+    assert!(
+        out.stdout.contains("linked from other products") && out.stdout.contains("REQ-UI-0001"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        run(&platform, &["show", "REQ-AUTH-0001", "--json"])
+            .stdout
+            .contains("\"dependents\"")
+    );
+
+    // The platform's node changes, and the product that depends on it is named.
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(p)
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@e.x")
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@e.x")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{args:?}");
+    };
+    git(&["init", "-q"]);
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "base"]);
+    let file = platform.join("oxispec/requirements/auth/login.md");
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(
+        &file,
+        text.replace("<describe the behavior>", "log the user in"),
+    )
+    .unwrap();
+    let out = run(&platform, &["ci", "--base", "HEAD", "--json"]);
+    assert!(
+        out.stdout.contains("\"dependents\"") && out.stdout.contains("apps/a"),
+        "{}",
+        out.stdout
+    );
+
+    // A link to a node or a scenario that does not exist is an error in both places.
+    for target in ["platform:REQ-AUTH-0009", "platform:REQ-AUTH-0001.S9"] {
+        let ui = fs::read_dir(app.join("oxispec/requirements/ui"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let text = fs::read_to_string(&ui).unwrap();
+        let broken = text.replace("platform:REQ-AUTH-0001", target);
+        fs::write(&ui, &broken).unwrap();
+        for at in [&app, &p.to_path_buf()] {
+            let out = run(at, &["check"]);
+            assert_eq!(out.code, 1, "{target}: {}", out.stdout);
+            assert!(
+                out.stdout.contains("E002") || out.stdout.contains("E009"),
+                "{}",
+                out.stdout
+            );
+        }
+        fs::write(&ui, text).unwrap();
+    }
+    // A namespace that is no project is only an unchecked reference.
+    let ui = app.join("oxispec/requirements/ui/screen.md");
+    let text = fs::read_to_string(&ui).unwrap();
+    fs::write(&ui, text.replace("platform:", "elsewhere:")).unwrap();
+    let out = run(&app, &["check", "--verbose"]);
+    assert_eq!(out.code, 0, "{}", out.stdout);
+    assert!(out.stdout.contains("I001"), "{}", out.stdout);
+}
+
+// verifies: REQ-SITE-0005.S1
+#[test]
+fn links_between_products_can_be_followed_on_the_site() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    platform_workspace(p);
+    let out = run(p, &["site", "--out", "out"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let app = fs::read_to_string(p.join("out/apps_a/REQ-UI-0001.html")).unwrap();
+    assert!(
+        app.contains("href=\"../platform/REQ-AUTH-0001.html\""),
+        "{app}"
+    );
+    let node = fs::read_to_string(p.join("out/platform/REQ-AUTH-0001.html")).unwrap();
+    assert!(
+        node.contains("Used by other products") && node.contains("../apps_a/REQ-UI-0001.html"),
+        "{node}"
+    );
+}
+
 // verifies: REQ-SITE-0004.S1
 // verifies: REQ-SITE-0004.S2
 #[test]
