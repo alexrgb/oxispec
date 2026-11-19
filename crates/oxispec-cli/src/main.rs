@@ -3162,7 +3162,7 @@ fn element_fields(kind: ElementKind) -> &'static str {
     }
 }
 
-// spec: REQ-FORMATS-0003
+// spec: REQ-FORMAT-PROFILES-0003
 fn new_element(
     root: &Path,
     cfg: &Config,

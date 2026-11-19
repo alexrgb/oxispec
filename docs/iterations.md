@@ -199,4 +199,5 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 84**: a monorepo with products: a project below a project is a product, the project above leaves it out, `oxispec products` lists them, `check` goes through each and `site` builds one site with a product switcher.
 - **Iteration 85**: links between products (`platform:REQ-AUTH-0001`) are checked, `show` and `ci` name the nodes of other products that depend on a node, and the site follows them.
 - **Iteration 86**: `--at` reads a link between products against the other project as it was at that revision.
+- **Iteration 87**: the requirements of the format profiles move to the `format-profiles` folder and the `REQ-FORMAT-PROFILES` domain (the old IDs stay as aliases), so they are not mistaken for `REQ-FORMAT`.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).

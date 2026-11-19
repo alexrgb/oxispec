@@ -5153,7 +5153,7 @@ fn project_with_light_adrs(p: &Path) {
     fs::write(&config, format!("{text}{LIGHT_ADR}")).unwrap();
 }
 
-// verifies: REQ-FORMATS-0001.S1
+// verifies: REQ-FORMAT-PROFILES-0001.S1
 #[test]
 fn a_profile_shapes_new_and_check_enforces_it() {
     let dir = tempfile::tempdir().unwrap();
@@ -5191,7 +5191,7 @@ fn a_profile_shapes_new_and_check_enforces_it() {
     assert!(out.stdout.contains("\"E028\"") && out.stdout.contains("ADR-0001"));
 }
 
-// verifies: REQ-FORMATS-0001.S2
+// verifies: REQ-FORMAT-PROFILES-0001.S2
 #[test]
 fn formats_list_and_show_describe_the_profiles() {
     let dir = tempfile::tempdir().unwrap();
@@ -5235,7 +5235,7 @@ fn formats_list_and_show_describe_the_profiles() {
     );
 }
 
-// verifies: REQ-FORMATS-0002.S1
+// verifies: REQ-FORMAT-PROFILES-0002.S1
 #[test]
 fn new_adr_can_pick_a_profile_and_refuses_one_for_another_type() {
     let dir = tempfile::tempdir().unwrap();
@@ -5262,7 +5262,7 @@ fn new_adr_can_pick_a_profile_and_refuses_one_for_another_type() {
     assert_eq!(out.code, 2);
 }
 
-// verifies: REQ-FORMATS-0002.S2
+// verifies: REQ-FORMAT-PROFILES-0002.S2
 #[test]
 fn a_config_that_names_an_unknown_profile_fails_check_with_e031() {
     let dir = tempfile::tempdir().unwrap();
@@ -5633,8 +5633,8 @@ fn answers() -> String {
     out
 }
 
-// verifies: REQ-FORMATS-0003.S1
-// verifies: REQ-FORMATS-0003.S2
+// verifies: REQ-FORMAT-PROFILES-0003.S1
+// verifies: REQ-FORMAT-PROFILES-0003.S2
 #[test]
 fn an_architecture_element_is_written_in_a_profile_and_held_to_it() {
     let dir = tempfile::tempdir().unwrap();
