@@ -171,7 +171,101 @@ pub fn builtin() -> Vec<Profile> {
         style: None,
         statuses: Vec::new(),
     };
+    // A record of work: only its sections are chosen; its fields stay those of its type.
+    let record =
+        |ty: &str, name: &str, description: &str, required: &[&str], optional: &[&str]| Profile {
+            name: name.into(),
+            ty: ty.into(),
+            description: description.into(),
+            builtin: true,
+            sections: sections(required, optional),
+            fields: Vec::new(),
+            optional_fields: Vec::new(),
+            style: None,
+            statuses: Vec::new(),
+        };
     vec![
+        record(
+            "prd",
+            "prd-standard",
+            "The sections of `new prd`, none required",
+            &[],
+            &[
+                "Overview",
+                "Users",
+                "Goals",
+                "Non-goals",
+                "Success metrics",
+                "Open questions",
+            ],
+        ),
+        record(
+            "prd",
+            "one-pager",
+            "A one-page PRD: the problem, the goals, what is left out and how success is measured",
+            &["Problem", "Goals", "Non-goals", "Success metrics"],
+            &["Users", "Open questions"],
+        ),
+        record(
+            "test-plan",
+            "test-plan-standard",
+            "The sections of `new test-plan`, none required",
+            &[],
+            &[
+                "Scope",
+                "Approach",
+                "Levels",
+                "Environments",
+                "Exit criteria",
+            ],
+        ),
+        record(
+            "test-plan",
+            "ieee-829",
+            "A test plan after IEEE 829: items, features in and out, approach, criteria, environment",
+            &[
+                "Test items",
+                "Features to be tested",
+                "Features not to be tested",
+                "Approach",
+                "Pass and fail criteria",
+                "Environmental needs",
+            ],
+            &["Responsibilities", "Schedule", "Risks and contingencies"],
+        ),
+        record(
+            "risk",
+            "risk-standard",
+            "The sections of `new risk`, none required",
+            &[],
+            &[
+                "The risk",
+                "What would trigger it",
+                "What it would cost",
+                "What is done about it",
+            ],
+        ),
+        record(
+            "risk",
+            "treatment-plan",
+            "A risk with its cause, consequence and treatment",
+            &["Description", "Cause", "Consequence", "Mitigation"],
+            &["Trigger", "Contingency"],
+        ),
+        record(
+            "debt",
+            "debt-standard",
+            "The sections of `new debt`, none required",
+            &[],
+            &["What it is", "Why it was taken", "What paying it off takes"],
+        ),
+        record(
+            "debt",
+            "principal-and-interest",
+            "Tech debt as principal and interest: what it is, what carrying it costs, what repaying it costs",
+            &["Description", "Interest", "Principal"],
+            &["Plan"],
+        ),
         element(
             "person",
             &["Role"],
@@ -492,6 +586,13 @@ impl Profile {
             }
         }
         text.push_str("---\n# @ID@: @TITLE@\n");
+        text.push_str(&self.body());
+        text
+    }
+
+    /// The headings of the profile's sections, each with its hint, as they follow the title.
+    pub fn body(&self) -> String {
+        let mut text = String::new();
         for section in &self.sections {
             let marks = "#".repeat(usize::from(section.level));
             text.push_str(&format!("\n{marks} {}\n", section.name));
@@ -1083,5 +1184,14 @@ mod tests_of_formats {
             .map(|f| f.code)
             .collect();
         assert_eq!(codes, ["E029", "E029"]);
+    }
+
+    #[test]
+    fn the_built_in_profiles_have_unique_names() {
+        let mut names: Vec<String> = builtin().into_iter().map(|p| p.name).collect();
+        let all = names.len();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), all);
     }
 }

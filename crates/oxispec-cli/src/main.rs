@@ -889,7 +889,12 @@ enum NewKind {
     },
     /// A test plan: what is tested, how, where, and when it is done. Link what it covers with
     /// `covers`
-    TestPlan { title: String },
+    TestPlan {
+        title: String,
+        /// The format profile to write it in. Default: the one the config chooses for test plans
+        #[arg(long)]
+        format: Option<String>,
+    },
     /// A risk to the application, for example: new risk "Session tokens never expire"
     /// --likelihood medium --impact high --from REQ-AUTH-0001
     Risk {
@@ -903,6 +908,9 @@ enum NewKind {
         /// The node it arises from; becomes an `arises-from` link
         #[arg(long)]
         from: Option<String>,
+        /// The format profile to write it in. Default: the one the config chooses for risks
+        #[arg(long)]
+        format: Option<String>,
     },
     /// A tech debt item, for example: new debt "Retry loop has no backoff" --from REQ-API-0003
     Debt {
@@ -913,10 +921,18 @@ enum NewKind {
         /// The node it arises from; becomes an `arises-from` link
         #[arg(long)]
         from: Option<String>,
+        /// The format profile to write it in. Default: the one the config chooses for debt
+        #[arg(long)]
+        format: Option<String>,
     },
     /// A product requirements document. Requirements that `refine` it make up the document
     /// `docs prd` writes
-    Prd { title: String },
+    Prd {
+        title: String,
+        /// The format profile to write it in. Default: the one the config chooses for PRDs
+        #[arg(long)]
+        format: Option<String>,
+    },
     /// A change set: a proposed change to the specs, with a lifecycle
     Change { title: String },
     /// A vocabulary: the typed variables that claims in requirements talk about
@@ -1663,35 +1679,50 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     title,
                     severity,
                     from,
+                    format,
                 } => {
                     require_module(&cfg, "debt")?;
                     onboard::require_document(&cfg, "debt")?;
-                    new_debt(&root, &title, &severity, from.as_deref(), scheme, cache)?
+                    let body = profile_body(&cfg, "debt", format.as_deref())?;
+                    new_debt(
+                        &root,
+                        &title,
+                        &severity,
+                        from.as_deref(),
+                        body.as_deref(),
+                        scheme,
+                        cache,
+                    )?
                 }
-                NewKind::Prd { title } => {
+                NewKind::Prd { title, format } => {
                     require_module(&cfg, "specs")?;
                     onboard::require_document(&cfg, "prd")?;
-                    new_prd(&root, &title, scheme, cache)?
+                    let body = profile_body(&cfg, "prd", format.as_deref())?;
+                    new_prd(&root, &title, body.as_deref(), scheme, cache)?
                 }
-                NewKind::TestPlan { title } => {
+                NewKind::TestPlan { title, format } => {
                     require_module(&cfg, "tests")?;
                     onboard::require_document(&cfg, "test-plan")?;
-                    new_test_plan(&root, &title, scheme, cache)?
+                    let body = profile_body(&cfg, "test-plan", format.as_deref())?;
+                    new_test_plan(&root, &title, body.as_deref(), scheme, cache)?
                 }
                 NewKind::Risk {
                     title,
                     likelihood,
                     impact,
                     from,
+                    format,
                 } => {
                     require_module(&cfg, "risks")?;
                     onboard::require_document(&cfg, "risk")?;
+                    let body = profile_body(&cfg, "risk", format.as_deref())?;
                     new_risk(
                         &root,
                         &title,
                         &likelihood,
                         &impact,
                         from.as_deref(),
+                        body.as_deref(),
                         scheme,
                         cache,
                     )?
@@ -2815,11 +2846,43 @@ status: draft
 ## Open questions
 ";
 
-fn new_prd(root: &Path, title: &str, scheme: IdScheme, cache: bool) -> Result<(String, PathBuf)> {
+/// The sections a record of work is written with, when the command or the config names a
+/// profile for its type: `None` keeps the sections of the plain template.
+// spec: REQ-FORMAT-PROFILES-0004
+fn profile_body(cfg: &Config, ty: &str, format: Option<&str>) -> Result<Option<String>> {
+    let (profiles, _) = oxispec_core::formats::available(cfg);
+    let Some(name) = format.or_else(|| cfg.formats.get(ty).map(String::as_str)) else {
+        return Ok(None);
+    };
+    match profiles.iter().find(|p| p.name == name) {
+        Some(p) if p.ty == ty => Ok(Some(p.body())),
+        Some(p) => bail!("the profile `{name}` is for {} nodes, not {ty}", p.ty),
+        None => bail!("no profile named `{name}`; see `oxispec formats list`"),
+    }
+}
+
+/// `template` with the sections after its title replaced by `body`, when there is one.
+fn with_body(template: &str, body: Option<&str>) -> String {
+    const TITLE: &str = "# @ID@: @TITLE@\n";
+    match (body, template.find(TITLE)) {
+        (Some(body), Some(at)) => format!("{}{body}", &template[..at + TITLE.len()]),
+        _ => template.to_string(),
+    }
+}
+
+fn new_prd(
+    root: &Path,
+    title: &str,
+    sections: Option<&str>,
+    scheme: IdScheme,
+    cache: bool,
+) -> Result<(String, PathBuf)> {
     let id = allocate_id(&load_graph(root, cache), "PRD-", scheme)?;
     let suffix = id.strip_prefix("PRD-").unwrap_or(&id);
     let rel = config::node_dir(root, "prd")?.join(format!("{suffix}-{}.md", slug(title)?));
-    let body = PRD_TEMPLATE.replace("@ID@", &id).replace("@TITLE@", title);
+    let body = with_body(PRD_TEMPLATE, sections)
+        .replace("@ID@", &id)
+        .replace("@TITLE@", title);
     write_new(root, &rel, &body)?;
     Ok((id, rel))
 }
@@ -2957,6 +3020,7 @@ fn new_debt(
     title: &str,
     severity: &str,
     from: Option<&str>,
+    sections: Option<&str>,
     scheme: IdScheme,
     cache: bool,
 ) -> Result<(String, PathBuf)> {
@@ -2977,7 +3041,7 @@ fn new_debt(
     let rel = config::node_dir(root, "debt")?.join(format!("{suffix}-{}.md", slug(title)?));
     let today = oxispec_core::debt::today();
     let links = from.map_or(String::new(), |f| format!("links:\n  arises-from: {f}\n"));
-    let body = debt::TEMPLATE
+    let body = with_body(debt::TEMPLATE, sections)
         .replace("@ID@", &id)
         .replace("@TITLE@", title)
         .replace("@SEVERITY@", severity)
@@ -3018,13 +3082,14 @@ When testing is done: which scenarios pass, and what may be left.
 fn new_test_plan(
     root: &Path,
     title: &str,
+    sections: Option<&str>,
     scheme: IdScheme,
     cache: bool,
 ) -> Result<(String, PathBuf)> {
     let id = allocate_id(&load_graph(root, cache), "TP-", scheme)?;
     let suffix = id.strip_prefix("TP-").unwrap_or(&id);
     let rel = config::node_dir(root, "test-plans")?.join(format!("{suffix}-{}.md", slug(title)?));
-    let body = TEST_PLAN_TEMPLATE
+    let body = with_body(TEST_PLAN_TEMPLATE, sections)
         .replace("@ID@", &id)
         .replace("@TITLE@", title)
         .replace("@DATE@", &oxispec_core::debt::today());
@@ -3032,12 +3097,15 @@ fn new_test_plan(
     Ok((id, rel))
 }
 
+// One argument for each thing `new risk` takes; a struct would only rename them.
+#[allow(clippy::too_many_arguments)]
 fn new_risk(
     root: &Path,
     title: &str,
     likelihood: &str,
     impact: &str,
     from: Option<&str>,
+    sections: Option<&str>,
     scheme: IdScheme,
     cache: bool,
 ) -> Result<(String, PathBuf)> {
@@ -3063,7 +3131,7 @@ fn new_risk(
     let suffix = id.strip_prefix("RISK-").unwrap_or(&id);
     let rel = config::node_dir(root, "risks")?.join(format!("{suffix}-{}.md", slug(title)?));
     let links = from.map_or(String::new(), |f| format!("links:\n  arises-from: {f}\n"));
-    let body = risks::TEMPLATE
+    let body = with_body(risks::TEMPLATE, sections)
         .replace("@ID@", &id)
         .replace("@TITLE@", title)
         .replace("@LIKELIHOOD@", likelihood)
