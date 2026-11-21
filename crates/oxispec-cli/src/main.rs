@@ -43,6 +43,7 @@ mod reference;
 mod releases;
 mod risks;
 mod rollback;
+mod scope;
 mod search;
 mod server;
 mod setstatus;
@@ -505,6 +506,12 @@ enum Command {
         /// Delete the stored search index and build it again
         #[arg(long)]
         rebuild: bool,
+        /// Read this product of a monorepo (a folder below this project with a project of its own)
+        #[arg(long)]
+        product: Option<String>,
+        /// Include every product of a monorepo, each node named `product:ID`
+        #[arg(long, conflicts_with = "product")]
+        all_products: bool,
         #[arg(long)]
         json: bool,
     },
@@ -578,6 +585,12 @@ enum Command {
         /// Only nodes whose ID is of this domain, such as `carousels` for REQ-CAROUSELS-0001
         #[arg(long)]
         domain: Option<String>,
+        /// Read this product of a monorepo (a folder below this project with a project of its own)
+        #[arg(long)]
+        product: Option<String>,
+        /// Include every product of a monorepo, each node named `product:ID`
+        #[arg(long, conflicts_with = "product")]
+        all_products: bool,
         #[arg(long)]
         json: bool,
     },
@@ -610,6 +623,9 @@ enum Command {
         /// Only requirements with this status
         #[arg(long)]
         status: Option<String>,
+        /// Read this product of a monorepo (a folder below this project with a project of its own)
+        #[arg(long)]
+        product: Option<String>,
         #[arg(long)]
         json: bool,
     },
@@ -624,6 +640,9 @@ enum Command {
         /// Show the node as it was at a git revision (a branch, tag, hash or date:YYYY-MM-DD)
         #[arg(long)]
         at: Option<String>,
+        /// Read this product of a monorepo (a folder below this project with a project of its own)
+        #[arg(long)]
+        product: Option<String>,
     },
 }
 
@@ -1807,10 +1826,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
             status,
             limit,
             rebuild,
+            product,
+            all_products,
             json,
         } => {
-            let root = project_root(cli.root.as_deref())?;
+            let root = scope::choose(&project_root(cli.root.as_deref())?, product.as_deref())?;
             let options = search::SearchOptions {
+                all_products,
                 query: query.join(" "),
                 ty,
                 status,
@@ -1970,10 +1992,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
         Command::Read {
             domain,
             status,
+            product,
             json,
         } => {
             readdomain::read(
-                &project_root(cli.root.as_deref())?,
+                &scope::choose(&project_root(cli.root.as_deref())?, product.as_deref())?,
                 domain.as_deref(),
                 status.as_deref(),
                 json,
@@ -1981,9 +2004,15 @@ fn run(cli: Cli) -> Result<ExitCode> {
             )?;
             Ok(ExitCode::SUCCESS)
         }
-        Command::Show { id, text, json, at } => {
+        Command::Show {
+            id,
+            text,
+            json,
+            at,
+            product,
+        } => {
             show(
-                &project_root(cli.root.as_deref())?,
+                &scope::choose(&project_root(cli.root.as_deref())?, product.as_deref())?,
                 &id,
                 json,
                 cache,
@@ -1996,13 +2025,16 @@ fn run(cli: Cli) -> Result<ExitCode> {
             ty,
             status,
             domain,
+            product,
+            all_products,
             json,
         } => {
             list_nodes(
-                &project_root(cli.root.as_deref())?,
+                &scope::choose(&project_root(cli.root.as_deref())?, product.as_deref())?,
                 &ty,
                 status.as_deref(),
                 domain.as_deref(),
+                all_products,
                 json,
                 cache,
             )?;
@@ -2553,46 +2585,70 @@ fn check_command(root: &Path, options: &CheckOptions, cache: bool) -> Result<Exi
 }
 
 // spec: REQ-SEARCH-0003
+// spec: REQ-PROJECT-0009
 fn list_nodes(
     root: &Path,
     types: &[String],
     status: Option<&str>,
     domain: Option<&str>,
+    all_products: bool,
     json: bool,
     cache: bool,
 ) -> Result<()> {
     config::load(root)?;
-    let graph = load_graph(root, cache);
     let domain = domain.map(|d| d.to_ascii_uppercase().replace(['-', '_', ' '], ""));
-    let rows: Vec<_> = graph
-        .nodes
-        .iter()
-        .filter(|n| types.is_empty() || types.iter().any(|t| t == &n.ty))
-        .filter(|n| status.is_none_or(|s| n.status.as_deref() == Some(s)))
-        .filter(|n| {
-            domain.as_ref().is_none_or(|d| {
-                // REQ-CAROUSELS-0001: the part between the first dash and the number.
-                let mut parts = n.id.split('-');
-                parts.next();
-                let tail: Vec<&str> = parts.collect();
-                tail.len() >= 2 && tail[..tail.len() - 1].join("") == *d
-            })
-        })
-        .collect();
+    let projects = if all_products {
+        scope::projects(root)
+    } else {
+        vec![(".".to_string(), root.to_path_buf())]
+    };
+    let mut rows: Vec<(String, oxispec_core::node::Node)> = Vec::new();
+    for (product, dir) in &projects {
+        let graph = load_graph(dir, cache);
+        rows.extend(
+            graph
+                .nodes
+                .iter()
+                .filter(|n| types.is_empty() || types.iter().any(|t| t == &n.ty))
+                .filter(|n| status.is_none_or(|s| n.status.as_deref() == Some(s)))
+                .filter(|n| {
+                    domain.as_ref().is_none_or(|d| {
+                        // REQ-CAROUSELS-0001: the part between the first dash and the number.
+                        let mut parts = n.id.split('-');
+                        parts.next();
+                        let tail: Vec<&str> = parts.collect();
+                        tail.len() >= 2 && tail[..tail.len() - 1].join("") == *d
+                    })
+                })
+                .map(|n| (product.clone(), n.clone())),
+        );
+    }
     let title_of = |n: &oxispec_core::node::Node| {
         n.title
             .clone()
             .or_else(|| n.requirements.first().map(|r| r.name.clone()))
             .unwrap_or_default()
     };
+    // A node of a product is named as a link to it is written: `apps/a:REQ-UI-0001`.
+    let name_of = |product: &str, id: &str| {
+        if all_products && product != "." {
+            format!("{product}:{id}")
+        } else {
+            id.to_string()
+        }
+    };
     if json {
         let items: Vec<_> = rows
             .iter()
-            .map(|n| {
-                serde_json::json!({
+            .map(|(product, n)| {
+                let mut item = serde_json::json!({
                     "id": n.id, "type": n.ty, "status": n.status,
                     "title": title_of(n), "path": n.path,
-                })
+                });
+                if all_products {
+                    item["product"] = product.clone().into();
+                }
+                item
             })
             .collect();
         outln!(
@@ -2604,10 +2660,10 @@ fn list_nodes(
         );
         return Ok(());
     }
-    for n in &rows {
+    for (product, n) in &rows {
         outln!(
             "{}  {}  [{}]  {}",
-            n.id,
+            name_of(product, &n.id),
             n.ty,
             n.status.as_deref().unwrap_or("-"),
             title_of(n)
@@ -2631,9 +2687,18 @@ fn show(
         Some(rev) => git::graph_at(root, rev)?,
         None => load_graph(root, cache),
     };
-    let node = graph
-        .get(id)
-        .with_context(|| format!("no node with id {id}"))?;
+    let Some(node) = graph.get(id) else {
+        // A node of a product is shown from the top project too, when there is only one.
+        if revision.is_none()
+            && let Some((name, dir)) = scope::holder(root, &format!("node {id}"), |d| {
+                load_graph(d, cache).get(id).is_some()
+            })?
+        {
+            eprintln!("in product {name}");
+            return show(&dir, id, json, cache, None, text);
+        }
+        bail!("no node with id {id}");
+    };
     let incoming = graph.incoming(&node.id);
     // Nodes of the other products of the workspace that link to this one.
     let dependents = if revision.is_none() {

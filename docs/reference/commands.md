@@ -1074,6 +1074,8 @@ Usage: oxispec search [OPTIONS] <QUERY>...
 - `--status <STATUS>`: Only nodes with this status.
 - `-n, --limit <LIMIT>`: How many results to show. Default: `10`.
 - `--rebuild`: Delete the stored search index and build it again.
+- `--product <PRODUCT>`: Read this product of a monorepo (a folder below this project with a project of its own).
+- `--all-products`: Include every product of a monorepo, each node named `product:ID`.
 - `--json`
 
 ## `oxispec history`
@@ -1151,6 +1153,8 @@ Usage: oxispec list [OPTIONS]
 - `--type <TYPE>`: Only nodes of this type. Repeat for several types.
 - `--status <STATUS>`: Only nodes with this status.
 - `--domain <DOMAIN>`: Only nodes whose ID is of this domain, such as `carousels` for REQ-CAROUSELS-0001.
+- `--product <PRODUCT>`: Read this product of a monorepo (a folder below this project with a project of its own).
+- `--all-products`: Include every product of a monorepo, each node named `product:ID`.
 - `--json`
 
 ## `oxispec set-status`
@@ -1178,6 +1182,7 @@ Usage: oxispec read [OPTIONS] [DOMAIN]
 
 - `<DOMAIN>`: The domain, such as `account-and-profile` (the part of REQ-ACCOUNT-AND-PROFILE-0001 between `REQ-` and the number), or the folder of the requirements.
 - `--status <STATUS>`: Only requirements with this status.
+- `--product <PRODUCT>`: Read this product of a monorepo (a folder below this project with a project of its own).
 - `--json`
 
 ## `oxispec show`
@@ -1192,3 +1197,4 @@ Usage: oxispec show [OPTIONS] <ID>
 - `--text`: Print the text of the node as well.
 - `--json`
 - `--at <AT>`: Show the node as it was at a git revision (a branch, tag, hash or date:YYYY-MM-DD).
+- `--product <PRODUCT>`: Read this product of a monorepo (a folder below this project with a project of its own).
