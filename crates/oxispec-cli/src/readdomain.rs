@@ -117,6 +117,13 @@ pub fn read(
     };
     let mut nodes = functionality(&graph, asked);
     if nodes.is_empty() {
+        // A functionality of a product is read from the top project too, when there is one.
+        if let Some((name, dir)) = crate::scope::holder(root, &format!("`{asked}`"), |d| {
+            !functionality(&index::load(d, cache).0, asked).is_empty()
+        })? {
+            eprintln!("in product {name}");
+            return read(&dir, domain, status, json_output, cache);
+        }
         let known: Vec<&str> = all.keys().map(String::as_str).collect();
         bail!("{}", none_found(asked, &known));
     }

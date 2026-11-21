@@ -5522,6 +5522,69 @@ fn a_link_between_products_is_checked_at_a_revision() {
     assert!(new.stdout.contains("E002"), "{}", new.stdout);
 }
 
+// verifies: REQ-PROJECT-0009.S1
+// verifies: REQ-PROJECT-0009.S2
+#[test]
+fn the_top_project_reads_its_products() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    platform_workspace(p);
+
+    let own = run(p, &["list"]).stdout;
+    assert!(own.contains("0 node(s)"), "{own}");
+    let one = run(p, &["list", "--product", "apps/a"]).stdout;
+    assert!(
+        one.contains("REQ-UI-0001") && !one.contains("REQ-AUTH-0001"),
+        "{one}"
+    );
+    let all = run(p, &["list", "--all-products"]).stdout;
+    assert!(
+        all.contains("platform:REQ-AUTH-0001") && all.contains("apps/a:REQ-UI-0001"),
+        "{all}"
+    );
+    let hits = run(p, &["search", "Login", "--all-products"]).stdout;
+    assert!(hits.contains("platform:REQ-AUTH-0001"), "{hits}");
+    let none = run(p, &["search", "Login", "--product", "apps/a"]).stdout;
+    assert!(none.contains("no matches"), "{none}");
+    let out = run(p, &["list", "--product", "elsewhere"]);
+    assert_eq!(out.code, 2, "{}", out.stdout);
+    assert!(
+        out.stderr.contains("apps/a") && out.stderr.contains("platform"),
+        "{}",
+        out.stderr
+    );
+
+    // A node or a functionality that one product has is found from the top.
+    let shown = run(p, &["show", "REQ-AUTH-0001"]);
+    assert_eq!(shown.code, 0, "{}", shown.stderr);
+    assert!(shown.stdout.contains("REQ-AUTH-0001"), "{}", shown.stdout);
+    assert!(
+        shown.stderr.contains("in product platform"),
+        "{}",
+        shown.stderr
+    );
+    let read = run(p, &["read", "auth"]);
+    assert_eq!(read.code, 0, "{}", read.stderr);
+    assert!(read.stdout.contains("REQ-AUTH-0001"), "{}", read.stdout);
+
+    // Two products with the same ID: the top project does not guess.
+    assert_eq!(
+        run(
+            &p.join("platform"),
+            &["new", "requirement", "ui", "Other screen"]
+        )
+        .code,
+        0
+    );
+    let out = run(p, &["show", "REQ-UI-0001"]);
+    assert_eq!(out.code, 2, "{}", out.stdout);
+    assert!(
+        out.stderr.contains("apps/a") && out.stderr.contains("platform"),
+        "{}",
+        out.stderr
+    );
+}
+
 // verifies: REQ-SITE-0005.S1
 #[test]
 fn links_between_products_can_be_followed_on_the_site() {
