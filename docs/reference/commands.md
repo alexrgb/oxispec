@@ -150,6 +150,7 @@ Usage: oxispec new test-plan [OPTIONS] <TITLE>
 ```
 
 - `<TITLE>`
+- `--format <FORMAT>`: The format profile to write it in. Default: the one the config chooses for test plans.
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
 ### `oxispec new risk`
@@ -164,6 +165,7 @@ Usage: oxispec new risk [OPTIONS] <TITLE>
 - `--likelihood <LIKELIHOOD>`: low, medium or high. Default: `medium`.
 - `--impact <IMPACT>`: low, medium, high or critical. Default: `medium`.
 - `--from <FROM>`: The node it arises from; becomes an `arises-from` link.
+- `--format <FORMAT>`: The format profile to write it in. Default: the one the config chooses for risks.
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
 ### `oxispec new debt`
@@ -177,6 +179,7 @@ Usage: oxispec new debt [OPTIONS] <TITLE>
 - `<TITLE>`
 - `--severity <SEVERITY>`: low, medium, high or critical. Default: `medium`.
 - `--from <FROM>`: The node it arises from; becomes an `arises-from` link.
+- `--format <FORMAT>`: The format profile to write it in. Default: the one the config chooses for debt.
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
 ### `oxispec new prd`
@@ -188,6 +191,7 @@ Usage: oxispec new prd [OPTIONS] <TITLE>
 ```
 
 - `<TITLE>`
+- `--format <FORMAT>`: The format profile to write it in. Default: the one the config chooses for PRDs.
 - `--id-scheme <ID_SCHEME>`: Override the project's ID scheme for this node. One of `sequential`, `random`.
 
 ### `oxispec new change`

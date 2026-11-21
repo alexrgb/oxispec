@@ -5633,6 +5633,64 @@ fn answers() -> String {
     out
 }
 
+// verifies: REQ-FORMAT-PROFILES-0004.S1
+// verifies: REQ-FORMAT-PROFILES-0004.S2
+#[test]
+fn a_record_of_work_is_written_in_a_profile() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "full"]).code, 0);
+    let made = |args: &[&str]| {
+        let out = run(p, args);
+        assert_eq!(out.code, 0, "{args:?}: {}{}", out.stdout, out.stderr);
+    };
+    made(&["new", "prd", "Checkout", "--format", "one-pager"]);
+    made(&["new", "test-plan", "Release", "--format", "ieee-829"]);
+    made(&["new", "risk", "Leak", "--format", "treatment-plan"]);
+    made(&["new", "debt", "Retry", "--format", "principal-and-interest"]);
+    let read = |dir: &str| {
+        let d = p.join("oxispec").join(dir);
+        let f = fs::read_dir(d).unwrap().next().unwrap().unwrap().path();
+        fs::read_to_string(f).unwrap()
+    };
+    let prd = read("prd");
+    assert!(
+        prd.contains("## Problem") && !prd.contains("## Overview"),
+        "{prd}"
+    );
+    assert!(read("test-plans").contains("## Features to be tested"));
+    let risk = read("risks");
+    assert!(
+        risk.contains("## Mitigation") && risk.contains("likelihood: medium"),
+        "{risk}"
+    );
+    let debt = read("debt");
+    assert!(
+        debt.contains("## Principal") && debt.contains("severity: medium"),
+        "{debt}"
+    );
+    let out = run(p, &["new", "risk", "Other", "--format", "one-pager"]);
+    assert_eq!(out.code, 2, "{}", out.stdout);
+    assert!(out.stderr.contains("is for prd nodes"), "{}", out.stderr);
+
+    // The config chooses the profile, and the node is held to it.
+    let config = p.join(".oxispec/config.yaml");
+    let cfg = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{cfg}formats:\n  prd: one-pager\n")).unwrap();
+    assert_eq!(run(p, &["check"]).code, 0);
+    let file = fs::read_dir(p.join("oxispec/prd"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let text = fs::read_to_string(&file).unwrap();
+    fs::write(&file, text.replace("## Problem", "## Trouble")).unwrap();
+    let out = run(p, &["check"]);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(out.stdout.contains("E028"), "{}", out.stdout);
+}
+
 // verifies: REQ-FORMAT-PROFILES-0003.S1
 // verifies: REQ-FORMAT-PROFILES-0003.S2
 #[test]

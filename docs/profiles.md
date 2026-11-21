@@ -25,6 +25,10 @@ formats:
 
 The elements of the architecture model have a profile each, so a project can ask for the prose around the `architecture` block the same way it does for ADRs: `c4-person` (Role), `c4-system` (Purpose), `c4-container` and `c4-component` (Purpose and Responsibilities), and `c4-environment` (Purpose), each with a few optional sections. Choose one for a kind of element in the config, `formats: container: c4-container` (the key is the node type; for an environment it is `deployment-environment`), or for a single element with `oxispec new architecture container Api --format c4-container`. The new file has the sections of the profile and then the `architecture` block with the fields of its kind. A profile made for another kind is refused, and once the config chooses a profile, `check` reports E028 for an element that lacks a required section.
 
+## Records of work
+
+A PRD, a test plan, a risk and a tech debt item have profiles too. Each type has a plain profile (`prd-standard`, `test-plan-standard`, `risk-standard`, `debt-standard`: the sections `new` writes today, none required) and one that requires sections: `one-pager` for PRDs (Problem, Goals, Non-goals, Success metrics), `ieee-829` for test plans (test items, features in and out of scope, approach, pass and fail criteria, environment), `treatment-plan` for risks (Description, Cause, Consequence, Mitigation) and `principal-and-interest` for debt (Description, Interest, Principal). Choose one with `--format` on `new prd`, `new test-plan`, `new risk` or `new debt`, or for every new node with `formats: prd: one-pager` in the config. The profile sets the sections only: the fields of the type (likelihood, impact, severity, owner and the rest) are always written. Once the config chooses a profile, `check` reports E028 for a node that lacks a required section.
+
 ## Fixing the documents of a project
 
 `oxispec onboard` records which kinds of documents a project keeps (`documents:` in the config) together with the format of each (`formats:`), so adding a document never needs the question "which one, and in what format". See [getting started](guide/getting-started.md#create-a-project).
