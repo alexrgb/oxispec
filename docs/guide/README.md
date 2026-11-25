@@ -5,6 +5,7 @@ How to use the `oxispec` binary. Start with the first page, then take the one th
 | Page | For |
 |---|---|
 | [Getting started](getting-started.md) | Install, create a project, write a first requirement, run the checks |
+| [A monorepo with several products](getting-started.md#a-monorepo-with-several-products) | One project per product, links between products, reading them from the top |
 | [Concepts](concepts.md) | Nodes, IDs, links, modules and what `check` looks at |
 | [Writing requirements](requirements.md) | Requirements and scenarios, decisions, change sets, review |
 | [Writing a PRD](writing-a-prd.md) | A product requirements document made from the nodes |

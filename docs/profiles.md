@@ -70,7 +70,7 @@ The name is letters, digits, `-` and `_`, and cannot be the name of a built-in p
 | `madr` | `adr` | [MADR 4.0](https://adr.github.io/madr/): Context and Problem Statement, Considered Options and Decision Outcome are required. Decision Drivers, Consequences, Confirmation, Pros and Cons of the Options and More Information are in the template and optional. `date` and `decision-makers` are in the template. |
 | `y-statement` | `adr` | A decision in one sentence (context, concern, choice, neglected options, quality, downside, rationale), in a `Statement` section. |
 
-Choosing `default` or `shall` never makes an existing project fail. Choosing one of the others holds every ADR to it, so a project that has ADRs in another shape will see E028 until they are converted (planned in iteration 26b). More profiles (requirement styles such as EARS and Gherkin) are planned in [iterations.md](iterations.md), iteration 28.
+Choosing `default` or `shall` never makes an existing project fail. Choosing one of the others holds every ADR to it, so a project that has ADRs in another shape will see E028 until they are converted with `oxispec adr convert` (see [Converting between formats](#converting-between-formats)). Requirement styles (EARS, Gherkin, user story) and profiles for records of work are in the sections below.
 
 ## ADR formats side by side
 
