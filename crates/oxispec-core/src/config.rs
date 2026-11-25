@@ -69,6 +69,11 @@ pub struct TraceConfig {
     /// How the comments of a language without a grammar are read, by name.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub comments: BTreeMap<String, CommentSyntax>,
+    /// Regular expressions for IDs that a test names in its title, for
+    /// example `TC-[A-Z]+-\d+` for `it('TC-CAT-001 lists programs', ...)`.
+    /// A match counts as `verifies` when a node has that ID.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub test_ids: Vec<String>,
 }
 
 /// A service that turns text into vectors, with the OpenAI-compatible

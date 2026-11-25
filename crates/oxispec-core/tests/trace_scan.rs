@@ -115,3 +115,38 @@ fn a_reference_to_nothing_is_an_error_with_a_place() {
     assert_eq!(codes, ["E014", "E015"]);
     assert_eq!(c.findings[0].line, Some(2));
 }
+
+// verifies: REQ-TRACE-0007.S1
+#[test]
+fn a_test_title_matching_trace_test_ids_verifies_the_node_with_that_id() {
+    let config: oxispec_core::config::TraceConfig =
+        serde_saphyr::from_str("test_ids: ['TC-[A-Z]+-[0-9]+']").unwrap();
+    let languages = oxispec_core::languages::Languages::from_config(&config).unwrap();
+    let code = "describe('x', () => {\n  it('TC-CAT-001 lists programs', () => {});\n  it('plain', () => {});\n});\n";
+    let found = oxispec_core::trace::scan_text_with(Path::new("a.test.ts"), code, &languages);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].target, "TC-CAT-001");
+    assert_eq!(found[0].kind, Kind::Verifies);
+    assert_eq!(found[0].line, 2);
+    // Without the setting nothing is read from the title.
+    assert!(scan_in("a.test.ts", code).is_empty());
+}
+
+// verifies: REQ-TRACE-0007.S2
+#[test]
+fn a_pattern_match_without_a_node_is_left_out_and_a_bad_pattern_is_refused() {
+    let config: oxispec_core::config::TraceConfig =
+        serde_saphyr::from_str("test_ids: ['TC-[A-Z]+-[0-9]+']").unwrap();
+    let languages = oxispec_core::languages::Languages::from_config(&config).unwrap();
+    let found = oxispec_core::trace::scan_text_with(
+        Path::new("a.test.ts"),
+        "it('TC-CAT-001 x', () => {});\n",
+        &languages,
+    );
+    let coverage = coverage(&graph(), &found, None);
+    assert!(coverage.findings.is_empty(), "{:?}", coverage.findings);
+    let bad: oxispec_core::config::TraceConfig =
+        serde_saphyr::from_str("test_ids: ['TC-[']").unwrap();
+    let err = oxispec_core::languages::Languages::from_config(&bad).unwrap_err();
+    assert!(err.contains("trace.test_ids"), "{err}");
+}

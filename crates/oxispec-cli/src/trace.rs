@@ -84,6 +84,13 @@ pub fn trace_command(
         .collect();
     let implementers: Vec<&&Annotation> =
         mine.iter().filter(|a| a.kind == Kind::Implements).collect();
+    // A node with no scenarios (a test case, say) is verified as a whole.
+    let verifiers: Vec<&&Annotation> = if node.requirements.iter().any(|r| !r.scenarios.is_empty())
+    {
+        Vec::new()
+    } else {
+        mine.iter().filter(|a| a.kind == Kind::Verifies).collect()
+    };
     let title = node
         .title
         .clone()
@@ -112,6 +119,7 @@ pub fn trace_command(
             "title": title,
             "status": node.status,
             "implemented_by": implementers,
+            "verified_by": verifiers,
             "scenarios": scenarios.iter().map(|(anchor, name, tests)| json!({
                 "anchor": anchor, "name": name, "verified_by": tests,
             })).collect::<Vec<_>>(),
@@ -130,6 +138,12 @@ pub fn trace_command(
     }
     for a in implementers {
         outln!("  {}", place(a));
+    }
+    if !verifiers.is_empty() {
+        outln!("verified by:");
+        for a in verifiers {
+            outln!("  {}", place(a));
+        }
     }
     outln!("scenarios:");
     if scenarios.is_empty() {

@@ -78,6 +78,8 @@ pub struct Languages {
     list: Vec<Language>,
     /// When set, only files of these languages are scanned.
     only: Option<Vec<String>>,
+    /// `trace.test_ids`: IDs a test names in its title, found by pattern.
+    test_ids: Vec<regex::Regex>,
 }
 
 impl Default for Languages {
@@ -85,6 +87,7 @@ impl Default for Languages {
         Languages {
             list: builtin(),
             only: None,
+            test_ids: Vec::new(),
         }
     }
 }
@@ -138,7 +141,23 @@ impl Languages {
             }
             Some(config.languages.clone())
         };
-        Ok(Languages { list, only })
+        let mut test_ids = Vec::new();
+        for pattern in &config.test_ids {
+            test_ids.push(
+                regex::Regex::new(pattern)
+                    .map_err(|e| format!("invalid pattern in `trace.test_ids`: {pattern}: {e}"))?,
+            );
+        }
+        Ok(Languages {
+            list,
+            only,
+            test_ids,
+        })
+    }
+
+    /// The patterns of `trace.test_ids`.
+    pub fn test_ids(&self) -> &[regex::Regex] {
+        &self.test_ids
     }
 
     pub fn all(&self) -> &[Language] {

@@ -37,6 +37,17 @@ trace:
 
 A `spec:` comment can name an entity (`ENT-0001`) as well as a requirement. The code it is above is then the code that represents the entity, and `oxispec entities` shows it. See [entities.md](entities.md#say-which-code-represents-it).
 
+## Tests named by an ID in their title
+
+A project that already names its tests after a node, as `it('TC-CAT-001 lists programs', ...)`, does not have to add a marker to each one. Give a pattern for those IDs:
+
+```yaml
+trace:
+  test_ids: ['TC-[A-Z]+-[0-9]+']
+```
+
+Every match on a line of a source file counts as `verifies` for the node with that ID, with the same symbol binding as a marker. A match that no node has is left out without a finding, because a pattern can match text that is not one of your IDs. A pattern that is not a valid regular expression stops the scan with the reason. `oxispec trace TC-CAT-001` lists the tests under `verified by` for a node that has no scenarios, such as a `test-case`.
+
 ## Languages
 
 By default every text file is scanned. To scan only the languages of your project, name them, either at `oxispec init --languages rust,python` or in the config:

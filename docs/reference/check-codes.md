@@ -44,7 +44,7 @@ A code is never reused. `E` is an error (`oxispec check` exits with 1), `W` a wa
 | E036 | error | A node lacks the sign-off the project's compliance rules ask for |
 | E037 | error | The compliance settings in the config are not valid |
 | W001 | warning | Unknown node type |
-| W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
+| W002 | warning | Frontmatter is not valid YAML, so the file was skipped. The finding is at the line of the error and says when a value needs quotes (a title with `: ` in it) |
 | W003 | warning | A file could not be read |
 | W004 | warning | Unknown link kind |
 | W005 | warning | A SHOULD claim cannot hold in a context where other claims apply |

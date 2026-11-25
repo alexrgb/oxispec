@@ -164,7 +164,7 @@ pub const CODES: &[(&str, &str)] = &[
     ("W001", "Unknown node type"),
     (
         "W002",
-        "Frontmatter is not valid YAML, so the file was skipped",
+        "Frontmatter is not valid YAML, so the file was skipped. The finding is at the line of the error and says when a value needs quotes (a title with `: ` in it)",
     ),
     ("W003", "A file could not be read"),
     ("W004", "Unknown link kind"),

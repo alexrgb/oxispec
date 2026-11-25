@@ -463,9 +463,19 @@ pub fn parse_blocks(body: &str, line_offset: usize) -> Blocks {
     }
 }
 
+/// The line number in a YAML error such as `error: line 2 column 48: ...`.
+fn yaml_error_line(summary: &str) -> Option<usize> {
+    let rest = summary.split("line ").nth(1)?;
+    rest.split(|c: char| !c.is_ascii_digit())
+        .next()?
+        .parse()
+        .ok()
+}
+
 /// Parses one file. Files without frontmatter, or with frontmatter that has
 /// neither `id` nor `type`, are not nodes and produce nothing.
 // spec: REQ-FORMAT-0001
+// spec: REQ-FORMAT-0009
 pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) {
     let Some((yaml, body, consumed)) = split_frontmatter(text) else {
         return (None, Vec::new());
@@ -473,11 +483,21 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
     let fm: Frontmatter = match serde_saphyr::from_str(yaml) {
         Ok(fm) => fm,
         Err(e) => {
+            let message = e.to_string();
+            let summary = message.lines().next().unwrap_or_default();
+            // The error counts lines of the YAML, which starts after the `---` line.
+            let line = yaml_error_line(summary).map(|l| l + 1);
+            let hint = match line.and_then(|l| text.lines().nth(l - 1)) {
+                Some(l) if l.split_once(':').is_some_and(|(_, v)| v.contains(": ")) => {
+                    ". A value with `: ` in it needs quotes: put the whole value in \"...\""
+                }
+                _ => "",
+            };
             let f = Finding::warning(
                 "W002",
-                format!("frontmatter is not valid YAML, file skipped: {e}"),
+                format!("frontmatter is not valid YAML, file skipped: {summary}{hint}"),
             )
-            .at(path, Some(1));
+            .at(path, line.or(Some(1)));
             return (None, vec![f]);
         }
     };
@@ -564,6 +584,21 @@ mod tests {
         assert_eq!(seen, [(2, "Context", 7), (3, "Detail", 13)]);
     }
     use super::*;
+
+    // verifies: REQ-FORMAT-0009.S1
+    #[test]
+    fn frontmatter_with_an_unquoted_colon_is_reported_at_its_line_with_a_hint() {
+        let text = "---\nid: ADR-1\ntitle: Erasure (Art. 17): a directory\ntype: adr\n---\n# X\n";
+        let (node, findings) = parse_file_text(Path::new("a.md"), text);
+        assert!(node.is_none());
+        assert_eq!(findings[0].code, "W002");
+        assert_eq!(findings[0].line, Some(3), "{:?}", findings[0]);
+        assert!(
+            findings[0].message.contains("needs quotes"),
+            "{}",
+            findings[0].message
+        );
+    }
 
     #[test]
     fn a_requirement_keeps_its_statement_and_a_scenario_its_steps() {

@@ -947,6 +947,7 @@ dependencies = [
  "notify",
  "pulldown-cmark",
  "quick-xml",
+ "regex",
  "serde",
  "serde-saphyr",
  "serde_json",

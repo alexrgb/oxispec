@@ -19,6 +19,7 @@ anyhow = "1"
 blake3 = { version = "1", features = ["pure"] }
 clap = { version = "4", features = ["derive"] }
 getrandom = "0.4"
+regex = "1"
 ignore = "0.4"
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 serde = { version = "1", features = ["derive"] }
