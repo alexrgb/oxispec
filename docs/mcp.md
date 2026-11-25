@@ -103,4 +103,4 @@ A pack is the text of the nodes you ask for and the nodes near them, nearest fir
 - **Pointers.** What did not fit is listed by ID, type and title under "Related, not included", up to 50, so the agent knows it exists and can ask for it.
 - Each node says how it is connected, for example `REQ-AUTH-0001 decided-by ADR-0001`.
 
-This is ranking by graph distance only. Ranking by similarity, scopes (`.oxispec/scope.yaml`), the digest, and filtering by access rules come later, with those features.
+This is ranking by graph distance only. Ranking by similarity, scopes (`.oxispec/scope.yaml`), the digest, and filtering by access rules are not built yet; see the roadmap in [design.md](design.md#22-roadmap).

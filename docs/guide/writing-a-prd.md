@@ -28,3 +28,7 @@ The document has the node's sections, then a Functional requirements section wit
 `oxispec check` sees the PRD like any node: a link to a node that does not exist is an error. Requirements still get `// spec:` and `// verifies:` comments in code and tests, so `oxispec coverage` shows which acceptance criteria have a test. When a requirement changes, `oxispec diff` and the suspect links show it, and the PRD text you make next time carries the change.
 
 A PRD that already exists as a markdown file can be brought in once with `oxispec import specs --from prd --dir <file>`. See [Moving from another tool](importing.md).
+
+## Formats
+
+A PRD, like a test plan, a risk and a tech debt item, can be written in a format profile: `oxispec new prd "Title" --format one-pager` (the other is `prd-standard`). Set the usual one per project with `oxispec onboard` or `formats:` in the config; see [profiles](../profiles.md#records-of-work).

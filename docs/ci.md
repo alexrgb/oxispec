@@ -65,8 +65,8 @@ jobs:
 - Code scanning needs GitHub Advanced Security on private repositories. Leave the SARIF step out if you do not have it.
 - Pull requests from forks get a read-only token, so the comment step is skipped for them.
 - `--edit-last` updates the last comment written with the same token, so the pull request keeps one comment.
-- Installing with `cargo install` is slow. Prebuilt binaries are planned (see the roadmap) and will replace that step.
+- Installing with `cargo install` is slow. Prefer a prebuilt binary from the [releases page](https://github.com/alexrgb/oxispec/releases) or the installer script (see the README).
 
 ## Not built yet
 
-A `--changed-files` mode for monorepos with many projects, trace and coverage results (they need the scanners in a later iteration), and posting comments from the binary.
+A `--changed-files` mode for monorepos with many projects, and posting comments from the binary. Trace and coverage are separate commands: see [trace.md](trace.md).

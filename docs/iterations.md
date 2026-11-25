@@ -203,3 +203,4 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Iteration 88**: format profiles for a PRD, a test plan, a risk and a tech debt item, with `--format` on `new`.
 - **Iteration 89**: `list`, `read`, `search` and `show` at the top of a monorepo read the products: `--product`, `--all-products`, and a node or functionality that one product has is found from the top.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).
+- **Iteration 90**: documentation brought in line with the code: profiles, CI and MCP pages no longer call built features planned, the README and the guide index point to `onboard`, `formats`, products and the monorepo section.
