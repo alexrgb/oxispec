@@ -7972,6 +7972,45 @@ fn the_committed_reference_matches_the_program() {
     );
 }
 
+// verifies: REQ-DOCS-0001.S4
+#[test]
+fn every_command_is_named_in_the_hand_written_docs() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let help = run(dir.path(), &["--help"]).stdout;
+    let commands: Vec<&str> = help
+        .lines()
+        .skip_while(|l| !l.starts_with("Commands:"))
+        .skip(1)
+        .take_while(|l| !l.is_empty())
+        .filter_map(|l| l.split_whitespace().next())
+        .filter(|c| *c != "help")
+        .collect();
+    assert!(commands.len() > 40, "{commands:?}");
+    let mut text = std::fs::read_to_string(root.join("README.md")).unwrap();
+    let mut stack = vec![root.join("docs")];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap().flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                if !path.ends_with("reference") {
+                    stack.push(path);
+                }
+            } else if path.extension().is_some_and(|x| x == "md") {
+                text.push_str(&std::fs::read_to_string(&path).unwrap());
+            }
+        }
+    }
+    let missing: Vec<&&str> = commands
+        .iter()
+        .filter(|c| !text.contains(&format!("oxispec {c}")))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "commands with no word in README.md or docs/ (outside docs/reference): {missing:?}. Describe them in the docs."
+    );
+}
+
 // verifies: REQ-DOCS-0001.S1
 // verifies: REQ-DOCS-0001.S2
 #[test]

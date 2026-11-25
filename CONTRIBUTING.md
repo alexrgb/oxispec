@@ -30,7 +30,12 @@ cargo test --workspace
 1. Branch from `main`. Names: `feat/<n>-<slug>` for an iteration, `fix/<slug>`, `docs/<slug>`, `ci/<slug>`.
 2. Keep the change small and focused. A reviewer should be able to read the whole diff.
 3. Add tests for new behavior. Fix the test first for a bug fix when you can.
-4. Update the docs when behavior changes. If a design decision changes, update `docs/design.md` in the same pull request.
+4. Update the hand-written docs in the same pull request as the behavior. The reference in `docs/reference/` is generated (step 8), but the rest is not, and it drifts unless someone reads it:
+   - Search `README.md` and `docs/` (including `docs/guide/`) for the command, option, check code, module, format profile or term you changed, and fix every page that describes it.
+   - A new feature gets a place in the guide or its own page in `docs/`, a line in `docs/iterations.md`, and a mention in the README if a person would look for it there.
+   - A feature that is now built must not stay under "planned", "not yet" or "later" anywhere (`docs/design.md` roadmap, `docs/claims.md`, `docs/ci.md`, `docs/mcp.md`). Search for those words.
+   - If a design decision changes, update `docs/design.md` too.
+   - A test checks that every command is named in the docs. The rest is a review item: the pull request template asks for it.
 5. Open a pull request. The **title must follow [Conventional Commits](https://www.conventionalcommits.org)**, for example `feat(cli): add oxispec link`, because pull requests are squash merged and the title becomes the commit message. See [docs/versioning.md](docs/versioning.md).
 6. Do not change version numbers or `CHANGELOG.md`. Release pull requests do that.
 7. If you change a skill in `crates/oxispec-core/skills/`, regenerate the published folder with `cargo run -- agents export --to skills-repo --all`, and commit it. A test fails when `skills/` is out of date. A skill may only name commands and flags that exist: a test checks that too.
