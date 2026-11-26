@@ -48,6 +48,27 @@ trace:
 
 Every match on a line of a source file counts as `verifies` for the node with that ID, with the same symbol binding as a marker. A match that no node has is left out without a finding, because a pattern can match text that is not one of your IDs. A pattern that is not a valid regular expression stops the scan with the reason. `oxispec trace TC-CAT-001` lists the tests under `verified by` for a node that has no scenarios, such as a `test-case`.
 
+## IDs of your own shape, ranges and other systems
+
+A project's documents may name IDs that are not nodes: test cases kept in a table, or the keys of a task tracker. Say what they look like and oxispec treats a match as a known reference:
+
+```yaml
+ids:
+  TC: 'TC-[A-Z]+-[0-9]+'          # the whole ID must match
+external:
+  KAN:
+    pattern: 'KAN-[0-9]+'
+    url: 'https://example.atlassian.net/browse/{id}'   # optional
+```
+
+- A link to such an ID (`verifies: [TC-CAT-1200]`) is not dangling (`E002`), and a test that names it is not an `E014`.
+- `oxispec trace TC-CAT-1200` says the ID has no node of its own and lists the tests and code that name it. With `--json` it gives `node: false`, `kind`, `external`, `url` and `mentioned_by`.
+- `external` is for another system. An ID is shown as text. A link is built only when `url` is given, with `{id}` in it and `http://` or `https://` at its start. oxispec never fetches the status of an item.
+- A range stands for the IDs between its ends: `TC-CAT-1200..1212` or `TC-CAT-1200..TC-CAT-1212`, with leading zeros kept. It works in a test title found by `trace.test_ids` and in a link of a node, and a range that runs backwards, mixes prefixes or has more than 1000 IDs is not read as one.
+- A pattern that is not a valid regular expression, or a `url` without `{id}`, stops oxispec with the key it is in.
+
+This does not make a node. A type, a title, fields and links from the columns of a table need `sources:`, which is planned (see [ADR-0005](../specs/adr/0005-nodes-that-live-inside-a-document.md)).
+
 ## Languages
 
 By default every text file is scanned. To scan only the languages of your project, name them, either at `oxispec init --languages rust,python` or in the config:

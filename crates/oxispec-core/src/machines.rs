@@ -615,7 +615,7 @@ fn links(graph: &Graph, machine: &Machine, out: &mut Vec<Finding>) {
         .filter_map(|p| p.source.as_ref().map(|s| (s, "from")));
     for (target, field) in transition_targets.chain(property_sources) {
         let problem = match resolve_link(graph, target) {
-            LinkResolution::Ok | LinkResolution::External => continue,
+            LinkResolution::Ok | LinkResolution::External | LinkResolution::Reference => continue,
             LinkResolution::Invalid => format!("`{target}` is not a valid ID"),
             LinkResolution::MissingNode => format!("`{target}` does not exist"),
             LinkResolution::MissingScenario(anchor) => {

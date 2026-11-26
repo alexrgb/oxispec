@@ -74,9 +74,14 @@ pub fn trace_command(
         return Ok(());
     };
 
-    let node = graph
-        .get(id::base_of(target))
-        .with_context(|| format!("no node with id {target}"))?;
+    let Some(node) = graph.get(id::base_of(target)) else {
+        // spec: REQ-IDS-0001
+        // spec: REQ-IDS-0003
+        if graph.refs().matches(target) {
+            return known_id(&scan, &graph, target, json_output);
+        }
+        bail!("no node with id {target}");
+    };
     let mine: Vec<&Annotation> = scan
         .annotations
         .iter()
@@ -157,6 +162,48 @@ pub fn trace_command(
             let places: Vec<String> = tests.iter().map(|a| place(a)).collect();
             outln!("  {label:<12} {name}: verified by {}", places.join(", "));
         }
+    }
+    Ok(())
+}
+
+/// `trace` on an ID that a pattern of the project matches and no node has: where it is named.
+fn known_id(
+    scan: &Scan,
+    graph: &oxispec_core::graph::Graph,
+    target: &str,
+    json_output: bool,
+) -> Result<()> {
+    let refs = graph.refs();
+    let kind = refs.kind(target).unwrap_or_default();
+    let url = refs.url(target);
+    let mentions: Vec<&Annotation> = scan
+        .annotations
+        .iter()
+        .filter(|a| a.target == target)
+        .collect();
+    if json_output {
+        let out = json!({
+            "schema_version": OUTPUT_SCHEMA_VERSION,
+            "id": target,
+            "node": false,
+            "kind": kind,
+            "external": refs.is_external(target),
+            "url": url,
+            "mentioned_by": mentions,
+        });
+        outln!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+    outln!("{target}  ({kind}, no node of its own)");
+    if let Some(url) = url {
+        outln!("link: {url}");
+    }
+    outln!("named by:");
+    if mentions.is_empty() {
+        outln!("  nothing yet");
+    }
+    for a in mentions {
+        outln!("  {}", place(a));
     }
     Ok(())
 }

@@ -150,3 +150,23 @@ fn a_pattern_match_without_a_node_is_left_out_and_a_bad_pattern_is_refused() {
     let err = oxispec_core::languages::Languages::from_config(&bad).unwrap_err();
     assert!(err.contains("trace.test_ids"), "{err}");
 }
+
+// verifies: REQ-IDS-0002.S3
+#[test]
+fn a_test_title_with_a_range_verifies_every_id_in_it() {
+    let config: oxispec_core::config::TraceConfig =
+        serde_saphyr::from_str("test_ids: ['TC-[A-Z]+-[0-9]+']").unwrap();
+    let languages = oxispec_core::languages::Languages::from_config(&config).unwrap();
+    let code = "it('TC-CAT-1200..1202 filters', () => {});\nit('TC-CAT-5 alone', () => {});\n";
+    let found = oxispec_core::trace::scan_text_with(Path::new("a.test.ts"), code, &languages);
+    let targets: Vec<(&str, usize)> = found.iter().map(|a| (a.target.as_str(), a.line)).collect();
+    assert_eq!(
+        targets,
+        [
+            ("TC-CAT-1200", 1),
+            ("TC-CAT-1201", 1),
+            ("TC-CAT-1202", 1),
+            ("TC-CAT-5", 2)
+        ]
+    );
+}

@@ -374,6 +374,12 @@ pub fn load_plain(root: &Path, use_cache: bool) -> Graph {
     graph
         .with_formats(crate::formats::Formats::load(root))
         .with_debt(config.clone().map(|c| c.debt).unwrap_or_default())
+        .with_refs(
+            config
+                .as_ref()
+                .and_then(|c| crate::refs::Refs::new(&c.ids, &c.external).ok())
+                .unwrap_or_default(),
+        )
         .with_compliance(config.map(|c| c.compliance).unwrap_or_default())
 }
 
@@ -442,6 +448,12 @@ pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
     let graph = graph
         .with_formats(crate::formats::Formats::load(root))
         .with_debt(config.clone().map(|c| c.debt).unwrap_or_default())
+        .with_refs(
+            config
+                .as_ref()
+                .and_then(|c| crate::refs::Refs::new(&c.ids, &c.external).ok())
+                .unwrap_or_default(),
+        )
         .with_compliance(config.map(|c| c.compliance).unwrap_or_default());
     let graph = with_linked_projects(root, use_cache, graph);
     // The files of another project are not in the fingerprint, so such a graph is not kept.

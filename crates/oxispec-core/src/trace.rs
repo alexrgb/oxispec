@@ -255,19 +255,25 @@ pub fn scan_text_with(path: &Path, text: &str, languages: &Languages) -> Vec<Ann
         // `trace.test_ids`: an ID in a test title, found by a pattern.
         for pattern in languages.test_ids() {
             for m in pattern.find_iter(line) {
-                let target = m.as_str();
-                let named = found
-                    .iter()
-                    .any(|a| a.line == index + 1 && a.target == target);
-                if !named && id::parse(target).is_some() {
-                    found.push(Annotation {
-                        target: target.to_string(),
-                        kind: Kind::Verifies,
-                        path: path.to_path_buf(),
-                        line: index + 1,
-                        symbol: None,
-                        pattern: true,
-                    });
+                // `TC-CAT-1200..1212` names every ID from one end to the other.
+                let tail = crate::refs::range_tail(&line[m.end()..]);
+                let text = &line[m.start()..m.end() + tail];
+                let targets =
+                    crate::refs::expand_range(text).unwrap_or_else(|| vec![m.as_str().to_string()]);
+                for target in targets {
+                    let named = found
+                        .iter()
+                        .any(|a| a.line == index + 1 && a.target == target);
+                    if !named && id::parse(&target).is_some() {
+                        found.push(Annotation {
+                            target,
+                            kind: Kind::Verifies,
+                            path: path.to_path_buf(),
+                            line: index + 1,
+                            symbol: None,
+                            pattern: true,
+                        });
+                    }
                 }
             }
         }
@@ -495,7 +501,9 @@ pub fn coverage(graph: &Graph, annotations: &[Annotation], status: Option<&str>)
                     id::base_of(&a.target)
                 ),
             ),
-            LinkResolution::Invalid | LinkResolution::External => continue,
+            LinkResolution::Invalid | LinkResolution::External | LinkResolution::Reference => {
+                continue;
+            }
         };
         // Links from nodes are checked by `check`, so only code is reported here.
         if a.line > 1 || graph.nodes.iter().all(|n| n.path != a.path) {

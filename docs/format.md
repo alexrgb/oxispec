@@ -210,6 +210,10 @@ trace:
   exclude: ["vendor/**"]   # optional
   languages: [rust, python]   # optional: scan only these, see trace.md
   test_ids: ['TC-[A-Z]+-[0-9]+']   # optional: IDs in test titles count as `verifies`, see trace.md
+ids:                        # optional: IDs of your own shape need no node, see trace.md
+  TC: 'TC-[A-Z]+-[0-9]+'
+external:                   # optional: IDs of another system, with an optional link, see trace.md
+  KAN: { pattern: 'KAN-[0-9]+', url: 'https://example.atlassian.net/browse/{id}' }
 domains:                    # optional: the domain an import gives, see profiles.md
   analytics-and-reports: REPORTS   # a spec by name
   CAR: SLIDES                      # or the prefix of a source ID

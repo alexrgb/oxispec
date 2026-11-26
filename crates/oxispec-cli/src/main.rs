@@ -2405,7 +2405,7 @@ fn link_command(root: &Path, from: &str, kind: &str, to: &str, cache: bool) -> R
         );
     }
     match resolve_link(&graph, to) {
-        LinkResolution::Ok | LinkResolution::External => {}
+        LinkResolution::Ok | LinkResolution::External | LinkResolution::Reference => {}
         LinkResolution::Invalid => bail!("{to:?} is not a valid id"),
         LinkResolution::MissingNode => bail!("{to} does not exist"),
         LinkResolution::MissingScenario(anchor) => bail!(

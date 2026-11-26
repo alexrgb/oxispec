@@ -9266,3 +9266,40 @@ fn tasks_are_ticked_with_a_command() {
     fs::write(&change, before).unwrap();
     assert!(refused(&["change", "task", "done", "CHG-0001", "--all"]).contains("no tasks"));
 }
+
+// verifies: REQ-IDS-0001.S3
+// verifies: REQ-IDS-0003.S2
+#[test]
+fn trace_lists_where_an_id_is_named_when_a_pattern_knows_it_and_no_node_has_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    fs::write(
+        p.join("a.test.ts"),
+        "it('TC-CAT-1200..1201 lists programs', () => {});\n// verifies: KAN-7\n",
+    )
+    .unwrap();
+    let out = run(p, &["trace", "TC-CAT-1200"]);
+    assert_ne!(out.code, 0);
+    let config = p.join(".oxispec/config.yaml");
+    let mut text = fs::read_to_string(&config).unwrap();
+    text.push_str(
+        "trace:\n  test_ids: ['TC-[A-Z]+-[0-9]+']\nids:\n  TC: 'TC-[A-Z]+-[0-9]+'\nexternal:\n  KAN:\n    pattern: 'KAN-[0-9]+'\n    url: https://example.atlassian.net/browse/{id}\n",
+    );
+    fs::write(&config, text).unwrap();
+    let out = run(p, &["trace", "TC-CAT-1201"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("no node of its own"), "{}", out.stdout);
+    assert!(out.stdout.contains("a.test.ts:1"), "{}", out.stdout);
+    let out = run(p, &["trace", "KAN-7", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout
+            .contains("https://example.atlassian.net/browse/KAN-7"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("a.test.ts"), "{}", out.stdout);
+    // A pattern ID with no node is not an error for coverage or check.
+    assert_eq!(run(p, &["coverage"]).code, 0);
+}

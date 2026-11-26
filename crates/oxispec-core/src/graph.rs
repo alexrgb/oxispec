@@ -31,6 +31,8 @@ pub struct Graph {
     /// The graphs of other projects this one links to, by the namespace the links use. See
     /// `products`.
     pub(crate) externals: Arc<std::collections::BTreeMap<String, Graph>>,
+    /// The ID shapes of the project (`ids:`, `external:`), whose IDs need no node.
+    pub(crate) refs: Arc<crate::refs::Refs>,
 }
 
 #[derive(Debug, Default)]
@@ -133,6 +135,7 @@ impl Graph {
             debt: Arc::default(),
             compliance: Arc::default(),
             externals: Arc::default(),
+            refs: Arc::default(),
         }
     }
 
@@ -165,6 +168,17 @@ impl Graph {
     pub fn with_compliance(mut self, compliance: crate::config::ComplianceConfig) -> Graph {
         self.compliance = Arc::new(compliance);
         self
+    }
+
+    /// The same graph, with the ID shapes of the project.
+    pub fn with_refs(mut self, refs: crate::refs::Refs) -> Graph {
+        self.refs = Arc::new(refs);
+        self
+    }
+
+    /// The ID shapes of the project.
+    pub fn refs(&self) -> &crate::refs::Refs {
+        &self.refs
     }
 
     /// The same graph, with the project's rules for tech debt.

@@ -79,6 +79,7 @@ pub mod node;
 pub mod parse;
 pub mod prd;
 pub mod products;
+pub mod refs;
 pub mod release;
 pub mod report;
 pub mod results;

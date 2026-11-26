@@ -73,6 +73,8 @@ pub enum LinkResolution {
     Ok,
     /// A namespaced ID that belongs to another project. Not checked here.
     External,
+    /// An ID of a shape the project declares (`ids:`, `external:`) that no node has. Not checked.
+    Reference,
     /// Not a valid ID.
     Invalid,
     /// The node does not exist.
@@ -83,7 +85,11 @@ pub enum LinkResolution {
 
 pub fn resolve_link(graph: &Graph, target: &str) -> LinkResolution {
     let Some(parsed) = id::parse(target) else {
-        return LinkResolution::Invalid;
+        return if graph.refs().matches(target) {
+            LinkResolution::Reference
+        } else {
+            LinkResolution::Invalid
+        };
     };
     if let Some(namespace) = parsed.namespace {
         // A project of the same workspace was loaded: the link is checked there.
@@ -93,7 +99,11 @@ pub fn resolve_link(graph: &Graph, target: &str) -> LinkResolution {
         };
     }
     let Some(node) = graph.get(parsed.base) else {
-        return LinkResolution::MissingNode;
+        return if graph.refs().matches(target) {
+            LinkResolution::Reference
+        } else {
+            LinkResolution::MissingNode
+        };
     };
     match parsed.child {
         Some(child) if !node.has_scenario(child) => {
@@ -197,9 +207,13 @@ fn links(graph: &Graph, node: &Node, out: &mut Vec<Finding>) {
                 .node(&node.id),
             );
         }
+        let targets = targets
+            .iter()
+            .flat_map(|t| crate::refs::expand_range(t).unwrap_or_else(|| vec![t.clone()]));
         for target in targets {
+            let target = &target;
             let finding = match resolve_link(graph, target) {
-                LinkResolution::Ok => continue,
+                LinkResolution::Ok | LinkResolution::Reference => continue,
                 LinkResolution::Invalid => {
                     Finding::error("E005", format!("invalid id {target:?} in `{kind}` link"))
                 }
@@ -649,6 +663,34 @@ mod tests {
         let adr = adr_with_link("frobnicates", "REQ-A-0010");
         let g = graph(&[("r.md", REQ_ANCHORS), ("a.md", &adr)]);
         assert_eq!(codes(&g), vec!["W004"]);
+    }
+
+    fn with_refs(g: Graph, ids: &[(&str, &str)]) -> Graph {
+        let ids = ids
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        g.with_refs(crate::refs::Refs::new(&ids, &Default::default()).unwrap())
+    }
+
+    // verifies: REQ-IDS-0001.S2
+    #[test]
+    fn a_link_to_a_known_id_without_a_node_is_not_dangling() {
+        let text = adr_with_link("verifies", "TC-CAT-1200");
+        let g = graph(&[("a.md", &text)]);
+        assert_eq!(codes(&g), vec!["E002"]);
+        let g = with_refs(graph(&[("a.md", &text)]), &[("TC", "TC-[A-Z]+-[0-9]+")]);
+        assert!(codes(&g).is_empty(), "{:?}", check(&g));
+    }
+
+    // verifies: REQ-IDS-0002.S4
+    #[test]
+    fn a_range_in_a_link_is_checked_id_by_id() {
+        let text = adr_with_link("verifies", "TC-CAT-1200..1202");
+        let g = graph(&[("a.md", &text)]);
+        assert_eq!(codes(&g), vec!["E002", "E002", "E002"]);
+        let g = with_refs(graph(&[("a.md", &text)]), &[("TC", "TC-[A-Z]+-[0-9]+")]);
+        assert!(codes(&g).is_empty(), "{:?}", check(&g));
     }
 
     #[test]
