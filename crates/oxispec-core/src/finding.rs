@@ -252,6 +252,10 @@ pub const CODES: &[(&str, &str)] = &[
         "W029",
         "The requirements of one domain are in more than one folder",
     ),
+    (
+        "W030",
+        "A row of a table that `sources:` reads has no ID, so it is not a node",
+    ),
     ("I001", "A link to another project is not checked"),
     (
         "I002",

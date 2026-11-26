@@ -144,6 +144,9 @@ pub fn set_status(
         Some(n) => bail!("{id} is a {}, not a risk", n.ty),
         None => bail!("no node {id}"),
     };
+    if let Some(why) = oxispec_core::sources::write_refusal(node) {
+        bail!("{why}");
+    }
     let path = root.join(&node.path);
     let text = fs::read_to_string(&path)?;
     let today = debt::today();

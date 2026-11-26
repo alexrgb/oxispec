@@ -372,6 +372,7 @@ pub fn load_plain(root: &Path, use_cache: bool) -> Graph {
     let (graph, _) = load_files(root, use_cache, walk(root));
     let config = crate::config::load(root).ok();
     graph
+        .with_sourced_from(root, config.as_ref())
         .with_formats(crate::formats::Formats::load(root))
         .with_debt(config.clone().map(|c| c.debt).unwrap_or_default())
         .with_refs(
@@ -446,6 +447,7 @@ pub fn load(root: &Path, use_cache: bool) -> (Graph, LoadStats) {
     let (graph, stats) = load_files(root, use_cache, found);
     let config = crate::config::load(root).ok();
     let graph = graph
+        .with_sourced_from(root, config.as_ref())
         .with_formats(crate::formats::Formats::load(root))
         .with_debt(config.clone().map(|c| c.debt).unwrap_or_default())
         .with_refs(

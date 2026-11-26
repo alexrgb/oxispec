@@ -186,6 +186,23 @@ pub struct Node {
     /// BLAKE3 hash of everything after the frontmatter, to see that the text changed.
     #[serde(default)]
     pub body_hash: String,
+    /// For a node that is a part of a document (a row of a table), where it is. `None` for a node
+    /// that is a file. See `sources`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Origin>,
+    /// Other cells of the row of a sourced node, by the name the config gives.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, String>,
+}
+
+/// The lines of a document that a sourced node is.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Origin {
+    /// `table` for a row of a table.
+    pub kind: String,
+    /// The first and last line, counted from 1.
+    pub line: usize,
+    pub end_line: usize,
 }
 
 impl Node {

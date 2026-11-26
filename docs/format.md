@@ -214,6 +214,9 @@ ids:                        # optional: IDs of your own shape need no node, see 
   TC: 'TC-[A-Z]+-[0-9]+'
 external:                   # optional: IDs of another system, with an optional link, see trace.md
   KAN: { pattern: 'KAN-[0-9]+', url: 'https://example.atlassian.net/browse/{id}' }
+sources:                    # optional: rows of tables are nodes, see trace.md
+  - files: 'docs/*/test-cases.md'
+    table: { id: 1, id_pattern: 'TC-[A-Z]+-[0-9]+', type: test-case, title: 2, links: { verifies: 3 } }
 domains:                    # optional: the domain an import gives, see profiles.md
   analytics-and-reports: REPORTS   # a spec by name
   CAR: SLIDES                      # or the prefix of a source ID
@@ -331,6 +334,7 @@ Codes are stable. A code is never reused.
 | W027 | warning | A task of a change set names a node or scenario that does not exist (see [change sets](#change-sets)) |
 | W028 | warning | A change set is merged but some of its tasks are still open |
 | W029 | warning | The requirements of one domain are in more than one folder |
+| W030 | warning | A row of a table that `sources:` reads has no ID, so it is not a node |
 | I001 | info | A link to another project is not checked. Shown with `--verbose`. A link `product:ID` to a project of the same workspace is checked, see [getting started](guide/getting-started.md#a-platform-and-the-products-that-depend-on-it). |
 | I002 | info | A claim says nothing that another claim does not already say. Shown with `--verbose`. |
 

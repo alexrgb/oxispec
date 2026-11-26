@@ -170,6 +170,29 @@ impl Graph {
         self
     }
 
+    /// The same graph with the rows of the tables that the config's `sources:` name.
+    pub fn with_sourced_from(self, root: &Path, config: Option<&crate::config::Config>) -> Graph {
+        match config {
+            Some(c) if !c.sources.is_empty() => {
+                let (nodes, findings) = crate::sources::load(root, &c.sources);
+                self.with_sourced(nodes, findings)
+            }
+            _ => self,
+        }
+    }
+
+    /// The same graph with nodes read from the documents of `sources:` and what was found reading them.
+    pub fn with_sourced(self, nodes: Vec<Node>, findings: Vec<Finding>) -> Graph {
+        if nodes.is_empty() && findings.is_empty() {
+            return self;
+        }
+        let mut all = self.data.nodes.clone();
+        all.extend(nodes);
+        let mut all_findings = self.data.findings.clone();
+        all_findings.extend(findings);
+        Graph::new(all, all_findings)
+    }
+
     /// The same graph, with the ID shapes of the project.
     pub fn with_refs(mut self, refs: crate::refs::Refs) -> Graph {
         self.refs = Arc::new(refs);

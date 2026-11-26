@@ -67,7 +67,29 @@ external:
 - A range stands for the IDs between its ends: `TC-CAT-1200..1212` or `TC-CAT-1200..TC-CAT-1212`, with leading zeros kept. It works in a test title found by `trace.test_ids` and in a link of a node, and a range that runs backwards, mixes prefixes or has more than 1000 IDs is not read as one.
 - A pattern that is not a valid regular expression, or a `url` without `{id}`, stops oxispec with the key it is in.
 
-This does not make a node. A type, a title, fields and links from the columns of a table need `sources:`, which is planned (see [ADR-0005](../specs/adr/0005-nodes-that-live-inside-a-document.md)).
+This does not make a node. For a type, a title, fields and links from the columns of a table, use `sources:`.
+
+## Rows of a table as nodes
+
+A project may keep its test cases or user stories as rows of a table, one file per feature. Say where, and which column is which, and each row is a node, without any change to the documents:
+
+```yaml
+sources:
+  - files: 'docs/features/*/test-cases.md'    # a glob, relative to the project
+    table:
+      id: 1                                   # the column of the ID (columns count from 1)
+      id_pattern: 'TC-[A-Z]+-[0-9]+'          # optional: the ID inside the cell; without it the whole cell
+      type: test-case
+      title: 2
+      links: { verifies: 3 }                  # the column holds IDs; a range `US-CAT-1..3` is expanded
+      fields: { priority: 5, status: 6 }      # `status` and `owner` fill those fields, the rest go to `fields`
+```
+
+- A table counts when some row has an ID in the ID column. Other tables of the file, and tables in code blocks, are left alone. A row without an ID in such a table gives `W030` at its line.
+- Bold, code ticks and Markdown links in a cell are read as plain text. A cell of links is split at commas, semicolons, slashes and spaces, and words that are not IDs are ignored.
+- The node has the file as its `path` and the line of the row as `origin`. `show` prints both, the fields, and the row itself with `--text`. `check` (`E001` for a duplicate, `E002` for a link to nothing), `trace`, `coverage`, `list` and `search` read it like any other node. The type should be one that `check` knows (`test-case`, `requirement`, ...), or W001 says it is not.
+- It is read-only. `link`, `set-status`, the debt and risk `status` commands and `rollback` refuse it, naming the file and line, and `rollback` and `diff` leave it out. Edit the table.
+- Not yet: headings as nodes, the history of a row, suspect links on a row, and a page of its own in the site (see [ADR-0005](../specs/adr/0005-nodes-that-live-inside-a-document.md)).
 
 ## Languages
 

@@ -77,5 +77,6 @@ A code is never reused. `E` is an error (`oxispec check` exits with 1), `W` a wa
 | W027 | warning | A task of a change set names a node or scenario that does not exist |
 | W028 | warning | A change set is merged but some of its tasks are still open |
 | W029 | warning | The requirements of one domain are in more than one folder |
+| W030 | warning | A row of a table that `sources:` reads has no ID, so it is not a node |
 | I001 | info | A link to another project is not checked |
 | I002 | info | A claim says nothing that another claim does not already say |

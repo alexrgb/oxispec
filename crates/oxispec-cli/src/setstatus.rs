@@ -55,6 +55,9 @@ pub fn set_status(root: &Path, req: &Request, json_output: bool, cache: bool) ->
         let node = graph
             .get(id)
             .with_context(|| format!("no node with id {id}"))?;
+        if let Some(why) = oxispec_core::sources::write_refusal(node) {
+            bail!("{why}");
+        }
         if node.ty != "requirement" {
             bail!(
                 "{} is a {}, not a requirement; change sets, debt and risks have their own `status` commands",

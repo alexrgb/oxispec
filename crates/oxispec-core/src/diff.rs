@@ -257,6 +257,10 @@ pub fn diff_graphs(old: &Graph, new: &Graph) -> GraphDiff {
         if !std::ptr::eq(new.get(&node.id).unwrap_or(node), node) {
             continue;
         }
+        // A row of a table has no history of its own yet, so a revision does not have it.
+        if node.origin.is_some() {
+            continue;
+        }
         match old.get(&node.id) {
             None => added.push(NodeRef::from(node)),
             Some(before) => {
@@ -274,6 +278,7 @@ pub fn diff_graphs(old: &Graph, new: &Graph) -> GraphDiff {
     let removed = old
         .nodes
         .iter()
+        .filter(|n| n.origin.is_none())
         .filter(|n| std::ptr::eq(old.get(&n.id).unwrap_or(n), *n) && new.get(&n.id).is_none())
         .map(NodeRef::from)
         .collect();
