@@ -772,6 +772,7 @@ mod tests {
             target: target.to_string(),
             kind: Kind::Implements,
             path: PathBuf::from("src/order.rs"),
+            pattern: false,
             line,
             symbol: symbol.map(|name| crate::symbol::Symbol {
                 name: name.to_string(),

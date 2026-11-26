@@ -209,6 +209,7 @@ agents: [claude, cursor]   # only with the agents module; see agents.md
 trace:
   exclude: ["vendor/**"]   # optional
   languages: [rust, python]   # optional: scan only these, see trace.md
+  test_ids: ['TC-[A-Z]+-[0-9]+']   # optional: IDs in test titles count as `verifies`, see trace.md
 domains:                    # optional: the domain an import gives, see profiles.md
   analytics-and-reports: REPORTS   # a spec by name
   CAR: SLIDES                      # or the prefix of a source ID
@@ -298,7 +299,7 @@ Codes are stable. A code is never reused.
 | E041 | error | An entity block cannot be read, has no name, or shares its name with another entity (see [entities.md](entities.md)) |
 | E042 | error | An alias is not a valid ID, is the ID of another node, or is an alias of two nodes |
 | W001 | warning | Unknown node type |
-| W002 | warning | Frontmatter is not valid YAML, so the file was skipped |
+| W002 | warning | Frontmatter is not valid YAML, so the file was skipped. The finding is at the line of the error and says when a value needs quotes (a title with `: ` in it) |
 | W003 | warning | A file could not be read |
 | W004 | warning | Unknown link kind |
 | W005 | warning | A `should` claim cannot hold in a context where other claims apply |

@@ -17,6 +17,7 @@ ignore = { workspace = true }
 notify = { workspace = true }
 pulldown-cmark = { version = "0.13.6", default-features = false, features = ["html"] }
 quick-xml = "0.42.0"
+regex = { workspace = true }
 serde = { workspace = true }
 serde-saphyr = { workspace = true }
 serde_json = { workspace = true }

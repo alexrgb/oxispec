@@ -2247,6 +2247,39 @@ fn coverage_reports_annotations_that_point_at_nothing() {
     assert!(out.stdout.contains("--> src/more.rs:1"), "{}", out.stdout);
 }
 
+// verifies: REQ-TRACE-0007.S1
+#[test]
+fn trace_finds_a_test_by_the_id_in_its_title_when_the_project_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    fs::create_dir_all(p.join("specs/test-cases")).unwrap();
+    fs::write(
+        p.join("specs/test-cases/TC-CAT-001.md"),
+        "---\nid: TC-CAT-001\ntype: test-case\ntitle: Catalog is anonymous\n---\n# TC-CAT-001\n",
+    )
+    .unwrap();
+    fs::write(
+        p.join("a.test.ts"),
+        "it('TC-CAT-001 lists programs', () => {});\nit('TC-CAT-002 has no node', () => {});\n",
+    )
+    .unwrap();
+    let out = run(p, &["trace", "TC-CAT-001"]);
+    assert!(!out.stdout.contains("a.test.ts"), "{}", out.stdout);
+    let config = p.join(".oxispec/config.yaml");
+    let mut text = fs::read_to_string(&config).unwrap();
+    text.push_str("trace:\n  test_ids: ['TC-[A-Z]+-[0-9]+']\n");
+    fs::write(&config, text).unwrap();
+    let out = run(p, &["trace", "TC-CAT-001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("verified by:"), "{}", out.stdout);
+    assert!(out.stdout.contains("a.test.ts:1"), "{}", out.stdout);
+    // A title that names no node is not an error.
+    let out = run(p, &["coverage"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(!out.stdout.contains("E014"), "{}", out.stdout);
+}
+
 // verifies: REQ-TRACE-0005.S1
 #[test]
 fn trace_leaves_out_excluded_paths_markdown_and_ignored_files() {

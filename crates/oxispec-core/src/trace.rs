@@ -50,6 +50,11 @@ pub struct Annotation {
     /// a parser. See [`crate::symbol`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbol: Option<Symbol>,
+    /// Found by a `trace.test_ids` pattern, not written as a marker. A
+    /// pattern can match text that is no ID of ours, so a match with no node
+    /// is left out instead of reported.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub pattern: bool,
 }
 
 /// What came out of walking a project.
@@ -158,6 +163,7 @@ pub fn scan_text(path: &Path, text: &str) -> Vec<Annotation> {
 
 /// The annotations in one file's text, reading its language as the project's
 /// settings say.
+// spec: REQ-TRACE-0007
 pub fn scan_text_with(path: &Path, text: &str, languages: &Languages) -> Vec<Annotation> {
     let leaders: Option<&[String]> = languages
         .for_path(path)
@@ -172,7 +178,7 @@ pub fn scan_text_with(path: &Path, text: &str, languages: &Languages) -> Vec<Ann
         offset += whole.len();
         let line = whole.trim_end_matches(['\n', '\r']);
         // Most lines have nothing. Skip them cheaply.
-        if !(line.contains(':') || line.contains('[')) {
+        if !(line.contains(':') || line.contains('[') || !languages.test_ids().is_empty()) {
             continue;
         }
         let mut add = |target: &str, kind: Kind| {
@@ -182,6 +188,7 @@ pub fn scan_text_with(path: &Path, text: &str, languages: &Languages) -> Vec<Ann
                 path: path.to_path_buf(),
                 line: index + 1,
                 symbol: None,
+                pattern: false,
             });
         };
         for (marker, kind) in MARKERS {
@@ -244,6 +251,25 @@ pub fn scan_text_with(path: &Path, text: &str, languages: &Languages) -> Vec<Ann
                 }
             }
             rest = &rest[close + 1..];
+        }
+        // `trace.test_ids`: an ID in a test title, found by a pattern.
+        for pattern in languages.test_ids() {
+            for m in pattern.find_iter(line) {
+                let target = m.as_str();
+                let named = found
+                    .iter()
+                    .any(|a| a.line == index + 1 && a.target == target);
+                if !named && id::parse(target).is_some() {
+                    found.push(Annotation {
+                        target: target.to_string(),
+                        kind: Kind::Verifies,
+                        path: path.to_path_buf(),
+                        line: index + 1,
+                        symbol: None,
+                        pattern: true,
+                    });
+                }
+            }
         }
     }
     if !found.is_empty() {
@@ -373,6 +399,7 @@ fn from_links(graph: &Graph) -> Vec<Annotation> {
                     path: node.path.clone(),
                     line: 1,
                     symbol: None,
+                    pattern: false,
                 });
             }
         }
@@ -451,6 +478,7 @@ pub fn coverage(graph: &Graph, annotations: &[Annotation], status: Option<&str>)
                 };
                 continue;
             }
+            LinkResolution::MissingNode if a.pattern => continue,
             LinkResolution::MissingNode => (
                 "E014",
                 format!(
@@ -649,6 +677,7 @@ def test_idle(): pass
             path: path.into(),
             line: 7,
             symbol: None,
+            pattern: false,
         }
     }
 
