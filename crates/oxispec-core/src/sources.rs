@@ -123,7 +123,11 @@ fn files(root: &Path, glob: &str) -> Vec<PathBuf> {
         .build()
         .flatten()
         .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
-        .filter_map(|e| e.path().strip_prefix(root).ok().map(Path::to_path_buf))
+        // Paths are kept with `/` separators on every platform, as the other nodes' are.
+        .filter_map(|e| {
+            let rel = e.path().strip_prefix(root).ok()?;
+            Some(PathBuf::from(rel.to_string_lossy().replace('\\', "/")))
+        })
         .collect();
     found.sort();
     found
