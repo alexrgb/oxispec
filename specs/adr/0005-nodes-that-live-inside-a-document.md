@@ -1,7 +1,7 @@
 ---
 id: ADR-0005
 type: adr
-status: proposed
+status: accepted
 date: 2026-11-26
 links:
   amends: [ADR-0001]
@@ -12,7 +12,7 @@ links:
 
 A node is a file ([ADR-0001](0001-markdown-files-with-front-matter-are-the-source-of-truth.md)), and its ID is in front matter ([ADR-0002](0002-ids-are-immutable-and-independent-of-file-paths.md)). The only thing smaller than a file that has an ID is a scenario, which is a child of its requirement: `REQ-AUTH-0012.S1`.
 
-A trial on a learning-platform project showed one whose documents were written before oxispec, in the usual way of a product team: one `spec.md` and one `test-cases.md` per epic, with a user story as a heading and a test case as a row of a table. Its IDs (`US-CAT-001`, `TC-CAT-001`, `BRL-CAT-02`, `BR-080`, `ADR-0027`) are cited by well over a thousand test titles, by commit messages and by Jira. For this project oxispec found no node (`E003` for every such file, `no node with id TC-CAT-001`), so there was no trace, no coverage and no link check.
+Many projects have documents that were written before oxispec, in the usual way of a product team: one `spec.md` and one `test-cases.md` per epic, with a user story as a heading and a test case as a row of a table. Its IDs (`US-CAT-001`, `TC-CAT-001`, `BRL-CAT-02`, `BR-080`, `ADR-0027`) are cited by well over a thousand test titles, by commit messages and by Jira. For such a project oxispec finds no node (`E003` for every such file, `no node with id TC-CAT-001`), so there was no trace, no coverage and no link check.
 
 What the project needs from oxispec, in the order of value:
 
@@ -28,7 +28,7 @@ Things in oxispec that assume a node is a file: `Node.path`, the duplicate check
 
 `oxispec import specs --from markdown` makes a node per requirement, and a one-time script could do the same for rows. Nothing in the model changes.
 
-For this project it means 1000+ files, the loss of the tables people read, and a document that is no longer where the team writes. The trial rejected it. It stays the answer for projects that start with oxispec.
+For this project it means 1000+ files, the loss of the tables people read, and a document that is no longer where the team writes. It is the answer teams reject first. It stays the answer for projects that start with oxispec.
 
 ### 2. Nodes sourced from a document, declared in the config
 
@@ -79,7 +79,7 @@ It reuses everything, including `history` and `site`, because the file exists. T
 
 ## Decision
 
-Proposed: **option 2, in stages, with option 4's pattern IDs as the first stage**, and options 3 and 5 not taken.
+Accepted: **option 2, in stages, with option 4's pattern IDs as the first stage**, and options 3 and 5 not taken.
 
 1. **IDs of the project's own shape.** `ids:` declares patterns (`TC-[A-Z]+-[0-9]+`) that are valid IDs whatever their form, and a range `A..B` in a link column or in text is expanded to its IDs by a parser of its own that runs before `id::parse` (the ID parser is unchanged, so `.` still means a child). This stage alone gives option 4.
 2. **Table sources.** `sources:` with `table:`, read-only, with `id`, `type`, `title`, `fields` and `links` by column. `check`, `trace`, `coverage`, `show`, `list`, `search`, `context` and the MCP tools read them. `Node` gets `origin`. Commands that write a node refuse one with a message that names the file and the row.
@@ -87,9 +87,9 @@ Proposed: **option 2, in stages, with option 4's pattern IDs as the first stage*
 4. **History, suspect links and the site** for sourced nodes: history by the row at each revision, suspect by the hash of the row, a page per node.
 5. Writing a sourced node (`set-status`, `new`) is not planned. A project that wants it uses files.
 
-Each stage is its own iteration and pull request, tested on that project's documents (one epic, then all of them) as an acceptance test.
+Each stage is its own iteration and pull request, tested on a real project of this shape (one part of it, then all of it) as an acceptance test.
 
-External IDs such as Jira keys are a separate decision. They are a reference with a URL, not a node, so they follow stage 1 (a pattern, and a URL template to show a link), and a check that says whether a closed ticket has a test needs a source of the ticket's status, which oxispec does not have and does not fetch.
+External IDs such as Jira keys are a separate, smaller decision: an ID of a task is a reference to something outside the project, so it needs a pattern (stage 1) and nothing more. A link is built only when the config gives one, a base and the ID (`external: { KAN: { pattern: "KAN-[0-9]+", url: "https://example.atlassian.net/browse/{id}" } }`), and without it the ID is shown as text. oxispec does not fetch the status of a task.
 
 ## Consequences
 

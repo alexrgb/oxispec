@@ -205,4 +205,4 @@ The plan changes as we learn. Change it in a pull request, like anything else.
 - **Review and stress tests** (in review): a review of iterations 1 to 14, `oxispec-stress`, and five fixes it led to. See [review.md](review.md) and [stress.md](stress.md).
 - **Iteration 90**: documentation brought in line with the code: profiles, CI and MCP pages no longer call built features planned, the README and the guide index point to `onboard`, `formats`, products and the monorepo section.
 - **Iteration 91**: a rule and a test to keep the hand-written docs in step with the program: CONTRIBUTING says what to search and fix, a test fails when a command is named nowhere in the docs, and pull requests get a checklist.
-- **Iteration 92**: from a trial on a project with its own ID shapes: `trace.test_ids` finds tests by an ID in their title, `trace` lists the tests of a node without scenarios, and W002 says the line and that a value needs quotes.
+- **Iteration 92**: for projects with their own ID shapes: `trace.test_ids` finds tests by an ID in their title, `trace` lists the tests of a node without scenarios, and W002 says the line and that a value needs quotes.
