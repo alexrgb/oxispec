@@ -89,7 +89,19 @@ sources:
 - Bold, code ticks and Markdown links in a cell are read as plain text. A cell of links is split at commas, semicolons, slashes and spaces, and words that are not IDs are ignored.
 - The node has the file as its `path` and the line of the row as `origin`. `show` prints both, the fields, and the row itself with `--text`. `check` (`E001` for a duplicate, `E002` for a link to nothing), `trace`, `coverage`, `list` and `search` read it like any other node. The type should be one that `check` knows (`test-case`, `requirement`, ...), or W001 says it is not.
 - It is read-only. `link`, `set-status`, the debt and risk `status` commands and `rollback` refuse it, naming the file and line, and `rollback` and `diff` leave it out. Edit the table.
-- Not yet: headings as nodes, the history of a row, suspect links on a row, and a page of its own in the site (see [ADR-0005](../specs/adr/0005-nodes-that-live-inside-a-document.md)).
+- Not yet: the history of a row, suspect links on a row, and a page of its own in the site (see [ADR-0005](../specs/adr/0005-nodes-that-live-inside-a-document.md)).
+
+### Headings as nodes
+
+A user story that is a heading (`## US-CAT-001: Browse programs`) is a node too:
+
+```yaml
+sources:
+  - files: 'docs/features/*/spec.md'
+    heading: { id_pattern: 'US-[A-Z]+-[0-9]+', type: user-story }
+```
+
+A source has `table` or `heading`, not both. A heading outside a code block whose text has a match is a node with that ID and type. The rest of the heading, without separators such as `:` or a dash, is its title. Its place is the lines from the heading to the line before the next heading of the same or a higher level, so its sub-headings belong to it. `show` prints the range, and `show --text` prints those lines. It is read-only like a row, and its hash changes when any line of the section does. A heading gives no links or fields; link to it from a test case table or write the IDs in `links` of other nodes.
 
 ## Languages
 

@@ -9398,3 +9398,34 @@ fn a_revision_does_not_have_the_rows_so_rollback_and_diff_leave_them_alone() {
         table
     );
 }
+
+// verifies: REQ-SOURCES-0003.S3
+#[test]
+fn a_heading_with_an_id_is_shown_and_traced_and_not_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    fs::create_dir_all(p.join("docs")).unwrap();
+    let spec = "# Catalog\n\n## US-CAT-001: Browse programs\n\nA visitor browses.\n\n## Other\n";
+    fs::write(p.join("docs/spec.md"), spec).unwrap();
+    fs::write(p.join("a.test.ts"), "it('US-CAT-001 browses', () => {});\n").unwrap();
+    let config = p.join(".oxispec/config.yaml");
+    let mut text = fs::read_to_string(&config).unwrap();
+    text.push_str("trace:\n  test_ids: ['US-[A-Z]+-[0-9]+']\nsources:\n  - files: 'docs/spec.md'\n    heading: { id_pattern: 'US-[A-Z]+-[0-9]+', type: requirement }\n");
+    fs::write(&config, text).unwrap();
+    let out = run(p, &["show", "US-CAT-001", "--text"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("docs/spec.md:3-6"), "{}", out.stdout);
+    assert!(out.stdout.contains("A visitor browses."), "{}", out.stdout);
+    assert!(!out.stdout.contains("## Other"), "{}", out.stdout);
+    let out = run(p, &["trace", "US-CAT-001"]);
+    assert!(out.stdout.contains("a.test.ts:1"), "{}", out.stdout);
+    let out = run(p, &["link", "US-CAT-001", "verifies", "US-CAT-001"]);
+    assert_ne!(out.code, 0);
+    assert!(
+        out.stderr.contains("a section of a document"),
+        "{}",
+        out.stderr
+    );
+    assert_eq!(fs::read_to_string(p.join("docs/spec.md")).unwrap(), spec);
+}

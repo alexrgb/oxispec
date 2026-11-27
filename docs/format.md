@@ -217,6 +217,8 @@ external:                   # optional: IDs of another system, with an optional 
 sources:                    # optional: rows of tables are nodes, see trace.md
   - files: 'docs/*/test-cases.md'
     table: { id: 1, id_pattern: 'TC-[A-Z]+-[0-9]+', type: test-case, title: 2, links: { verifies: 3 } }
+  - files: 'docs/*/spec.md'
+    heading: { id_pattern: 'US-[A-Z]+-[0-9]+', type: user-story }
 domains:                    # optional: the domain an import gives, see profiles.md
   analytics-and-reports: REPORTS   # a spec by name
   CAR: SLIDES                      # or the prefix of a source ID
