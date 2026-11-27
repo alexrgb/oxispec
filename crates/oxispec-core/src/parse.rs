@@ -566,6 +566,8 @@ pub fn parse_file_text(path: &Path, text: &str) -> (Option<Node>, Vec<Finding>) 
         architecture,
         entities,
         body_hash: blake3::hash(body.as_bytes()).to_hex().to_string(),
+        origin: None,
+        fields: std::collections::BTreeMap::new(),
     };
     (Some(node), Vec::new())
 }

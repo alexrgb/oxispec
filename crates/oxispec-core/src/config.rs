@@ -161,6 +161,9 @@ pub struct Config {
     /// IDs of another system, such as Jira keys, by name. See `refs`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub external: BTreeMap<String, crate::refs::ExternalConfig>,
+    /// Documents whose tables hold nodes, one row each. See `sources`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<crate::sources::SourceConfig>,
     /// The domain that an import gives to the IDs of a spec, by the name of the spec (its folder
     /// or file) or by the prefix of an ID in the source. See `import::domain_for`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -264,6 +267,7 @@ impl Config {
             compliance: ComplianceConfig::default(),
             domains: BTreeMap::new(),
             ids: BTreeMap::new(),
+            sources: Vec::new(),
             external: BTreeMap::new(),
             docs_dir: DEFAULT_DOCS_DIR.to_string(),
         }
@@ -316,6 +320,9 @@ fn parse_text(path: &Path, text: &str) -> Result<Config, Error> {
                 ),
             ));
         }
+    }
+    if let Err(why) = crate::sources::validate(&config.sources) {
+        return Err(Error::Yaml(path.to_path_buf(), format!("sources: {why}")));
     }
     if let Err(why) = crate::refs::Refs::new(&config.ids, &config.external) {
         return Err(Error::Yaml(path.to_path_buf(), why.to_string()));

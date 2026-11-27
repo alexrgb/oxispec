@@ -74,6 +74,8 @@ impl Action {
 pub enum RollbackError {
     #[error("no node {0} at that revision or now")]
     UnknownNode(String),
+    #[error("{0}")]
+    Sourced(String),
 }
 
 /// The nodes that differ between now and the revision: added, removed or changed.
@@ -94,6 +96,9 @@ pub fn plan(current: &Graph, target: &Graph, ids: &[String]) -> Result<Vec<Actio
     let mut seen = BTreeSet::new();
     for given in ids {
         let (now, then) = (current.get(given), target.get(given));
+        if let Some(why) = now.and_then(crate::sources::write_refusal) {
+            return Err(RollbackError::Sourced(why));
+        }
         let id = match (now, then) {
             (Some(node), _) | (None, Some(node)) => node.id.clone(),
             (None, None) => return Err(RollbackError::UnknownNode(given.clone())),

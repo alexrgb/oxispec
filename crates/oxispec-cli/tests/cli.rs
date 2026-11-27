@@ -9303,3 +9303,98 @@ fn trace_lists_where_an_id_is_named_when_a_pattern_knows_it_and_no_node_has_it()
     // A pattern ID with no node is not an error for coverage or check.
     assert_eq!(run(p, &["coverage"]).code, 0);
 }
+
+fn sources_project(p: &Path) {
+    assert_eq!(run(p, &["init", "--preset", "standard"]).code, 0);
+    fs::create_dir_all(p.join("docs/cat")).unwrap();
+    fs::write(
+        p.join("docs/cat/test-cases.md"),
+        "# Cases\n\n| ID | Title | Verifies | Priority |\n|---|---|---|---|\n| TC-CAT-001 | Lists programs | US-CAT-001, US-CAT-002..US-CAT-003 | P1 |\n| TC-CAT-002 | Opens one | US-CAT-009 | P2 |\n",
+    )
+    .unwrap();
+    fs::write(
+        p.join("docs/cat/spec.md"),
+        "---\nid: US-CAT-001\ntype: requirement\n---\n### Requirement: Browse\nThe catalog SHALL list programs.\n\n#### Scenario: Anon {#S1}\n- **WHEN** a\n- **THEN** b\n",
+    )
+    .unwrap();
+    fs::write(
+        p.join("a.test.ts"),
+        "it('TC-CAT-001 lists programs', () => {});\n",
+    )
+    .unwrap();
+    let config = p.join(".oxispec/config.yaml");
+    let mut text = fs::read_to_string(&config).unwrap();
+    text.push_str("trace:\n  test_ids: ['TC-[A-Z]+-[0-9]+']\nsources:\n  - files: 'docs/*/test-cases.md'\n    table:\n      id: 1\n      id_pattern: 'TC-[A-Z]+-[0-9]+'\n      type: test-case\n      title: 2\n      links: { verifies: 3 }\n      fields: { priority: 4 }\n");
+    fs::write(&config, text).unwrap();
+}
+
+// verifies: REQ-SOURCES-0001.S4
+#[test]
+fn a_row_of_a_table_is_shown_traced_and_checked_like_a_node() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    sources_project(p);
+    let out = run(p, &["show", "TC-CAT-001", "--text"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains("docs/cat/test-cases.md:5"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("priority: P1"), "{}", out.stdout);
+    assert!(out.stdout.contains("Lists programs"), "{}", out.stdout);
+    let out = run(p, &["trace", "TC-CAT-001"]);
+    assert!(out.stdout.contains("a.test.ts:1"), "{}", out.stdout);
+    // US-CAT-002 and US-CAT-009 do not exist.
+    let out = run(p, &["check"]);
+    assert!(out.stdout.contains("US-CAT-009"), "{}", out.stdout);
+    assert!(out.stdout.contains("US-CAT-002"), "{}", out.stdout);
+}
+
+// verifies: REQ-SOURCES-0002.S1
+#[test]
+fn commands_that_write_a_node_refuse_a_row_and_leave_the_document_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    sources_project(p);
+    let before = fs::read_to_string(p.join("docs/cat/test-cases.md")).unwrap();
+    let out = run(p, &["link", "TC-CAT-001", "verifies", "US-CAT-001"]);
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("a row of a table"), "{}", out.stderr);
+    let out = run(p, &["set-status", "accepted", "TC-CAT-001"]);
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("a row of a table"), "{}", out.stderr);
+    assert_eq!(
+        fs::read_to_string(p.join("docs/cat/test-cases.md")).unwrap(),
+        before
+    );
+}
+
+// verifies: REQ-SOURCES-0002.S2
+#[test]
+fn a_revision_does_not_have_the_rows_so_rollback_and_diff_leave_them_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    sources_project(p);
+    commit_all(p, "first");
+    fs::write(p.join("notes.txt"), "x\n").unwrap();
+    commit_all(p, "second");
+    let table = fs::read_to_string(p.join("docs/cat/test-cases.md")).unwrap();
+    let out = run(p, &["rollback", "HEAD~1", "--all", "--dry-run"]);
+    assert!(
+        !out.stdout.contains("TC-CAT-001"),
+        "{}{}",
+        out.stdout,
+        out.stderr
+    );
+    let out = run(p, &["rollback", "HEAD~1", "TC-CAT-001"]);
+    assert_ne!(out.code, 0);
+    assert!(out.stderr.contains("a row of a table"), "{}", out.stderr);
+    let out = run(p, &["diff", "HEAD~1"]);
+    assert!(!out.stdout.contains("TC-CAT-001"), "{}", out.stdout);
+    assert_eq!(
+        fs::read_to_string(p.join("docs/cat/test-cases.md")).unwrap(),
+        table
+    );
+}

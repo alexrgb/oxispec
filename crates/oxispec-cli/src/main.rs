@@ -2417,6 +2417,9 @@ fn link_command(root: &Path, from: &str, kind: &str, to: &str, cache: bool) -> R
         bail!("a node cannot link to itself");
     }
 
+    if let Some(why) = oxispec_core::sources::write_refusal(node) {
+        bail!("{why}");
+    }
     let path = root.join(&node.path);
     let text =
         fs::read_to_string(&path).with_context(|| format!("cannot read {}", path.display()))?;
@@ -2730,7 +2733,17 @@ fn show(
         node.ty,
         node.status.as_deref().unwrap_or("no status")
     );
-    outln!("path:  {}", node.path.display());
+    match &node.origin {
+        Some(o) => outln!(
+            "path:  {}:{} (a row of a table)",
+            node.path.display(),
+            o.line
+        ),
+        None => outln!("path:  {}", node.path.display()),
+    }
+    for (name, value) in &node.fields {
+        outln!("{name}: {value}");
+    }
     if let Some(owner) = &node.owner {
         outln!("owner: {owner}");
     }
@@ -2738,9 +2751,15 @@ fn show(
         let raw = std::fs::read_to_string(root.join(&node.path))
             .with_context(|| format!("cannot read {}", node.path.display()))?;
         let raw = raw.replace("\r\n", "\n");
-        let body = oxispec_core::parse::frontmatter_span(&raw)
-            .map_or(raw.as_str(), |span| &raw[span.body_start..]);
-        outln!("\n{}\n", body.trim());
+        if let Some(origin) = &node.origin {
+            // A row of a table: its own line, not the whole document.
+            let row = raw.lines().nth(origin.line - 1).unwrap_or_default();
+            outln!("\n{}\n", row.trim());
+        } else {
+            let body = oxispec_core::parse::frontmatter_span(&raw)
+                .map_or(raw.as_str(), |span| &raw[span.body_start..]);
+            outln!("\n{}\n", body.trim());
+        }
     }
     for r in &node.requirements {
         let anchors: Vec<&str> = r
