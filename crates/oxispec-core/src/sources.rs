@@ -21,8 +21,22 @@ use crate::node::{Node, Origin};
 pub struct SourceConfig {
     /// A glob of files, relative to the project: `docs/features/*/test-cases.md`.
     pub files: String,
-    /// A row of a table is a node.
-    pub table: TableConfig,
+    /// A row of a table is a node. One of `table` and `heading` is given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table: Option<TableConfig>,
+    /// A heading with an ID is a node, and so is the text under it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heading: Option<HeadingConfig>,
+}
+
+/// How headings are read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeadingConfig {
+    /// A regular expression for the ID inside the heading text, such as `US-[A-Z]+-[0-9]+`.
+    pub id_pattern: String,
+    /// The type of the nodes, such as `user-story`.
+    #[serde(rename = "type")]
+    pub ty: String,
 }
 
 /// How a table is read. Columns are counted from 1.
@@ -55,36 +69,58 @@ pub fn validate(sources: &[SourceConfig]) -> Result<(), String> {
         if s.files.trim().is_empty() || builder.add(&s.files).is_err() {
             return Err(format!("{at}.files `{}` is not a glob", s.files));
         }
-        let t = &s.table;
-        if t.ty.trim().is_empty() {
-            return Err(format!("{at}.table.type is empty"));
-        }
-        let columns = std::iter::once(("id", t.id))
-            .chain(t.title.map(|c| ("title", c)))
-            .chain(t.links.iter().map(|(k, c)| (k.as_str(), *c)))
-            .chain(t.fields.iter().map(|(k, c)| (k.as_str(), *c)));
-        for (name, column) in columns {
-            if column == 0 {
-                return Err(format!(
-                    "{at}.table: column `{name}` is 0; columns start at 1"
-                ));
+        match (&s.table, &s.heading) {
+            (Some(_), Some(_)) => {
+                return Err(format!("{at} has both `table` and `heading`; give one"));
             }
-        }
-        if let Some(p) = &t.id_pattern
-            && let Err(e) = Regex::new(p)
-        {
-            return Err(format!("{at}.table.id_pattern: {e}"));
+            (None, None) => return Err(format!("{at} needs `table` or `heading`")),
+            (Some(table), None) => validate_table(&at, table)?,
+            (None, Some(h)) => {
+                if h.ty.trim().is_empty() {
+                    return Err(format!("{at}.heading.type is empty"));
+                }
+                if let Err(e) = Regex::new(&h.id_pattern) {
+                    return Err(format!("{at}.heading.id_pattern: {e}"));
+                }
+            }
         }
     }
     Ok(())
 }
 
-/// Why a command that writes a node cannot write this one, when it is a row of a table.
+fn validate_table(at: &str, t: &TableConfig) -> Result<(), String> {
+    if t.ty.trim().is_empty() {
+        return Err(format!("{at}.table.type is empty"));
+    }
+    let columns = std::iter::once(("id", t.id))
+        .chain(t.title.map(|c| ("title", c)))
+        .chain(t.links.iter().map(|(k, c)| (k.as_str(), *c)))
+        .chain(t.fields.iter().map(|(k, c)| (k.as_str(), *c)));
+    for (name, column) in columns {
+        if column == 0 {
+            return Err(format!(
+                "{at}.table: column `{name}` is 0; columns start at 1"
+            ));
+        }
+    }
+    if let Some(p) = &t.id_pattern
+        && let Err(e) = Regex::new(p)
+    {
+        return Err(format!("{at}.table.id_pattern: {e}"));
+    }
+    Ok(())
+}
+
+/// Why a command that writes a node cannot write this one, when it is a part of a document.
 // spec: REQ-SOURCES-0002
 pub fn write_refusal(node: &Node) -> Option<String> {
     let origin = node.origin.as_ref()?;
+    let (what, edit) = match origin.kind.as_str() {
+        "heading" => ("a section of a document", "the document"),
+        _ => ("a row of a table", "the table"),
+    };
     Some(format!(
-        "{} is a row of a table ({}:{}), not a file, so oxispec reads it but does not change it; edit the table",
+        "{} is {what} ({}:{}), not a file, so oxispec reads it but does not change it; edit {edit}",
         node.id,
         node.path.display(),
         origin.line
@@ -101,7 +137,11 @@ pub fn load(root: &Path, sources: &[SourceConfig]) -> (Vec<Node>, Vec<Finding>) 
             let Ok(text) = std::fs::read_to_string(root.join(&rel)) else {
                 continue;
             };
-            let (n, f) = read_tables(&rel, &text, &source.table);
+            let (n, f) = match (&source.table, &source.heading) {
+                (Some(table), _) => read_tables(&rel, &text, table),
+                (None, Some(heading)) => read_headings(&rel, &text, heading),
+                (None, None) => continue,
+            };
             nodes.extend(n);
             findings.extend(f);
         }
@@ -242,6 +282,122 @@ fn ids_in(cell: &str) -> Vec<String> {
     out
 }
 
+/// A node with nothing but what every part of a document has: ID, type, file and place.
+fn sourced_node(
+    id: String,
+    ty: &str,
+    rel: &Path,
+    kind: &str,
+    line: usize,
+    end_line: usize,
+) -> Node {
+    Node {
+        id,
+        ty: ty.to_string(),
+        status: None,
+        owner: None,
+        approved_by: None,
+        approved_on: None,
+        version: None,
+        date: None,
+        decision_makers: Vec::new(),
+        severity: None,
+        due: None,
+        cost: None,
+        interest: None,
+        likelihood: None,
+        impact: None,
+        review: None,
+        title: None,
+        path: rel.to_path_buf(),
+        links: BTreeMap::new(),
+        aliases: Vec::new(),
+        requirements: Vec::new(),
+        claims: Vec::new(),
+        vocabulary: Vec::new(),
+        machines: Vec::new(),
+        architecture: Vec::new(),
+        entities: Vec::new(),
+        tasks: Vec::new(),
+        headings: Vec::new(),
+        body_hash: String::new(),
+        origin: Some(Origin {
+            kind: kind.to_string(),
+            line,
+            end_line,
+        }),
+        fields: BTreeMap::new(),
+    }
+}
+
+/// The headings of a document that have an ID, as nodes: the heading is the title and the node
+/// runs to the next heading of the same level or a higher one.
+// spec: REQ-SOURCES-0003
+fn read_headings(rel: &Path, text: &str, config: &HeadingConfig) -> (Vec<Node>, Vec<Finding>) {
+    let Ok(pattern) = Regex::new(&config.id_pattern) else {
+        return (Vec::new(), Vec::new());
+    };
+    let lines: Vec<&str> = text.lines().collect();
+    // (line index, level, text) of each heading outside a code block.
+    let mut found: Vec<(usize, usize, String)> = Vec::new();
+    let mut fence = false;
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            fence = !fence;
+            continue;
+        }
+        let level = trimmed.chars().take_while(|c| *c == '#').count();
+        if !fence
+            && (1..=6).contains(&level)
+            && trimmed[level..].starts_with(' ')
+            && line.len() - trimmed.len() < 4
+        {
+            found.push((
+                i,
+                level,
+                trimmed[level..]
+                    .trim()
+                    .trim_end_matches('#')
+                    .trim()
+                    .to_string(),
+            ));
+        }
+    }
+    let mut nodes = Vec::new();
+    for (n, (i, level, heading)) in found.iter().enumerate() {
+        let heading = plain(heading);
+        let Some(m) = pattern.find(&heading) else {
+            continue;
+        };
+        let end = found[n + 1..]
+            .iter()
+            .find(|(_, l, _)| l <= level)
+            .map_or(lines.len(), |(j, _, _)| *j);
+        let raw = lines[*i..end].join("\n");
+        let title = format!("{}{}", &heading[..m.start()], &heading[m.end()..]);
+        let title = title
+            .trim_matches(|c: char| {
+                c.is_whitespace()
+                    || matches!(c, ':' | '-' | '\u{2013}' | '\u{2014}' | '.' | '(' | ')')
+            })
+            .to_string();
+        nodes.push(Node {
+            title: Some(title).filter(|t| !t.is_empty()),
+            body_hash: blake3::hash(raw.as_bytes()).to_hex().to_string(),
+            ..sourced_node(
+                m.as_str().to_string(),
+                &config.ty,
+                rel,
+                "heading",
+                i + 1,
+                end,
+            )
+        });
+    }
+    (nodes, Vec::new())
+}
+
 // spec: REQ-SOURCES-0001
 fn read_tables(rel: &Path, text: &str, config: &TableConfig) -> (Vec<Node>, Vec<Finding>) {
     let pattern = config
@@ -292,44 +448,16 @@ fn read_tables(rel: &Path, text: &str, config: &TableConfig) -> (Vec<Node>, Vec<
             }
             let raw = row.cells.join("|");
             nodes.push(Node {
-                id: node_id,
-                ty: config.ty.clone(),
                 status: fields.remove("status"),
                 owner: fields.remove("owner"),
-                approved_by: None,
-                approved_on: None,
-                version: None,
-                date: None,
-                decision_makers: Vec::new(),
-                severity: None,
-                due: None,
-                cost: None,
-                interest: None,
-                likelihood: None,
-                impact: None,
-                review: None,
                 title: config
                     .title
                     .map(|c| plain(cell(row, c)))
                     .filter(|t| !t.is_empty()),
-                path: rel.to_path_buf(),
                 links: node_links,
-                aliases: Vec::new(),
-                requirements: Vec::new(),
-                claims: Vec::new(),
-                vocabulary: Vec::new(),
-                machines: Vec::new(),
-                architecture: Vec::new(),
-                entities: Vec::new(),
-                tasks: Vec::new(),
-                headings: Vec::new(),
                 body_hash: blake3::hash(raw.as_bytes()).to_hex().to_string(),
-                origin: Some(Origin {
-                    kind: "table".to_string(),
-                    line: row.line,
-                    end_line: row.line,
-                }),
                 fields,
+                ..sourced_node(node_id, &config.ty, rel, "table", row.line, row.line)
             });
         }
     }
@@ -383,22 +511,67 @@ mod tests {
         assert_eq!(findings[0].line, Some(12));
     }
 
+    const SPEC: &str = "# Catalog\n\n## US-CAT-001: Browse programs\n\nAs a visitor I browse.\n\n### Notes\n\nSome notes.\n\n## Not a story\n\n## US-CAT-002 \u{2014} Filter\n\n```\n## US-CAT-999 in code\n```\n\nText.\n";
+
+    fn headings() -> HeadingConfig {
+        HeadingConfig {
+            id_pattern: "US-[A-Z]+-[0-9]+".into(),
+            ty: "user-story".into(),
+        }
+    }
+
+    // verifies: REQ-SOURCES-0003.S1
+    #[test]
+    fn a_heading_with_an_id_is_a_node_that_runs_to_the_next_heading_of_its_level() {
+        let (nodes, _) = read_headings(Path::new("s.md"), SPEC, &headings());
+        let ids: Vec<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
+        assert_eq!(ids, ["US-CAT-001", "US-CAT-002"]);
+        assert_eq!(nodes[0].ty, "user-story");
+        assert_eq!(nodes[0].title.as_deref(), Some("Browse programs"));
+        let o = nodes[0].origin.as_ref().unwrap();
+        // The sub-heading `### Notes` is inside; `## Not a story` ends it.
+        assert_eq!((o.kind.as_str(), o.line, o.end_line), ("heading", 3, 10));
+        assert_eq!(nodes[1].title.as_deref(), Some("Filter"));
+        assert_eq!(nodes[1].origin.as_ref().unwrap().end_line, 19);
+    }
+
+    // verifies: REQ-SOURCES-0003.S2
+    #[test]
+    fn a_heading_in_a_code_block_is_not_a_node_and_the_text_is_hashed() {
+        let (nodes, _) = read_headings(Path::new("s.md"), SPEC, &headings());
+        assert!(nodes.iter().all(|n| n.id != "US-CAT-999"));
+        let changed = SPEC.replace("I browse", "I look at");
+        let (after, _) = read_headings(Path::new("s.md"), &changed, &headings());
+        assert_ne!(nodes[0].body_hash, after[0].body_hash);
+        assert_eq!(nodes[1].body_hash, after[1].body_hash);
+    }
+
     // verifies: REQ-SOURCES-0001.S3
     #[test]
     fn a_source_with_a_column_of_zero_or_a_bad_pattern_is_refused() {
         let ok = SourceConfig {
             files: "docs/*.md".into(),
-            table: config(),
+            table: Some(config()),
+            heading: None,
         };
         assert!(validate(std::slice::from_ref(&ok)).is_ok());
         let mut zero = ok.clone();
-        zero.table.title = Some(0);
+        zero.table.as_mut().unwrap().title = Some(0);
         assert!(validate(&[zero]).unwrap_err().contains("title"));
         let mut bad = ok.clone();
-        bad.table.id_pattern = Some("TC-[".into());
+        bad.table.as_mut().unwrap().id_pattern = Some("TC-[".into());
         assert!(validate(&[bad]).unwrap_err().contains("id_pattern"));
-        let mut empty = ok;
-        empty.table.ty = " ".into();
+        let mut empty = ok.clone();
+        empty.table.as_mut().unwrap().ty = " ".into();
         assert!(validate(&[empty]).is_err());
+        let mut neither = ok.clone();
+        neither.table = None;
+        assert!(validate(&[neither]).unwrap_err().contains("needs"));
+        let mut both = ok;
+        both.heading = Some(HeadingConfig {
+            id_pattern: "US-[0-9]+".into(),
+            ty: "user-story".into(),
+        });
+        assert!(validate(&[both]).unwrap_err().contains("both"));
     }
 }

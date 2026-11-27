@@ -2398,6 +2398,9 @@ fn link_command(root: &Path, from: &str, kind: &str, to: &str, cache: bool) -> R
     let node = graph
         .get(parsed.base)
         .with_context(|| format!("no node with id {from}"))?;
+    if let Some(why) = oxispec_core::sources::write_refusal(node) {
+        bail!("{why}");
+    }
     if !KNOWN_LINK_KINDS.contains(&kind) {
         bail!(
             "unknown link kind `{kind}` (known: {})",
@@ -2417,9 +2420,6 @@ fn link_command(root: &Path, from: &str, kind: &str, to: &str, cache: bool) -> R
         bail!("a node cannot link to itself");
     }
 
-    if let Some(why) = oxispec_core::sources::write_refusal(node) {
-        bail!("{why}");
-    }
     let path = root.join(&node.path);
     let text =
         fs::read_to_string(&path).with_context(|| format!("cannot read {}", path.display()))?;
@@ -2734,6 +2734,12 @@ fn show(
         node.status.as_deref().unwrap_or("no status")
     );
     match &node.origin {
+        Some(o) if o.kind == "heading" => outln!(
+            "path:  {}:{}-{} (a section of a document)",
+            node.path.display(),
+            o.line,
+            o.end_line
+        ),
         Some(o) => outln!(
             "path:  {}:{} (a row of a table)",
             node.path.display(),
@@ -2753,8 +2759,12 @@ fn show(
         let raw = raw.replace("\r\n", "\n");
         if let Some(origin) = &node.origin {
             // A row of a table: its own line, not the whole document.
-            let row = raw.lines().nth(origin.line - 1).unwrap_or_default();
-            outln!("\n{}\n", row.trim());
+            let part: Vec<&str> = raw
+                .lines()
+                .skip(origin.line - 1)
+                .take(origin.end_line + 1 - origin.line)
+                .collect();
+            outln!("\n{}\n", part.join("\n").trim());
         } else {
             let body = oxispec_core::parse::frontmatter_span(&raw)
                 .map_or(raw.as_str(), |span| &raw[span.body_start..]);
