@@ -282,12 +282,43 @@ fn plain_graph_at(root: &Path, revision: &Revision) -> Result<(Graph, bool)> {
         .map(|n| format!("{}:{prefix}{n}", revision.oid))
         .collect();
     let contents = read_objects(root, &specs)?;
+    let pairs: Vec<(String, Vec<u8>)> = files
+        .into_iter()
+        .zip(contents)
+        .filter_map(|(name, content)| content.map(|bytes| (name, bytes)))
+        .collect();
+    // The rows and sections that `sources:` reads, found in the same files. The settings are the
+    // ones the project has now, since the config of the revision may not have them yet.
+    let sources = oxispec_core::config::load(root)
+        .map(|c| c.sources)
+        .unwrap_or_default();
+    let sourced = if sources.is_empty() {
+        None
+    } else {
+        let names: Vec<String> = pairs.iter().map(|(n, _)| n.clone()).collect();
+        let by_name: std::collections::HashMap<&str, &[u8]> = pairs
+            .iter()
+            .map(|(n, b)| (n.as_str(), b.as_slice()))
+            .collect();
+        Some(oxispec_core::sources::load_from(
+            &sources,
+            &names,
+            &|name| {
+                by_name
+                    .get(name)
+                    .and_then(|b| String::from_utf8(b.to_vec()).ok())
+            },
+        ))
+    };
     let graph = Graph::from_sources(
-        files
+        pairs
             .into_iter()
-            .zip(contents)
-            .filter_map(|(name, content)| content.map(|bytes| (PathBuf::from(name), bytes))),
+            .map(|(name, bytes)| (PathBuf::from(name), bytes)),
     );
+    let graph = match sourced {
+        Some((nodes, findings)) => graph.with_sourced(nodes, findings),
+        None => graph,
+    };
     Ok((graph, configured))
 }
 

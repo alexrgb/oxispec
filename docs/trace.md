@@ -88,8 +88,11 @@ sources:
 - A table counts when some row has an ID in the ID column. Other tables of the file, and tables in code blocks, are left alone. A row without an ID in such a table gives `W030` at its line.
 - Bold, code ticks and Markdown links in a cell are read as plain text. A cell of links is split at commas, semicolons, slashes and spaces, and words that are not IDs are ignored.
 - The node has the file as its `path` and the line of the row as `origin`. `show` prints both, the fields, and the row itself with `--text`. `check` (`E001` for a duplicate, `E002` for a link to nothing), `trace`, `coverage`, `list` and `search` read it like any other node. The type should be one that `check` knows (`test-case`, `requirement`, ...), or W001 says it is not.
-- It is read-only. `link`, `set-status`, the debt and risk `status` commands and `rollback` refuse it, naming the file and line, and `rollback` and `diff` leave it out. Edit the table.
-- Not yet: the history of a row, suspect links on a row, and a page of its own in the site (see [ADR-0005](../specs/adr/0005-nodes-that-live-inside-a-document.md)).
+- It is read-only. `link`, `set-status`, the debt and risk `status` commands and `rollback` refuse it, naming the file and line, and `rollback --all` leaves it out. Edit the table.
+- `history` of a row lists the commits that changed that row, not the other rows of the file. `diff` and `--at` read rows and sections in the documents of a revision, with the `sources:` the project has now.
+- A link from a test to a row is confirmed and goes suspect like any other: the hash is of what the cells say, so spacing and bold are not a change.
+- `site` writes a page for each row (its type, fields and `file:line`) and each section (its own lines).
+- Not yet: writing a row (`set-status`, `new`) or rolling one back, which is not planned; a project that wants that keeps its nodes as files (see [ADR-0005](../specs/adr/0005-nodes-that-live-inside-a-document.md)).
 
 ### Headings as nodes
 

@@ -511,6 +511,32 @@ mod tests {
         assert_eq!(states(&g2, code_changed, &lock), [State::SuspectBoth]);
     }
 
+    // verifies: REQ-SOURCES-0004.S3
+    #[test]
+    fn a_link_to_a_row_of_a_table_goes_suspect_when_the_row_changes() {
+        let sources: Vec<crate::sources::SourceConfig> = serde_saphyr::from_str(
+            "- files: 'c.md'\n  table: { id: 1, id_pattern: 'TC-[0-9]+', type: test-case, title: 2 }\n",
+        )
+        .unwrap();
+        let graph = |row: &str| {
+            let text = format!("| ID | Title |\n|---|---|\n{row}\n");
+            let (nodes, _) = crate::sources::read_document(Path::new("c.md"), &text, &sources);
+            Graph::from_nodes(nodes)
+        };
+        let code = "// verifies: TC-1\nfn lists() {\n    work();\n}\n";
+        let found = scan_text(Path::new("src/a.rs"), code);
+        let g = graph("| TC-1 | Lists programs |");
+        let mut lock = Lock::default();
+        confirm(&g, &found, &mut lock, None);
+        let state = |g: &Graph| links(g, &found, &lock)[0].state;
+        assert_eq!(state(&g), State::Ok);
+        assert_eq!(state(&graph("| TC-1 | Lists  programs |")), State::Ok);
+        assert_eq!(
+            state(&graph("| TC-1 | Lists all programs |")),
+            State::SuspectSpec
+        );
+    }
+
     #[test]
     fn findings_name_the_side_that_changed_and_where() {
         let g = graph("The system SHALL end idle sessions.");

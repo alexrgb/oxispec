@@ -137,16 +137,67 @@ pub fn load(root: &Path, sources: &[SourceConfig]) -> (Vec<Node>, Vec<Finding>) 
             let Ok(text) = std::fs::read_to_string(root.join(&rel)) else {
                 continue;
             };
-            let (n, f) = match (&source.table, &source.heading) {
-                (Some(table), _) => read_tables(&rel, &text, table),
-                (None, Some(heading)) => read_headings(&rel, &text, heading),
-                (None, None) => continue,
-            };
+            let (n, f) = read_with(&rel, &text, source);
             nodes.extend(n);
             findings.extend(f);
         }
     }
     (nodes, findings)
+}
+
+/// The nodes of one document, read by every source whose glob names it. `rel` uses `/`.
+// spec: REQ-SOURCES-0004
+pub fn read_document(
+    rel: &Path,
+    text: &str,
+    sources: &[SourceConfig],
+) -> (Vec<Node>, Vec<Finding>) {
+    let mut nodes = Vec::new();
+    let mut findings = Vec::new();
+    let name = rel.to_string_lossy().replace('\\', "/");
+    for source in sources.iter().filter(|s| matches_glob(&s.files, &name)) {
+        let (n, f) = read_with(rel, text, source);
+        nodes.extend(n);
+        findings.extend(f);
+    }
+    (nodes, findings)
+}
+
+/// The nodes of the documents of a revision, from the names it has and a way to read one.
+// spec: REQ-SOURCES-0004
+pub fn load_from(
+    sources: &[SourceConfig],
+    names: &[String],
+    read: &dyn Fn(&str) -> Option<String>,
+) -> (Vec<Node>, Vec<Finding>) {
+    let mut nodes = Vec::new();
+    let mut findings = Vec::new();
+    for name in names {
+        if !sources.iter().any(|s| matches_glob(&s.files, name)) {
+            continue;
+        }
+        let Some(text) = read(name) else { continue };
+        let (n, f) = read_document(Path::new(name), &text, sources);
+        nodes.extend(n);
+        findings.extend(f);
+    }
+    (nodes, findings)
+}
+
+fn matches_glob(glob: &str, name: &str) -> bool {
+    let mut builder = ignore::overrides::OverrideBuilder::new("/");
+    builder.add(glob).is_ok()
+        && builder
+            .build()
+            .is_ok_and(|o| o.matched(name, false).is_whitelist())
+}
+
+fn read_with(rel: &Path, text: &str, source: &SourceConfig) -> (Vec<Node>, Vec<Finding>) {
+    match (&source.table, &source.heading) {
+        (Some(table), _) => read_tables(rel, text, table),
+        (None, Some(heading)) => read_headings(rel, text, heading),
+        (None, None) => (Vec::new(), Vec::new()),
+    }
 }
 
 fn files(root: &Path, glob: &str) -> Vec<PathBuf> {
@@ -446,7 +497,13 @@ fn read_tables(rel: &Path, text: &str, config: &TableConfig) -> (Vec<Node>, Vec<
                     fields.insert(name.clone(), value);
                 }
             }
-            let raw = row.cells.join("|");
+            // The hash is of what the cells say, so spacing and bold are not a change.
+            let raw = row
+                .cells
+                .iter()
+                .map(|c| plain(c))
+                .collect::<Vec<_>>()
+                .join("|");
             nodes.push(Node {
                 status: fields.remove("status"),
                 owner: fields.remove("owner"),

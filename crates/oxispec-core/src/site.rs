@@ -391,7 +391,17 @@ fn node_page(
     if let Some(version) = &node.version {
         facts.push(("version", version.clone()));
     }
-    facts.push(("file", node.path.display().to_string().replace('\\', "/")));
+    for (name, value) in &node.fields {
+        facts.push((name.as_str(), value.clone()));
+    }
+    let file = node.path.display().to_string().replace('\\', "/");
+    facts.push((
+        "file",
+        match &node.origin {
+            Some(o) => format!("{file}:{}", o.line),
+            None => file,
+        },
+    ));
     for (name, value) in &facts {
         body.push_str(&format!(
             " <span class=\"fact\">{name}: {}</span>",
@@ -420,9 +430,19 @@ fn node_page(
         }
     }
 
-    if let Some(text) = text_of(node) {
-        let text = crate::parse::split_frontmatter(&text)
-            .map_or(text.clone(), |(_, body, _)| body.to_string());
+    // A row of a table is shown by its fields above; a section of a document by its own lines.
+    let is_row = node.origin.as_ref().is_some_and(|o| o.kind == "table");
+    if let Some(text) = text_of(node).filter(|_| !is_row) {
+        let text = match &node.origin {
+            Some(o) => text
+                .lines()
+                .skip(o.line.saturating_sub(1))
+                .take(o.end_line + 1 - o.line)
+                .collect::<Vec<_>>()
+                .join("\n"),
+            None => crate::parse::split_frontmatter(&text)
+                .map_or(text.clone(), |(_, body, _)| body.to_string()),
+        };
         body.push_str(&format!("<article>{}</article>", markdown(graph, &text)));
     }
 
@@ -736,5 +756,33 @@ mod tests {
                 .html
                 .contains("<article>")
         );
+    }
+
+    // verifies: REQ-SOURCES-0004.S4
+    #[test]
+    fn a_row_and_a_section_get_pages_with_their_own_text() {
+        let doc = "# Doc\n\n## US-A-1: Story\n\nStory text.\n\n## Other\n\nOther text.\n\n| ID | Title | Priority |\n|---|---|---|\n| TC-1 | A case | P1 |\n| TC-2 | Another | P2 |\n";
+        let sources: Vec<crate::sources::SourceConfig> = serde_saphyr::from_str(
+            "- files: 'd.md'\n  heading: { id_pattern: 'US-[A-Z]+-[0-9]+', type: user-story }\n- files: 'd.md'\n  table: { id: 1, id_pattern: 'TC-[0-9]+', type: test-case, title: 2, fields: { priority: 3 } }\n",
+        )
+        .unwrap();
+        let (nodes, _) = crate::sources::read_document(Path::new("d.md"), doc, &sources);
+        let g = Graph::from_nodes(nodes);
+        let pages = render(&g, &options(), &|_| Some(doc.to_string()));
+        let page = |id: &str| {
+            pages
+                .iter()
+                .find(|p| p.path == page_name(id))
+                .map(|p| p.html.clone())
+                .unwrap()
+        };
+        let story = page("US-A-1");
+        assert!(story.contains("Story text."), "{story}");
+        assert!(!story.contains("Other text."), "{story}");
+        assert!(story.contains("d.md:3"), "{story}");
+        let row = page("TC-1");
+        assert!(row.contains("priority: P1"), "{row}");
+        assert!(row.contains("d.md:13"), "{row}");
+        assert!(!row.contains("Another"), "{row}");
     }
 }

@@ -86,6 +86,12 @@ pub fn differing_ids(current: &Graph, target: &Graph) -> Vec<String> {
     ids.extend(diff.added.into_iter().map(|n| n.id));
     ids.extend(diff.removed.into_iter().map(|n| n.id));
     ids.extend(diff.changed.into_iter().map(|n| n.id));
+    // A row or a section is a part of a document, and rollback restores files, so `--all` leaves
+    // it out and asking for one by name is refused.
+    ids.retain(|id| {
+        current.get(id).is_none_or(|n| n.origin.is_none())
+            && target.get(id).is_none_or(|n| n.origin.is_none())
+    });
     ids.into_iter().collect()
 }
 
@@ -96,7 +102,7 @@ pub fn plan(current: &Graph, target: &Graph, ids: &[String]) -> Result<Vec<Actio
     let mut seen = BTreeSet::new();
     for given in ids {
         let (now, then) = (current.get(given), target.get(given));
-        if let Some(why) = now.and_then(crate::sources::write_refusal) {
+        if let Some(why) = now.or(then).and_then(crate::sources::write_refusal) {
             return Err(RollbackError::Sourced(why));
         }
         let id = match (now, then) {

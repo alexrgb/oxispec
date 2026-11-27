@@ -9429,3 +9429,42 @@ fn a_heading_with_an_id_is_shown_and_traced_and_not_written() {
     );
     assert_eq!(fs::read_to_string(p.join("docs/spec.md")).unwrap(), spec);
 }
+
+// verifies: REQ-SOURCES-0004.S1
+// verifies: REQ-SOURCES-0004.S2
+#[test]
+fn a_row_has_its_own_history_and_is_compared_between_revisions() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path();
+    git(p, &["init", "-q"]);
+    sources_project(p);
+    commit_all(p, "first");
+    let table = p.join("docs/cat/test-cases.md");
+    let text = fs::read_to_string(&table).unwrap();
+    fs::write(&table, text.replace("Opens one", "Opens one program")).unwrap();
+    commit_all(p, "second row renamed");
+    let text = fs::read_to_string(&table).unwrap();
+    fs::write(&table, text.replace("Lists programs", "Lists all programs")).unwrap();
+    fs::write(
+        &table,
+        fs::read_to_string(&table).unwrap() + "| TC-CAT-003 | New | US-CAT-001 | P3 |\n",
+    )
+    .unwrap();
+    commit_all(p, "first row renamed, third added");
+
+    let out = run(p, &["history", "TC-CAT-001"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("first row renamed"), "{}", out.stdout);
+    assert!(out.stdout.contains("first"), "{}", out.stdout);
+    assert!(!out.stdout.contains("second row renamed"), "{}", out.stdout);
+
+    let out = run(p, &["diff", "HEAD~2"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("TC-CAT-003"), "{}", out.stdout);
+    assert!(out.stdout.contains("TC-CAT-001"), "{}", out.stdout);
+    assert!(out.stdout.contains("TC-CAT-002"), "{}", out.stdout);
+
+    let out = run(p, &["show", "TC-CAT-002", "--at", "HEAD~2", "--json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("\"Opens one\""), "{}", out.stdout);
+}
