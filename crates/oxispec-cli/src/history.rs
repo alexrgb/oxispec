@@ -79,7 +79,7 @@ pub fn history_command(
     json_output: bool,
     cache: bool,
 ) -> Result<()> {
-    config::load(root)?;
+    let cfg = config::load(root)?;
     git::require_repository(root, "history")?;
     let revision = at.map(|spec| git::resolve_rev(root, spec)).transpose()?;
     let graph = match &revision {
@@ -105,9 +105,17 @@ pub fn history_command(
         .iter()
         .map(|commit| {
             let bytes = git::file_at(root, &commit.oid, &commit.path)?;
-            Ok(bytes
-                .and_then(|b| String::from_utf8(b).ok())
-                .and_then(|text| parse_file_text(&commit.path, &text).0))
+            let text = bytes.and_then(|b| String::from_utf8(b).ok());
+            Ok(match (&node.origin, text) {
+                // A row or a section: the node of this ID in the document as it was then.
+                (Some(_), Some(text)) => {
+                    oxispec_core::sources::read_document(&commit.path, &text, &cfg.sources)
+                        .0
+                        .into_iter()
+                        .find(|n| n.id == node.id)
+                }
+                (_, text) => text.and_then(|text| parse_file_text(&commit.path, &text).0),
+            })
         })
         .collect::<Result<_>>()?;
 
@@ -125,9 +133,14 @@ pub fn history_command(
     for (i, commit) in commits.iter().take(limit).enumerate() {
         let new = versions[i].as_ref();
         let old = versions.get(i + 1).and_then(Option::as_ref);
+        let event = Event::between(old, new);
+        // A commit that changed the document but not this row or section is not its history.
+        if node.origin.is_some() && matches!(&event, Event::Changed(c) if c.is_empty()) {
+            continue;
+        }
         entries.push(Entry {
             commit: Some(commit.clone()),
-            event: Event::between(old, new),
+            event,
         });
     }
 
